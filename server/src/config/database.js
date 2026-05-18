@@ -36,12 +36,11 @@ YWbEG9WXQnt/5FdmimeYRjb0f1pFtDh4/VV04RvKbO3gu6ulhonans5tN24qxJWU
 // SSL configuration for production (Aiven requires SSL)
 const getSSLConfig = () => {
   if (process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true') {
+    logger.info('Configuring SSL for database connection');
     const sslConfig = {
       rejectUnauthorized: true,
       ca: AIVEN_CA_CERT,
     };
-
-    logger.info('SSL configured with embedded CA certificate');
     return sslConfig;
   }
   return false;
@@ -50,9 +49,11 @@ const getSSLConfig = () => {
 // Support DATABASE_URL (Render provides this) or individual env vars
 const createPool = () => {
   if (process.env.DATABASE_URL) {
+    // Remove sslmode from URL to prevent it from overriding our SSL config
+    const dbUrl = process.env.DATABASE_URL.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
     logger.info('Connecting to database via DATABASE_URL');
     return new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: dbUrl,
       ssl: getSSLConfig(),
       max: parseInt(process.env.DB_POOL_MAX) || 20,
       min: parseInt(process.env.DB_POOL_MIN) || 2,
