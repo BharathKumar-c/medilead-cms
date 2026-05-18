@@ -20,7 +20,7 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        sync: false  # Set manually in dashboard
+        sync: false  # Set in dashboard: postgres://avnadmin:PASSWORD@pg-2177bf51-pediacaredemo.e.aivencloud.com:21863/defaultdb?sslmode=require&uselibpqcompat=true
       - key: DB_SSL
         value: "true"
       - key: DB_SSL_CA_CERT

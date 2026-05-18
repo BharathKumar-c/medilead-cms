@@ -9,14 +9,28 @@ const logger = require('../utils/logger');
 const getSSLConfig = () => {
   if (process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true') {
     const sslConfig = {
-      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+      rejectUnauthorized: true,
     };
 
-    // Load CA certificate if provided
-    const caCertPath = process.env.DB_SSL_CA_CERT || path.join(__dirname, '..', '..', 'certs', 'ca.pem');
-    if (fs.existsSync(caCertPath)) {
-      sslConfig.ca = fs.readFileSync(caCertPath, 'utf8');
-      logger.info('SSL CA certificate loaded', { path: caCertPath });
+    // Try multiple paths for CA certificate
+    const possiblePaths = [
+      process.env.DB_SSL_CA_CERT,
+      path.join(process.cwd(), 'certs', 'ca.pem'),
+      path.join(__dirname, '..', '..', 'certs', 'ca.pem'),
+      path.join(__dirname, '..', '..', '..', 'certs', 'ca.pem'),
+    ].filter(Boolean);
+
+    for (const certPath of possiblePaths) {
+      if (fs.existsSync(certPath)) {
+        sslConfig.ca = fs.readFileSync(certPath, 'utf8');
+        logger.info('SSL CA certificate loaded', { path: certPath });
+        break;
+      }
+    }
+
+    if (!sslConfig.ca) {
+      logger.warn('SSL CA certificate not found, falling back to rejectUnauthorized: false');
+      sslConfig.rejectUnauthorized = false;
     }
 
     return sslConfig;

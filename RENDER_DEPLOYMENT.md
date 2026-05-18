@@ -54,7 +54,7 @@ In the **Environment** tab, add these variables:
 |-----|-------|-------|
 | `NODE_ENV` | `production` | |
 | `PORT` | `10000` | Render assigns port automatically, use 10000 |
-| `DATABASE_URL` | `postgres://avnadmin:YOUR_PASSWORD@pg-2177bf51-pediacaredemo.e.aivencloud.com:21863/defaultdb?sslmode=require` | Your Aiven PostgreSQL connection string |
+| `DATABASE_URL` | `postgres://avnadmin:YOUR_PASSWORD@pg-2177bf51-pediacaredemo.e.aivencloud.com:21863/defaultdb?sslmode=require&uselibpqcompat=true` | Your Aiven PostgreSQL connection string |
 | `DB_SSL` | `true` | Enable SSL for Aiven |
 | `DB_SSL_CA_CERT` | `./certs/ca.pem` | Path to CA certificate |
 | `JWT_SECRET` | *(generate a random 64-char string)* | See note below |
