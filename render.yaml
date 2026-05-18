@@ -40,7 +40,7 @@ services:
       - key: JWT_EXPIRES_IN
         value: 24h
       - key: CORS_ORIGIN
-        value: https://medcloud.kasantratech.com
+        value: https://medcloud.kasantratech.com,https://medilead-cms.onrender.com
       - key: LOG_LEVEL
         value: info
 
