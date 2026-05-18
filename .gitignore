@@ -20,6 +20,11 @@ server/.env
 server/.env.local
 server/.env.*.local
 
+# SSL Certificates (keep ca.pem for deployment, but protect any private keys)
+server/certs/*.key
+server/certs/*.p12
+server/certs/*.jks
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

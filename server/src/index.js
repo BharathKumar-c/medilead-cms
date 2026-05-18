@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 const helmet = require('helmet');
 require('dotenv').config();
@@ -13,29 +14,37 @@ const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Trust proxy (Render uses a reverse proxy)
+if (isProduction) {
+  app.set('trust proxy', 1);
+}
 
 // Security headers with helmet
 app.use(helmet({
-  contentSecurityPolicy: {
+  contentSecurityPolicy: isProduction ? {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
       connectSrc: ["'self'", "ws:", "wss:"],
     },
-  },
-  crossOriginEmbedderPolicy: false, // Allow embedding for development
+  } : false,
+  crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 
 // Socket.IO setup
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173'];
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN
-      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-      : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173'],
+    origin: allowedOrigins,
     credentials: true,
   },
 });
@@ -61,15 +70,11 @@ io.on('connection', (socket) => {
 module.exports.io = io;
 
 // Middleware
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173'];
-
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
 }));
-app.use(express.json({ limit: '10kb' })); // Limit JSON body size
+app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Request logging middleware
@@ -139,9 +144,35 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/calls', require('./routes/calls'));
 
-// 404 handler
+// Serve static frontend files in production
+if (isProduction) {
+  const frontendPath = path.join(__dirname, '..', '..', 'dist');
+  app.use(express.static(frontendPath));
+
+  // SPA fallback - serve index.html for non-API routes
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+}
+
+// 404 handler (only for API routes)
 app.use((req, res) => {
-  logger.warn(`Route not found: ${req.method} ${req.url}`);
+  if (req.path.startsWith('/api/')) {
+    logger.warn(`API route not found: ${req.method} ${req.url}`);
+    return res.status(404).json({
+      status: 'error',
+      message: `Route ${req.method} ${req.url} not found`,
+      code: 'NOT_FOUND',
+    });
+  }
+  // For non-API routes in production, serve index.html (SPA)
+  if (isProduction) {
+    const frontendPath = path.join(__dirname, '..', '..', 'dist');
+    return res.sendFile(path.join(frontendPath, 'index.html'));
+  }
   res.status(404).json({
     status: 'error',
     message: `Route ${req.method} ${req.url} not found`,

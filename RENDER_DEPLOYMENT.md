@@ -5,23 +5,19 @@ This guide covers deploying both the **frontend** (React + Vite) and **backend**
 ## Architecture Overview
 
 ```
-┌──────────────────────┐         ┌──────────────────────┐
-│   Static Site        │         │   Web Service        │
-│   (Frontend)         │ ──────> │   (Backend API)      │
-│   React + Vite       │  API    │   Express + Socket.IO│
-│   medilead-cms.on... │ calls   │   medilead-api.on... │
-└──────────────────────┘         └──────────┬───────────┘
-                                            │
-                                   ┌────────▼───────────┐
-                                   │   PostgreSQL       │
-                                   │   (Render Managed) │
-                                   └────────────────────┘
+┌──────────────────────┐         ┌──────────────────────┐         ┌──────────────────────┐
+│   Static Site        │         │   Web Service        │         │   Aiven PostgreSQL   │
+│   (Frontend)         │ ──────> │   (Backend API)      │ ──────> │   (Managed DB)       │
+│   React + Vite       │  API    │   Express + Socket.IO│  SSL    │   pg-2177bf51...     │
+│   medilead-cms.on... │ calls   │   medilead-api.on... │         │   aivencloud.com     │
+└──────────────────────┘         └──────────────────────┘         └──────────────────────┘
 ```
 
-You will create **3 services** on Render:
-1. **PostgreSQL Database** — managed database
-2. **Web Service** — backend API (Express)
-3. **Static Site** — frontend (React/Vite)
+You will create **2 services** on Render:
+1. **Web Service** — backend API (Express)
+2. **Static Site** — frontend (React/Vite)
+
+The database is hosted on **Aiven** (external PostgreSQL with SSL).
 
 ---
 
@@ -30,23 +26,7 @@ You will create **3 services** on Render:
 - A [Render account](https://render.com) (free tier works)
 - Your code pushed to a **GitHub** repository
 - The repo should contain both `server/` and root frontend code
-
----
-
-## Step 1: Create PostgreSQL Database
-
-1. Go to [Render Dashboard](https://dashboard.render.com)
-2. Click **New** → **PostgreSQL**
-3. Configure:
-   - **Name:** `medilead-db`
-   - **Database:** `cms_db_prod`
-   - **User:** `cms_user`
-   - **Region:** Choose closest to your users
-   - **Plan:** Free (for testing) or Starter ($7/mo for production)
-4. Click **Create Database**
-5. Once created, go to the **Info** tab and copy these values (you'll need them next):
-   - **Internal Database URL** (looks like `postgresql://user:pass@host:5432/dbname`)
-   - Or individual values: Host, Port, Database, Username, Password
+- Aiven PostgreSQL database with CA certificate (`server/certs/ca.pem`)
 
 ---
 
@@ -74,17 +54,15 @@ In the **Environment** tab, add these variables:
 |-----|-------|-------|
 | `NODE_ENV` | `production` | |
 | `PORT` | `10000` | Render assigns port automatically, use 10000 |
-| `DB_HOST` | *(from Render DB Internal hostname)* | e.g., `medilead-db.xxxxxx.render.com` |
-| `DB_PORT` | `5432` | |
-| `DB_NAME` | `cms_db_prod` | The database name you set |
-| `DB_USER` | *(from Render DB)* | |
-| `DB_PASSWORD` | *(from Render DB)* | |
+| `DATABASE_URL` | `postgres://avnadmin:YOUR_PASSWORD@pg-2177bf51-pediacaredemo.e.aivencloud.com:21863/defaultdb?sslmode=require` | Your Aiven PostgreSQL connection string |
+| `DB_SSL` | `true` | Enable SSL for Aiven |
+| `DB_SSL_CA_CERT` | `./certs/ca.pem` | Path to CA certificate |
 | `JWT_SECRET` | *(generate a random 64-char string)* | See note below |
 | `JWT_EXPIRES_IN` | `24h` | |
 | `CORS_ORIGIN` | `https://medilead-cms.onrender.com` | Your frontend URL (set after Step 3) |
-| `DB_POOL_MAX` | `5` | Lower for free/starter tier |
-| `DB_POOL_MIN` | `1` | |
-| `LOG_LEVEL` | `warn` | Less verbose in production |
+| `DB_POOL_MAX` | `20` | Aiven connection limit |
+| `DB_POOL_MIN` | `2` | |
+| `LOG_LEVEL` | `info` | |
 
 > **Generate JWT_SECRET:** Run this in your terminal:
 > ```bash
@@ -151,7 +129,7 @@ In the **Environment** tab, add these variables:
 
 | Key | Value | Notes |
 |-----|-------|-------|
-| `VITE_API_URL` | `https://medilead-api.onrender.com/api` | Your backend URL + `/api` |
+| `VITE_API_URL` | `/api` | Use relative path (frontend proxies to backend) |
 | `VITE_APP_NAME` | `MediLead CMS` | |
 | `VITE_APP_ENV` | `production` | |
 | `VITE_SOCKET_URL` | `https://medilead-api.onrender.com` | Backend URL for Socket.IO (no `/api`) |
@@ -208,7 +186,7 @@ Test the full flow:
 | **Spin down after 15 min inactivity** | First request after idle takes ~30s to wake up |
 | **750 hours/month** per service | Enough for 1 service running 24/7; 2 services = ~15 days |
 | **No custom domains** on free tier | You get `*.onrender.com` URLs |
-| **Database expires after 90 days** | Free PostgreSQL databases are deleted after 90 days |
+| **Database on Aiven** | Separate billing/limits on Aiven (not affected by Render free tier) |
 
 > **Recommendation:** For production, use the **Starter** plan ($7/mo per service) to avoid spin-down and get custom domains.
 
@@ -241,8 +219,10 @@ Test the full flow:
 - Verify backend is running (check Render logs)
 
 ### Database connection failed
-- Use the **Internal Database URL** (not External) for services in the same region
-- Check that `DB_HOST`, `DB_USER`, `DB_PASSWORD` match the Render database info
+- Ensure `DATABASE_URL` includes `?sslmode=require` for Aiven
+- Verify `DB_SSL=true` is set in environment variables
+- Check that `server/certs/ca.pem` exists (the CA certificate)
+- Test connection: `node -e "require('./src/config/database').healthCheck().then(console.log)"`
 
 ### Socket.IO not connecting
 - Ensure `VITE_SOCKET_URL` is set to the backend URL without `/api`
@@ -266,4 +246,4 @@ Test the full flow:
 | Frontend | `https://medilead-cms.onrender.com` |
 | Backend API | `https://medilead-api.onrender.com/api` |
 | Health Check | `https://medilead-api.onrender.com/api/health` |
-| Database | Internal (accessed only by backend) |
+| Database | Aiven PostgreSQL (external, accessed via SSL) |

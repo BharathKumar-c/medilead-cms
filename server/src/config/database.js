@@ -1,22 +1,61 @@
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const logger = require('../utils/logger');
 
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'cms_db',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  // Connection pool settings
-  max: parseInt(process.env.DB_POOL_MAX) || 20, // Maximum number of clients in the pool
-  min: parseInt(process.env.DB_POOL_MIN) || 2, // Minimum number of idle clients
-  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: parseInt(process.env.DB_CONNECT_TIMEOUT) || 5000, // Return error after 5 seconds if connection could not be established
-  // Statement timeout - cancel queries taking longer than 30 seconds
-  statement_timeout: parseInt(process.env.DB_STATEMENT_TIMEOUT) || 30000,
-});
+// SSL configuration for production (Aiven requires SSL)
+const getSSLConfig = () => {
+  if (process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true') {
+    const sslConfig = {
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+    };
+
+    // Load CA certificate if provided
+    const caCertPath = process.env.DB_SSL_CA_CERT || path.join(__dirname, '..', '..', 'certs', 'ca.pem');
+    if (fs.existsSync(caCertPath)) {
+      sslConfig.ca = fs.readFileSync(caCertPath, 'utf8');
+      logger.info('SSL CA certificate loaded', { path: caCertPath });
+    }
+
+    return sslConfig;
+  }
+  return false;
+};
+
+// Support DATABASE_URL (Render provides this) or individual env vars
+const createPool = () => {
+  if (process.env.DATABASE_URL) {
+    logger.info('Connecting to database via DATABASE_URL');
+    return new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: getSSLConfig(),
+      max: parseInt(process.env.DB_POOL_MAX) || 20,
+      min: parseInt(process.env.DB_POOL_MIN) || 2,
+      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
+      connectionTimeoutMillis: parseInt(process.env.DB_CONNECT_TIMEOUT) || 10000,
+      statement_timeout: parseInt(process.env.DB_STATEMENT_TIMEOUT) || 30000,
+    });
+  }
+
+  logger.info('Connecting to database via individual env vars');
+  return new Pool({
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT) || 5432,
+    database: process.env.DB_NAME || 'cms_db',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres',
+    ssl: getSSLConfig(),
+    max: parseInt(process.env.DB_POOL_MAX) || 20,
+    min: parseInt(process.env.DB_POOL_MIN) || 2,
+    idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
+    connectionTimeoutMillis: parseInt(process.env.DB_CONNECT_TIMEOUT) || 10000,
+    statement_timeout: parseInt(process.env.DB_STATEMENT_TIMEOUT) || 30000,
+  });
+};
+
+const pool = createPool();
 
 pool.on('connect', () => {
   logger.debug('New client connected to PostgreSQL');
