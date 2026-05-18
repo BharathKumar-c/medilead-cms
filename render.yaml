@@ -4,28 +4,23 @@
 ####
 
 services:
-  # Backend API + Frontend (combined service)
+  # Backend API Web Service
   - type: web
     name: medilead-api
     runtime: node
-    region: oregon  # Change to closest region
-    plan: free  # Change to 'starter' for production
-    buildCommand: npm install && npm run build && cd server && npm install
-    startCommand: cd server && node src/index.js
+    region: oregon
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node src/index.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
-      - key: VITE_API_URL
-        value: /api
-      - key: VITE_APP_NAME
-        value: MediLead CMS
-      - key: VITE_APP_ENV
-        value: production
       - key: DATABASE_URL
-        sync: false  # Set in dashboard: postgres://avnadmin:PASSWORD@pg-2177bf51-pediacaredemo.e.aivencloud.com:21863/defaultdb?sslmode=require&uselibpqcompat=true
+        sync: false
       - key: DB_SSL
         value: "true"
       - key: DB_SSL_CA_CERT
@@ -44,7 +39,24 @@ services:
         generateValue: true
       - key: JWT_EXPIRES_IN
         value: 24h
-      - key: LOG_LEVEL
-        value: info
       - key: CORS_ORIGIN
         value: https://medilead-cms.onrender.com
+      - key: LOG_LEVEL
+        value: info
+
+  # Frontend Static Site
+  - type: static_site
+    name: medilead-cms
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://medilead-api.onrender.com/api
+      - key: VITE_APP_NAME
+        value: MediLead CMS
+      - key: VITE_APP_ENV
+        value: production
