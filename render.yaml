@@ -40,7 +40,7 @@ services:
       - key: JWT_EXPIRES_IN
         value: 24h
       - key: CORS_ORIGIN
-        value: https://medilead-cms.onrender.com
+        value: https://medcloud.kasantratech.com
       - key: LOG_LEVEL
         value: info
 
@@ -56,6 +56,8 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://medilead-api.onrender.com/api
+      - key: VITE_SOCKET_URL
+        value: https://medilead-api.onrender.com
       - key: VITE_APP_NAME
         value: MediLead CMS
       - key: VITE_APP_ENV
