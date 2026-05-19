@@ -102,7 +102,7 @@ const AppointmentForm = () => {
     api.getDepartments().then(res => {
       if (res?.data?.departments) {
         const depts = Array.isArray(res.data.departments)
-          ? res.data.departments.map(d => typeof d === 'string' ? { value: d, label: d } : { value: d.id || d.name, label: d.name || d })
+          ? res.data.departments.map(d => typeof d === 'string' ? { value: d, label: d } : { value: d.name, label: d.name })
           : [];
         setDepartments(depts);
       }

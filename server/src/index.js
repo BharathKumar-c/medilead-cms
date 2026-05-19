@@ -30,6 +30,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
+      mediaSrc: ["'self'"],
       connectSrc: ["'self'", "ws:", "wss:"],
     },
   } : false,
@@ -98,6 +99,9 @@ app.options('*', cors());
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
+// Serve call recordings
+app.use('/api/recordings', express.static(path.join(__dirname, '..', 'uploads', 'recordings')));
+
 // Request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
@@ -164,6 +168,7 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/calls', require('./routes/calls'));
+app.use('/api/branches', require('./routes/branches'));
 
 // Serve static frontend files in production
 if (isProduction) {

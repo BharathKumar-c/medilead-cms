@@ -16,6 +16,8 @@ const createTables = async () => {
       DROP TABLE IF EXISTS lead_history CASCADE;
       DROP TABLE IF EXISTS appointments CASCADE;
       DROP TABLE IF EXISTS leads CASCADE;
+      DROP TABLE IF EXISTS branch_departments CASCADE;
+      DROP TABLE IF EXISTS master_branches CASCADE;
       DROP TABLE IF EXISTS master_lead_source CASCADE;
       DROP TABLE IF EXISTS master_department CASCADE;
       DROP TABLE IF EXISTS master_priority CASCADE;
@@ -58,6 +60,32 @@ const createTables = async () => {
       CREATE TABLE master_department (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) UNIQUE NOT NULL
+      );
+    `);
+
+    // Branches master table
+    await client.query(`
+      CREATE TABLE master_branches (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        address TEXT,
+        city VARCHAR(100),
+        state VARCHAR(100),
+        phone VARCHAR(50),
+        email VARCHAR(255),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Branch-Departments junction table
+    await client.query(`
+      CREATE TABLE branch_departments (
+        id SERIAL PRIMARY KEY,
+        branch_id INTEGER NOT NULL REFERENCES master_branches(id) ON DELETE CASCADE,
+        department_id INTEGER NOT NULL REFERENCES master_department(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(branch_id, department_id)
       );
     `);
 
@@ -147,6 +175,7 @@ const createTables = async () => {
         end_time TIMESTAMP,
         duration INTEGER DEFAULT 0,
         notes TEXT,
+        recording_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -239,6 +268,8 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
       CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at);
+      CREATE INDEX IF NOT EXISTS idx_branch_departments_branch ON branch_departments(branch_id);
+      CREATE INDEX IF NOT EXISTS idx_branch_departments_dept ON branch_departments(department_id);
     `);
 
     await client.query('COMMIT');

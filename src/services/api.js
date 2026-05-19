@@ -181,8 +181,9 @@ class ApiService {
     return this.request('/leads/master-data');
   }
 
-  async getDepartments() {
-    return this.request('/leads/departments');
+  async getDepartments(branchId) {
+    const params = branchId ? `?branch_id=${branchId}` : '';
+    return this.request(`/leads/departments${params}`);
   }
 
   async getPriorities() {
@@ -236,6 +237,15 @@ class ApiService {
     return this.request(`/leads/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  // Branches
+  async getBranches() {
+    return this.request('/branches');
+  }
+
+  async getBranchDepartments(branchId) {
+    return this.request(`/branches/${branchId}/departments`);
   }
 
   // Appointments
@@ -295,9 +305,12 @@ class ApiService {
     return this.request(`/appointments/slots?doctor_id=${doctorId}&date=${date}`);
   }
 
-  async getDoctors(department) {
-    const params = department ? `?department=${encodeURIComponent(department)}` : '';
-    return this.request(`/appointments/doctors${params}`);
+  async getDoctors(department, branchId) {
+    const params = new URLSearchParams();
+    if (department) params.set('department', department);
+    if (branchId) params.set('branch_id', branchId);
+    const query = params.toString();
+    return this.request(`/appointments/doctors${query ? `?${query}` : ''}`);
   }
 
   async getProviders(department) {

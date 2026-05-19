@@ -25,6 +25,12 @@ server/certs/*.key
 server/certs/*.p12
 server/certs/*.jks
 
+# Uploaded files (keep sample audio for dev)
+server/uploads/*
+!server/uploads/recordings/
+server/uploads/recordings/*
+!server/uploads/recordings/sample-call.wav
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

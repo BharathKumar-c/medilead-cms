@@ -1,29 +1,25 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Plus, X, Calendar,
   Clock, User, Phone, Mail, FileText, AlertTriangle, Check, Ban, MoreHorizontal,
 } from 'lucide-react';
 import Layout from '../components/Layout';
+import AppointmentFormSlideOver from '../components/AppointmentFormSlideOver';
 import Toast from '../components/Toast';
 import api from '../services/api';
 
 let toastId = 0;
 
 const Appointments = () => {
-  const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [appointments, setAppointments] = useState([]);
   const [calendarData, setCalendarData] = useState({});
   const [todayOverview, setTodayOverview] = useState({ scheduled: 0, completed: 0, cancelled: 0 });
   const [loading, setLoading] = useState(true);
-  const [departments, setDepartments] = useState([]);
-  const [providers, setProviders] = useState([]);
-  const [filteredProviders, setFilteredProviders] = useState([]);
   const [timeSlots] = useState(['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00']);
 
-  const [bookModal, setBookModal] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [cancelConfirm, setCancelConfirm] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -31,9 +27,6 @@ const Appointments = () => {
   const [actionMenuId, setActionMenuId] = useState(null);
   const [toasts, setToasts] = useState([]);
 
-  const [bookForm, setBookForm] = useState({
-    patient_name: '', phone: '', email: '', department: '', provider_id: '', provider_name: '', appointment_date: '', appointment_time: '', notes: '',
-  });
   const [rescheduleForm, setRescheduleForm] = useState({ date: '', time: '' });
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -47,15 +40,6 @@ const Appointments = () => {
 
   useEffect(() => {
     loadData();
-    api.getDepartments().then(res => {
-      if (res?.data?.departments) setDepartments(res.data.departments);
-    }).catch(() => {});
-    api.getProviders().then(res => {
-      if (res?.data?.providers) {
-        setProviders(res.data.providers);
-        setFilteredProviders(res.data.providers);
-      }
-    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -115,29 +99,6 @@ const Appointments = () => {
       case 'Cancelled': return 'bg-error/10 text-error border border-error/20';
       case 'No Show': return 'bg-error/10 text-error border border-error/20';
       default: return 'bg-surface-container-high text-on-surface-variant';
-    }
-  };
-
-  // Book Appointment
-  const handleBookSubmit = async () => {
-    if (!bookForm.patient_name || !bookForm.department || !bookForm.appointment_date || !bookForm.appointment_time) {
-      addToast('error', 'Missing Fields', 'Patient name, department, date, and time are required.');
-      return;
-    }
-    try {
-      const provider = filteredProviders.find(p => p.id === parseInt(bookForm.provider_id));
-      await api.bookAppointment({
-        ...bookForm,
-        provider_id: provider?.id || null,
-        provider_name: provider?.name || '',
-      });
-      addToast('success', 'Appointment Booked', `${bookForm.patient_name} scheduled for ${bookForm.appointment_date}.`);
-      setBookModal(false);
-      setBookForm({ patient_name: '', phone: '', email: '', department: '', provider_id: '', provider_name: '', appointment_date: '', appointment_time: '', notes: '' });
-      loadData();
-      loadCalendar();
-    } catch (err) {
-      addToast('error', 'Booking Failed', err.message || 'Could not book appointment.');
     }
   };
 
@@ -219,7 +180,7 @@ const Appointments = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
           <h1 className="font-h1 text-[24px] sm:text-[28px] lg:text-[32px] text-on-background">Appointments</h1>
-          <button onClick={() => navigate('/appointments/new')}
+          <button onClick={() => setIsFormOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all shadow-sm">
             <Plus className="w-4 h-4" /> Book Appointment
           </button>
@@ -337,87 +298,6 @@ const Appointments = () => {
           </div>
         </div>
 
-        {/* Book Appointment Modal */}
-        {bookModal && (
-          <div className="fixed inset-0 z-50 flex">
-            <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setBookModal(false)} />
-            <div className="relative ml-auto w-full max-w-lg bg-surface shadow-2xl flex flex-col h-full animate-slide-in">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant">
-                <h2 className="font-h2 text-on-surface">Book Appointment</h2>
-                <button onClick={() => setBookModal(false)} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><X className="w-5 h-5 text-on-surface-variant" /></button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Patient Name <span className="text-error">*</span></label>
-                  <input type="text" value={bookForm.patient_name} onChange={e => setBookForm(p => ({ ...p, patient_name: e.target.value }))}
-                    className="w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all" />
-                </div>
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Phone</label>
-                  <input type="tel" value={bookForm.phone} onChange={e => setBookForm(p => ({ ...p, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                    placeholder="9876543210" maxLength={10}
-                    className="w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all" />
-                </div>
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Email</label>
-                  <input type="email" value={bookForm.email} onChange={e => setBookForm(p => ({ ...p, email: e.target.value }))}
-                    placeholder="patient@email.com"
-                    className="w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all" />
-                </div>
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Department <span className="text-error">*</span></label>
-                  <select value={bookForm.department} onChange={async e => {
-                    const dept = e.target.value;
-                    setBookForm(p => ({ ...p, department: dept, provider_id: '', provider_name: '' }));
-                    if (dept) {
-                      const res = await api.getProviders(dept);
-                      if (res?.data?.providers) setFilteredProviders(res.data.providers);
-                    } else {
-                      setFilteredProviders(providers);
-                    }
-                  }}
-                    className="w-full px-4 py-3 pr-10 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all appearance-none">
-                    <option value="">Select department</option>
-                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Provider</label>
-                  <select value={bookForm.provider_id} onChange={e => setBookForm(p => ({ ...p, provider_id: e.target.value }))}
-                    className="w-full px-4 py-3 pr-10 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all appearance-none">
-                    <option value="">Select provider</option>
-                    {filteredProviders.map(p => <option key={p.id} value={p.id}>{p.name}{p.specialty ? ` (${p.specialty})` : ''}</option>)}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Date <span className="text-error">*</span></label>
-                    <input type="date" value={bookForm.appointment_date} onChange={e => setBookForm(p => ({ ...p, appointment_date: e.target.value }))}
-                      className="w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all" />
-                  </div>
-                  <div>
-                    <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Time <span className="text-error">*</span></label>
-                    <select value={bookForm.appointment_time} onChange={e => setBookForm(p => ({ ...p, appointment_time: e.target.value }))}
-                      className="w-full px-4 py-3 pr-10 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all appearance-none">
-                      <option value="">Select time</option>
-                      {timeSlots.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Notes</label>
-                  <textarea rows={3} value={bookForm.notes} onChange={e => setBookForm(p => ({ ...p, notes: e.target.value }))}
-                    className="w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all resize-none" />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 px-6 py-4 border-t border-outline-variant bg-surface-container-lowest">
-                <button onClick={() => setBookModal(false)} className="px-5 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all">Cancel</button>
-                <button onClick={handleBookSubmit} className="px-5 py-2.5 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all shadow-sm">Book Appointment</button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Reschedule Modal */}
         {rescheduleModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -515,6 +395,17 @@ const Appointments = () => {
         )}
 
         <Toast toasts={toasts} onRemove={removeToast} />
+
+        <AppointmentFormSlideOver
+          isOpen={isFormOpen}
+          onClose={() => setIsFormOpen(false)}
+          onSuccess={(msg) => {
+            addToast('success', 'Appointment Booked', msg);
+            loadData();
+            loadCalendar();
+          }}
+          onError={(msg) => addToast('error', 'Booking Failed', msg)}
+        />
       </div>
     </Layout>
   );

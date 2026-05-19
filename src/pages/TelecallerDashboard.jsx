@@ -2,11 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Phone, PhoneCall, PhoneMissed, PhoneOff, Clock, User, Search,
   ChevronLeft, ChevronRight, PhoneIncoming, PhoneOutgoing, UserPlus,
+  Headphones,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import PatientIntakeForm from '../components/PatientIntakeForm';
+import AudioPlayerModal from '../components/AudioPlayerModal';
 import Toast from '../components/Toast';
 import api from '../services/api';
+
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const resolveRecordingUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  // Resolve relative URL against the API backend origin
+  return `${API_BASE}${url.startsWith('/api') ? url.slice(4) : url}`;
+};
 
 let toastId = 0;
 const ITEMS_PER_PAGE = 10;
@@ -20,6 +30,8 @@ const TelecallerDashboard = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [prefilledPhone, setPrefilledPhone] = useState('');
   const [toasts, setToasts] = useState([]);
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [selectedCall, setSelectedCall] = useState(null);
 
   const addToast = useCallback((type, title, message) => {
     const id = ++toastId;
@@ -32,6 +44,15 @@ const TelecallerDashboard = () => {
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Refresh call data when SIP events arrive via Layout's socket
+  useEffect(() => {
+    const handleCallUpdate = () => {
+      loadData();
+    };
+    window.addEventListener('call-update', handleCallUpdate);
+    return () => window.removeEventListener('call-update', handleCallUpdate);
   }, []);
 
   useEffect(() => {
@@ -80,6 +101,11 @@ const TelecallerDashboard = () => {
   const handleCreateLead = (phoneNumber) => {
     setPrefilledPhone(phoneNumber);
     setIsFormOpen(true);
+  };
+
+  const handlePlayRecording = (call) => {
+    setSelectedCall(call);
+    setPlayerOpen(true);
   };
 
   const statusColors = {
@@ -204,6 +230,15 @@ const TelecallerDashboard = () => {
                             <span className="hidden sm:inline">Create Lead</span>
                           </button>
                         )}
+                        {call.recording_url && call.status === 'connected' && (
+                          <button
+                            onClick={() => handlePlayRecording(call)}
+                            className="p-2 bg-surface-container-high rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors"
+                            title="Play recording"
+                          >
+                            <Headphones className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -249,6 +284,19 @@ const TelecallerDashboard = () => {
       />
 
       <Toast toasts={toasts} onRemove={removeToast} />
+
+      <AudioPlayerModal
+        isOpen={playerOpen}
+        onClose={() => { setPlayerOpen(false); setSelectedCall(null); }}
+        recordingUrl={resolveRecordingUrl(selectedCall?.recording_url)}
+        callInfo={selectedCall ? {
+          caller_number: selectedCall.caller_number,
+          lead_name: selectedCall.lead_name,
+          direction: selectedCall.direction,
+          duration: selectedCall.duration,
+          created_at: selectedCall.created_at,
+        } : null}
+      />
     </Layout>
   );
 };

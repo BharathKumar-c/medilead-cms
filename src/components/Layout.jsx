@@ -58,6 +58,8 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
       } else if (data.event === 'ended') {
         addToast('info', 'Call Ended', `Call from ${data.caller} ended (${data.duration || 0}s)`);
       }
+      // Dispatch event so pages can refresh their call data
+      window.dispatchEvent(new CustomEvent('call-update', { detail: data }));
     },
   });
 
@@ -92,8 +94,8 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/lead-box', icon: Inbox, label: 'Lead Box' },
     { to: '/calls', icon: Phone, label: 'Calls' },
-    { to: '/reports', icon: BarChart3, label: 'Reports' },
     { to: '/appointments', icon: Calendar, label: 'Appointments' },
+    { to: '/reports', icon: BarChart3, label: 'Reports' },
     ...(isSuperAdmin ? [
       { to: '/user-management', icon: Users, label: 'User Management' },
     ] : []),

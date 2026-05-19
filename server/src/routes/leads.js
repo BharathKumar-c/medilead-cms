@@ -174,11 +174,24 @@ router.get('/providers', async (req, res) => {
   }
 });
 
-// GET /api/leads/departments — list departments for dropdown
+// GET /api/leads/departments — list departments for dropdown (optionally filtered by branch)
 router.get('/departments', async (req, res) => {
   try {
-    const result = await db.query('SELECT name FROM master_department ORDER BY name');
-    res.json({ status: 'success', data: { departments: result.rows.map(r => r.name) } });
+    const { branch_id } = req.query;
+    let query, params;
+
+    if (branch_id) {
+      query = `SELECT d.id, d.name FROM master_department d
+               INNER JOIN branch_departments bd ON d.id = bd.department_id
+               WHERE bd.branch_id = $1 ORDER BY d.name`;
+      params = [branch_id];
+    } else {
+      query = 'SELECT id, name FROM master_department ORDER BY name';
+      params = [];
+    }
+
+    const result = await db.query(query, params);
+    res.json({ status: 'success', data: { departments: result.rows } });
   } catch (err) {
     logger.error('Get departments error', { error: err.message });
     res.status(500).json({ status: 'error', message: 'Failed to fetch departments.', code: 'DEPARTMENTS_ERROR' });

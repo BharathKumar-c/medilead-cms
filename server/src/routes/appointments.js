@@ -148,19 +148,28 @@ router.get('/calendar', async (req, res) => {
   }
 });
 
-// GET /api/appointments/doctors — list doctors by department
+// GET /api/appointments/doctors — list doctors by department (optionally filtered by branch)
 router.get('/doctors', async (req, res) => {
   try {
-    const { department } = req.query;
-    let query = `SELECT id, name, department, specialty, qualification, phone, email FROM master_doctors WHERE is_active = true`;
+    const { department, branch_id } = req.query;
     const params = [];
+    const conditions = ['md.is_active = true'];
 
-    if (department) {
-      query += ` AND department = $1`;
-      params.push(department);
+    let query = `SELECT DISTINCT md.id, md.name, md.department, md.specialty, md.qualification, md.phone, md.email
+                 FROM master_doctors md`;
+
+    if (branch_id) {
+      params.push(branch_id);
+      query += ` INNER JOIN master_department dep ON dep.name = md.department
+                 INNER JOIN branch_departments bd ON bd.department_id = dep.id AND bd.branch_id = $${params.length}`;
     }
 
-    query += ` ORDER BY name`;
+    if (department) {
+      params.push(department);
+      conditions.push(`md.department = $${params.length}`);
+    }
+
+    query += ` WHERE ${conditions.join(' AND ')} ORDER BY md.name`;
     const result = await db.query(query, params);
     res.json({ status: 'success', data: { doctors: result.rows } });
   } catch (err) {

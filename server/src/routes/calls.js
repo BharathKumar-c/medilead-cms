@@ -245,6 +245,9 @@ router.post('/sip-event', validateSipEvent, async (req, res) => {
       }
     }
 
+    // Predefined recording for answered calls (test environment mirrors live recording)
+    const recordingUrl = event === 'answered' ? '/api/recordings/sample-call.wav' : null;
+
     if (callLog) {
       // Update existing call log
       const updates = ['status = $1'];
@@ -254,19 +257,20 @@ router.post('/sip-event', validateSipEvent, async (req, res) => {
       if (startTime) { updates.push(`start_time = CURRENT_TIMESTAMP`); }
       if (endTime) { updates.push(`end_time = CURRENT_TIMESTAMP`); }
       if (duration !== undefined && event === 'ended') { updates.push(`duration = $${paramIdx++}`); params.push(duration || 0); }
+      if (recordingUrl) { updates.push(`recording_url = $${paramIdx++}`); params.push(recordingUrl); }
 
       await db.query(
         `UPDATE call_logs SET ${updates.join(', ')} WHERE id = $${paramIdx}`,
         [...params, callLog.id]
       );
-      callLog = { ...callLog, status: callStatus, duration: duration || callLog.duration };
+      callLog = { ...callLog, status: callStatus, duration: duration || callLog.duration, recording_url: recordingUrl || callLog.recording_url };
     } else {
       // Create new call log entry
       const direction = (event === 'incoming' || event === 'missed') ? 'inbound' : 'outbound';
       const result = await db.query(
-        `INSERT INTO call_logs (caller_number, callee_number, direction, status, lead_id, call_id, start_time, end_time, duration)
-         VALUES ($1, $2, $3, $4, $5, $6, ${startTime || 'NULL'}, ${endTime || 'NULL'}, $7) RETURNING *`,
-        [caller || 'unknown', callee || 'unknown', direction, callStatus, leadId, call_id || `sip-${Date.now()}`, duration || 0]
+        `INSERT INTO call_logs (caller_number, callee_number, direction, status, lead_id, call_id, start_time, end_time, duration, recording_url)
+         VALUES ($1, $2, $3, $4, $5, $6, ${startTime || 'NULL'}, ${endTime || 'NULL'}, $7, $8) RETURNING *`,
+        [caller || 'unknown', callee || 'unknown', direction, callStatus, leadId, call_id || `sip-${Date.now()}`, duration || 0, recordingUrl]
       );
       callLog = result.rows[0];
     }

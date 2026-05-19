@@ -19,6 +19,8 @@ const seed = async () => {
     await client.query('DELETE FROM notifications');
     await client.query('DELETE FROM appointments');
     await client.query('DELETE FROM leads');
+    await client.query('DELETE FROM branch_departments');
+    await client.query('DELETE FROM master_branches');
     await client.query('DELETE FROM master_lead_source');
     await client.query('DELETE FROM master_department');
     await client.query('DELETE FROM master_priority');
@@ -34,6 +36,8 @@ const seed = async () => {
     await client.query(
       'ALTER SEQUENCE master_department_id_seq RESTART WITH 1',
     );
+    await client.query('ALTER SEQUENCE master_branches_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE branch_departments_id_seq RESTART WITH 1');
     await client.query('ALTER SEQUENCE master_priority_id_seq RESTART WITH 1');
     await client.query(
       'ALTER SEQUENCE master_lead_status_id_seq RESTART WITH 1',
@@ -73,6 +77,14 @@ const seed = async () => {
       ('Dermatology');
     `);
 
+    // Seed Branches
+    await client.query(`
+      INSERT INTO master_branches (name, address, city, state, phone, email) VALUES
+      ('Main Hospital', '100 MG Road, Central Area', 'Mumbai', 'Maharashtra', '022-22345678', 'main@hospital.com'),
+      ('North Wing Clinic', '45 Nehru Nagar, North District', 'Mumbai', 'Maharashtra', '022-22345679', 'north@hospital.com'),
+      ('South Satellite Center', '78 Anna Salai, South Zone', 'Chennai', 'Tamil Nadu', '044-28345678', 'south@hospital.com');
+    `);
+
     // Seed Doctors
     await client.query(`
       INSERT INTO master_doctors (name, department, specialty, qualification, phone, email) VALUES
@@ -88,6 +100,17 @@ const seed = async () => {
       ('Dr. Pooja Nair', 'General Consultation', 'General Physician', 'MBBS, MD Internal Medicine', '9876543210', 'pooja.nair@hospital.com'),
       ('Dr. Mohan Das', 'General Consultation', 'General Practitioner', 'MBBS, DNB Family Medicine', '9876543211', 'mohan.das@hospital.com'),
       ('Dr. Ritu Agarwal', 'Emergency', 'Emergency Medicine', 'MBBS, MD Emergency Medicine', '9876543212', 'ritu.agarwal@hospital.com');
+    `);
+
+    // Seed Branch-Departments (which departments are available at each branch)
+    await client.query(`
+      INSERT INTO branch_departments (branch_id, department_id) VALUES
+      -- Main Hospital: all 8 departments
+      (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
+      -- North Wing Clinic: 5 departments (Cardiology, General Consultation, Orthopedics, Neurology, Pediatrics)
+      (2, 1), (2, 2), (2, 4), (2, 5), (2, 6),
+      -- South Satellite Center: 4 departments (Cardiology, General Consultation, Pediatrics, Dermatology)
+      (3, 1), (3, 2), (3, 6), (3, 8);
     `);
 
     // Seed Priorities
@@ -164,6 +187,17 @@ const seed = async () => {
       (1, 'info', 'Lab results ready for Sarah Mitchell', '/lead-box', true),
       (1, 'warning', 'Overdue response: David Vance - 3 days pending', '/lead-box', true),
       (1, 'success', 'Report exported successfully', '/reports', true);
+    `);
+
+    // Seed Call Logs
+    await client.query(`
+      INSERT INTO call_logs (call_id, caller_number, callee_number, direction, status, lead_id, user_id, start_time, end_time, duration, notes, recording_url) VALUES
+      ('CALL-001', '+91 98765 43210', '+91 98765 43200', 'inbound', 'connected', 1, 3, '2024-10-24 09:00:00', '2024-10-24 09:05:30', 330, 'Patient inquiry about orthopedic consultation', '/api/recordings/sample-call.wav'),
+      ('CALL-002', '+91 98765 43212', '+91 98765 43200', 'outbound', 'connected', 2, 3, '2024-10-24 09:15:00', '2024-10-24 09:18:45', 225, 'Follow-up call for post-surgical recovery', '/api/recordings/sample-call.wav'),
+      ('CALL-003', '+91 98765 43215', '+91 98765 43200', 'inbound', 'missed', 4, NULL, '2024-10-24 09:30:00', NULL, 0, NULL, '/api/recordings/sample-call.wav'),
+      ('CALL-004', '+91 98765 43218', '+91 98765 43200', 'inbound', 'connected', 6, 3, '2024-10-24 10:00:00', '2024-10-24 10:08:15', 495, 'New referral for pediatric consultation', '/api/recordings/sample-call.wav'),
+      ('CALL-005', '+91 98765 43224', '+91 98765 43200', 'outbound', 'disconnected', 10, 3, '2024-10-24 10:30:00', '2024-10-24 10:30:45', 45, 'Call disconnected during follow-up scheduling', NULL),
+      ('CALL-006', '+91 98765 43231', '+91 98765 43200', 'inbound', 'connected', 15, 3, '2024-10-24 11:00:00', '2024-10-24 11:12:30', 750, 'Detailed discussion about dental referral', '/api/recordings/sample-call.wav');
     `);
 
     // Seed Activity Log
