@@ -44,10 +44,17 @@ const Dashboard = () => {
     }
   };
 
+  const escapeCsvField = (val) => {
+    const s = String(val ?? '');
+    const needsPrefix = /^[=+\-@]/.test(s);
+    const escaped = '"' + s.replaceAll('"', '""') + '"';
+    return needsPrefix ? '\t' + escaped : escaped;
+  };
+
   const handleExportCSV = () => {
     const headers = ['Patient Name', 'Call Type', 'Time', 'Status', 'Duration'];
     const rows = activity.map((r) => [r.patient_name, r.call_type, new Date(r.created_at).toLocaleTimeString(), r.status, r.duration]);
-    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
+    const csv = [headers, ...rows].map((r) => r.map(escapeCsvField).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

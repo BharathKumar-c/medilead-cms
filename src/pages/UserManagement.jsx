@@ -210,7 +210,7 @@ const UserManagement = () => {
 
 // Password requirements config
 const passwordRules = [
-  { test: (v) => v.length >= 6, label: 'At least 6 characters' },
+  { test: (v) => v.length >= 8, label: 'At least 8 characters' },
   { test: (v) => /[a-z]/.test(v), label: 'One lowercase letter' },
   { test: (v) => /[A-Z]/.test(v), label: 'One uppercase letter' },
   { test: (v) => /\d/.test(v), label: 'One number' },
@@ -343,7 +343,7 @@ const UserFormPanel = ({ user, onClose, onSave, onError, onSuccess }) => {
                   onChange={(e) => setField('password', e.target.value)}
                   onFocus={() => setShowPasswordRules(true)}
                   onBlur={() => setTimeout(() => setShowPasswordRules(false), 200)}
-                  placeholder="Min 6 characters"
+                  placeholder="Min 8 characters"
                   className={`${inputClass('password')} pr-12`}
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-on-surface-variant hover:text-on-surface transition-colors">

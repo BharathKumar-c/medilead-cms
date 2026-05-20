@@ -11,7 +11,7 @@ const router = express.Router();
 // POST /api/auth/register
 router.post('/register', validateRegister, async (req, res) => {
   try {
-    const { name, email, password, role, specialty, phone } = req.body;
+    const { name, email, password, specialty, phone } = req.body;
 
     // Check if user exists
     const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -31,7 +31,7 @@ router.post('/register', validateRegister, async (req, res) => {
       `INSERT INTO users (name, email, password_hash, role, specialty, phone)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, name, email, role, specialty, phone, created_at`,
-      [name, email, passwordHash, role || 'staff', specialty, phone]
+      [name, email, passwordHash, 'staff', specialty, phone]
     );
 
     const user = result.rows[0];
@@ -303,8 +303,8 @@ router.put('/users/:id/password', authenticate, authorize('super_admin'), valida
   try {
     const { newPassword } = req.body;
 
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ status: 'error', message: 'Password must be at least 6 characters.', code: 'INVALID_PASSWORD' });
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ status: 'error', message: 'Password must be at least 8 characters.', code: 'INVALID_PASSWORD' });
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);

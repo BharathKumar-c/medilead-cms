@@ -405,18 +405,16 @@ router.get('/export', async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'No data to export.', code: 'NO_DATA' });
     }
 
-    // Generate CSV
+    // Generate CSV with injection-safe escaping
+    const escapeField = (val) => {
+      const s = String(val ?? '');
+      const escaped = '"' + s.replace(/"/g, '""') + '"';
+      return /^[=+\-@]/.test(s) ? '\t' + escaped : escaped;
+    };
     const headers = Object.keys(data[0]);
     const csv = [
-      headers.join(','),
-      ...data.map(row => headers.map(h => {
-        const val = row[h];
-        // Escape commas and quotes
-        if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
-          return `"${val.replace(/"/g, '""')}"`;
-        }
-        return val ?? '';
-      }).join(','))
+      headers.map(escapeField).join(','),
+      ...data.map(row => headers.map(h => escapeField(row[h])).join(','))
     ].join('\n');
 
     logger.info('Report exported', { type, rowCount: data.length, userId: req.user.id });

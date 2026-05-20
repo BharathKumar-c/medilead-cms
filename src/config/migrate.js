@@ -2,6 +2,12 @@ const db = require('./database');
 require('dotenv').config();
 
 const createTables = async () => {
+  // Refuse destructive migration in production unless explicitly allowed
+  if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_MIGRATE) {
+    console.error('Migration is disabled in production. Set ALLOW_MIGRATE=true to override.');
+    return;
+  }
+
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -147,6 +153,7 @@ const createTables = async () => {
         end_time TIMESTAMP,
         duration INTEGER DEFAULT 0,
         notes TEXT,
+        recording_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);

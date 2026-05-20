@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Phone, PhoneMissed, Clock,
   ChevronLeft, ChevronRight, PhoneIncoming, PhoneOutgoing, UserPlus,
@@ -32,6 +32,7 @@ const TelecallerDashboard = () => {
   const [toasts, setToasts] = useState([]);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [selectedCall, setSelectedCall] = useState(null);
+  const loadRequestId = useRef(0);
 
   const addToast = useCallback((type, title, message) => {
     const id = ++toastId;
@@ -60,18 +61,20 @@ const TelecallerDashboard = () => {
   }, [filter]);
 
   const loadData = async () => {
+    const requestId = ++loadRequestId.current;
     setLoading(true);
     try {
       const [callsRes, statsRes] = await Promise.all([
         api.getCalls({ limit: 50 }),
         api.getCallStats(),
       ]);
+      if (requestId !== loadRequestId.current) return;
       setCalls(callsRes.data.calls);
       if (statsRes?.data) setStats(statsRes.data);
     } catch (err) {
       console.error('Failed to load call data:', err);
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
   };
 

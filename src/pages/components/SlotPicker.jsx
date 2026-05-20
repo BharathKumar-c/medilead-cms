@@ -54,7 +54,7 @@ const SlotPicker = ({ doctorId, date, value, onChange, error }) => {
         times.push({
           id: `${hour}:${min}`,
           time: `${displayH}:${min} ${period}`,
-          available: Math.random() > 0.3,
+          available: false,
         });
       }
     }

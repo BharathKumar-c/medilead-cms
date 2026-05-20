@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import DocsLayout from './DocsLayout';
 import DocsSearch from './DocsSearch';
 import GettingStarted from './sections/GettingStarted';
@@ -39,6 +39,7 @@ const DocsRouter = () => {
         <Route path="api-notifications" element={<APIReference />} />
         <Route path="database-schema" element={<DatabaseSchema />} />
         <Route path="security" element={<Security />} />
+        <Route path="*" element={<Navigate to="/docs" replace />} />
       </Routes>
     </DocsLayout>
   );
