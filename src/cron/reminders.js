@@ -63,15 +63,23 @@ function startFollowUpReminders(io) {
       }
 
       // Find appointments tomorrow that aren't confirmed
+      // Use local date components to avoid UTC timezone issues
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
 
       const unconfirmed = await db.query(`
         SELECT a.id, a.patient_name, a.provider_id, a.appointment_date, a.appointment_time
         FROM appointments a
         WHERE a.appointment_date = $1
           AND a.status = 'Scheduled'
+          AND NOT EXISTS (
+            SELECT 1 FROM notifications n
+            WHERE n.user_id = a.provider_id
+              AND n.title LIKE '%' || a.patient_name || '%'
+              AND n.title LIKE '%appointment%'
+              AND n.created_at > NOW() - INTERVAL '1 day'
+          )
       `, [tomorrowStr]);
 
       for (const apt of unconfirmed.rows) {

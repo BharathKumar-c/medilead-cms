@@ -225,6 +225,11 @@ router.get('/:id', validateId, async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Appointment not found.', code: 'APPOINTMENT_NOT_FOUND' });
     }
 
+    // Telecallers can only view appointments assigned to them
+    if (req.user.role === 'telecaller' && result.rows[0].provider_id !== req.user.id) {
+      return res.status(404).json({ status: 'error', message: 'Appointment not found.', code: 'APPOINTMENT_NOT_FOUND' });
+    }
+
     res.json({ status: 'success', data: { appointment: result.rows[0] } });
   } catch (err) {
     logger.error('Get appointment error', { error: err.message, appointmentId: req.params.id });
@@ -294,6 +299,11 @@ router.put('/:id', validateId, validateAppointmentUpdate, async (req, res) => {
 
     const existing = await db.query('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
     if (existing.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Appointment not found.', code: 'APPOINTMENT_NOT_FOUND' });
+    }
+
+    // Telecallers can only update appointments assigned to them
+    if (req.user.role === 'telecaller' && existing.rows[0].provider_id !== req.user.id) {
       return res.status(404).json({ status: 'error', message: 'Appointment not found.', code: 'APPOINTMENT_NOT_FOUND' });
     }
 
@@ -371,6 +381,11 @@ router.put('/:id/reschedule', validateId, validateReschedule, async (req, res) =
 
     const oldAppointment = existing.rows[0];
 
+    // Telecallers can only reschedule appointments assigned to them
+    if (req.user.role === 'telecaller' && oldAppointment.provider_id !== req.user.id) {
+      return res.status(404).json({ status: 'error', message: 'Appointment not found.', code: 'APPOINTMENT_NOT_FOUND' });
+    }
+
     // Check for conflicts
     if (oldAppointment.provider_id) {
       const conflict = await db.query(
@@ -389,15 +404,16 @@ router.put('/:id/reschedule', validateId, validateReschedule, async (req, res) =
       }
     }
 
+    const rescheduleNote = `\n[Rescheduled from ${oldAppointment.appointment_date} ${oldAppointment.appointment_time}]`;
     const result = await db.query(
       `UPDATE appointments SET
         appointment_date = $1,
         appointment_time = $2,
         status = 'Scheduled',
-        notes = COALESCE(notes, '') || E'\n[Rescheduled from ${oldAppointment.appointment_date} ${oldAppointment.appointment_time}]',
+        notes = COALESCE(notes, '') || $3,
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3 RETURNING *`,
-      [appointment_date, appointment_time, req.params.id]
+       WHERE id = $4 RETURNING *`,
+      [appointment_date, appointment_time, rescheduleNote, req.params.id]
     );
 
     // Notify provider
@@ -437,18 +453,24 @@ router.put('/:id/cancel', validateId, async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Appointment not found.', code: 'APPOINTMENT_NOT_FOUND' });
     }
 
+    // Telecallers can only cancel appointments assigned to them
+    if (req.user.role === 'telecaller' && existing.rows[0].provider_id !== req.user.id) {
+      return res.status(404).json({ status: 'error', message: 'Appointment not found.', code: 'APPOINTMENT_NOT_FOUND' });
+    }
+
     if (existing.rows[0].status === 'Cancelled') {
       return res.status(400).json({ status: 'error', message: 'Appointment is already cancelled.', code: 'ALREADY_CANCELLED' });
     }
 
+    const cancelNote = `\n[Cancelled: ${reason || 'No reason provided'}]`;
     const result = await db.query(
       `UPDATE appointments SET
         status = 'Cancelled',
         cancellation_reason = $2,
-        notes = COALESCE(notes, '') || E'\n[Cancelled: ${reason || 'No reason provided'}]',
+        notes = COALESCE(notes, '') || $3,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = $1 RETURNING *`,
-      [req.params.id, reason || null]
+      [req.params.id, reason || null, cancelNote]
     );
 
     // Notify provider

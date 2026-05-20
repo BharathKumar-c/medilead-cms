@@ -76,7 +76,7 @@ const ManagerGuide = () => {
         </p>
         <ul className="list-disc list-inside text-gray-700 space-y-1 mb-4">
           <li><strong>Status</strong> — New, Contacted, Interested, Follow-up, Appointment Booked, Closed, Rejected</li>
-          <li><strong>Priority</strong> — Hot, Warm, Cold</li>
+          <li><strong>Priority</strong> — High, Medium, Low</li>
           <li><strong>Assigned to</strong> — Filter by specific telecaller</li>
           <li><strong>Source</strong> — Website, referral, walk-in, etc.</li>
           <li><strong>Department</strong> — Cardiology, Orthopedics, General, etc.</li>
@@ -240,7 +240,7 @@ const ManagerGuide = () => {
             overloading one person while others have capacity.
           </p>
           <p className="text-sm text-blue-800">
-            <strong>Act on hot leads fast:</strong> Prioritize "Hot" leads and ensure they are
+            <strong>Act on high-priority leads fast:</strong> Prioritize "High" leads and ensure they are
             contacted within the first hour of assignment.
           </p>
           <p className="text-sm text-blue-800">

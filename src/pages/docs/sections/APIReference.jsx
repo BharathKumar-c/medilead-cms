@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { apiEndpoints } from '../../../data/docs';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const methodColors = {
   GET: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300' },
   POST: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300' },
@@ -111,7 +113,7 @@ const APIReference = () => {
       {/* Base URL */}
       <div className="bg-gray-900 rounded-lg p-4 mb-8">
         <p className="text-xs text-gray-400 mb-1">Base URL</p>
-        <code className="text-green-400 font-mono text-sm">http://localhost:5000</code>
+        <code className="text-green-400 font-mono text-sm">{API_BASE_URL}</code>
         <p className="text-xs text-gray-400 mt-3 mb-1">Authentication Header</p>
         <code className="text-green-400 font-mono text-sm">Authorization: Bearer &lt;your-jwt-token&gt;</code>
       </div>

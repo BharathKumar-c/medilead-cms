@@ -113,6 +113,9 @@ const AppointmentForm = () => {
 
   useEffect(() => {
     if (watchedDepartment) {
+      // Clear doctor and time slot when department changes
+      setValue('doctor_id', '');
+      setValue('time_slot_id', '');
       api.getDoctors(watchedDepartment).then(res => {
         if (res?.data?.doctors) {
           setDoctors(res.data.doctors.map(d => ({
@@ -121,8 +124,12 @@ const AppointmentForm = () => {
           })));
         }
       }).catch(() => setDoctors([]));
+    } else {
+      setDoctors([]);
+      setValue('doctor_id', '');
+      setValue('time_slot_id', '');
     }
-  }, [watchedDepartment]);
+  }, [watchedDepartment, setValue]);
 
   const handleNext = async () => {
     const valid = await trigger();

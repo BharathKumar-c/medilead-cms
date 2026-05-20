@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Clock, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 
 const SlotPicker = ({ doctorId, date, value, onChange, error }) => {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(false);
+  const latestRequestId = useRef(0);
 
   useEffect(() => {
     if (!doctorId || !date) {
@@ -12,19 +13,27 @@ const SlotPicker = ({ doctorId, date, value, onChange, error }) => {
       return;
     }
 
+    const requestId = ++latestRequestId.current;
+
     const fetchSlots = async () => {
       setLoading(true);
       try {
         const res = await api.getAvailableSlots(doctorId, date);
+        // Ignore stale response if doctor/date changed
+        if (requestId !== latestRequestId.current) return;
+
         if (res?.data?.slots) {
           setSlots(res.data.slots);
         } else {
           setSlots(generateDefaultSlots());
         }
       } catch {
+        if (requestId !== latestRequestId.current) return;
         setSlots(generateDefaultSlots());
       } finally {
-        setLoading(false);
+        if (requestId === latestRequestId.current) {
+          setLoading(false);
+        }
       }
     };
 
@@ -55,13 +64,14 @@ const SlotPicker = ({ doctorId, date, value, onChange, error }) => {
   // Check if a slot is in the past (only when date is today)
   const isPastSlot = (slotId) => {
     if (!date) return false;
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const now = new Date();
+    // Use local date components to avoid UTC timezone issues
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (date !== todayStr) return false;
 
     const [slotH, slotM] = slotId.split(':').map(Number);
-    const nowH = today.getHours();
-    const nowM = today.getMinutes();
+    const nowH = now.getHours();
+    const nowM = now.getMinutes();
     return slotH < nowH || (slotH === nowH && slotM <= nowM);
   };
 

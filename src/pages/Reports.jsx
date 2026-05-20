@@ -108,16 +108,13 @@ const Reports = () => {
         // Map API response to expected format
         const stats = res[10].data.appointmentStats;
         const byStatus = stats.byStatus || [];
-        const byDepartment = (stats.byDepartment || []).map(d => {
-          const deptStatus = byStatus.find(s => s.status === 'Completed') || {};
-          return {
-            department: d.department,
-            total: d.count,
-            completed: 0,
-            cancelled: 0,
-            no_show: 0,
-          };
-        });
+        const byDepartment = (stats.byDepartment || []).map(d => ({
+          department: d.department,
+          total: d.count,
+          completed: d.completed || 0,
+          cancelled: d.cancelled || 0,
+          no_show: d.no_show || 0,
+        }));
         setAppointmentStats({
           byStatus,
           byDepartment,

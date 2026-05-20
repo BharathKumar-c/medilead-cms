@@ -4,8 +4,8 @@ import {Stethoscope, Mail, Lock, Eye, EyeOff} from 'lucide-react';
 
 const Login = () => {
   const {login} = useAuth();
-  const [email, setEmail] = useState('bharath@medcloud.health');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -115,7 +115,7 @@ const Login = () => {
 
           <div className="mt-6 pt-4 border-t border-outline-variant">
             <p className="font-caption text-on-surface-variant text-center">
-              Demo credentials are pre-filled. Click Sign In to continue.
+              Enter your credentials to sign in.
             </p>
           </div>
         </div>

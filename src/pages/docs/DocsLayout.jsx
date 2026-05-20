@@ -20,6 +20,7 @@ const DocsLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const searchRef = useRef(null);
+  const sidebarSearchRef = useRef(null);
   const contentRef = useRef(null);
 
   // Auto-expand active section
@@ -62,10 +63,12 @@ const DocsLayout = ({ children }) => {
     setSearchResults(results);
   }, [searchQuery]);
 
-  // Close search on click outside
+  // Close search on click outside (check both top and sidebar search containers)
   useEffect(() => {
     const handleClick = (e) => {
-      if (searchRef.current && !searchRef.current.contains(e.target)) {
+      const clickedInTopSearch = searchRef.current && searchRef.current.contains(e.target);
+      const clickedInSidebarSearch = sidebarSearchRef.current && sidebarSearchRef.current.contains(e.target);
+      if (!clickedInTopSearch && !clickedInSidebarSearch) {
         setShowSearch(false);
       }
     };
@@ -130,7 +133,7 @@ const DocsLayout = ({ children }) => {
           </div>
 
           {/* Sidebar search */}
-          <div className="p-3">
+          <div className="p-3" ref={sidebarSearchRef}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input

@@ -8,6 +8,14 @@ export const useSocket = ({ onNotification, onIncomingCall, onCallEvent } = {}) 
   const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
 
+  // Store callbacks in refs so listeners always invoke the latest version
+  const onNotificationRef = useRef(onNotification);
+  const onIncomingCallRef = useRef(onIncomingCall);
+  const onCallEventRef = useRef(onCallEvent);
+  onNotificationRef.current = onNotification;
+  onIncomingCallRef.current = onIncomingCall;
+  onCallEventRef.current = onCallEvent;
+
   useEffect(() => {
     const token = api.getToken();
     if (!token) return;
@@ -31,15 +39,15 @@ export const useSocket = ({ onNotification, onIncomingCall, onCallEvent } = {}) 
     socket.on('disconnect', () => setConnected(false));
 
     socket.on('notification', (data) => {
-      if (onNotification) onNotification(data);
+      if (onNotificationRef.current) onNotificationRef.current(data);
     });
 
     socket.on('incoming-call', (data) => {
-      if (onIncomingCall) onIncomingCall(data);
+      if (onIncomingCallRef.current) onIncomingCallRef.current(data);
     });
 
     socket.on('call-event', (data) => {
-      if (onCallEvent) onCallEvent(data);
+      if (onCallEventRef.current) onCallEventRef.current(data);
     });
 
     return () => {

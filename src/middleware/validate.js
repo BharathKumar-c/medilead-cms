@@ -1,20 +1,26 @@
 const { body, param, query, validationResult } = require('express-validator');
 const logger = require('../utils/logger');
 
+// Sensitive fields whose values must never be logged or returned
+const SENSITIVE_FIELDS = ['password', 'newPassword', 'currentPassword', 'token', 'secret'];
+
 // Helper to handle validation errors
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    const formattedErrors = errors.array().map(err => ({
-      field: err.path,
-      message: err.msg,
-      value: err.value,
-    }));
+    const formattedErrors = errors.array().map(err => {
+      const isSensitive = SENSITIVE_FIELDS.some(f => err.path.toLowerCase().includes(f.toLowerCase()));
+      return {
+        field: err.path,
+        message: err.msg,
+        ...(isSensitive ? {} : { value: err.value }),
+      };
+    });
 
     logger.warn('Validation failed', {
       path: req.path,
       method: req.method,
-      errors: formattedErrors,
+      errors: formattedErrors.map(({ field, message }) => ({ field, message })),
     });
 
     return res.status(400).json({

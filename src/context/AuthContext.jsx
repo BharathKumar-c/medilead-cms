@@ -5,13 +5,19 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      localStorage.removeItem('user');
+      return null;
+    }
   });
   const [loading, setLoading] = useState(true);
 
-  // Handle 401 from API — clear state without page reload
+  // Handle 401 from API — clear state and token
   const handleUnauthorized = useCallback(() => {
+    api.logout();
     setUser(null);
     localStorage.removeItem('user');
   }, []);

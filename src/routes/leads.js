@@ -200,6 +200,11 @@ router.get('/:id', validateId, async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Lead not found.', code: 'LEAD_NOT_FOUND' });
     }
 
+    // Telecallers can only view leads assigned to them
+    if (req.user.role === 'telecaller' && result.rows[0].assigned_to !== req.user.id) {
+      return res.status(404).json({ status: 'error', message: 'Lead not found.', code: 'LEAD_NOT_FOUND' });
+    }
+
     res.json({ status: 'success', data: { lead: result.rows[0] } });
   } catch (err) {
     logger.error('Get lead error', { error: err.message, leadId: req.params.id });
@@ -309,6 +314,11 @@ router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
 
     const oldLead = existing.rows[0];
 
+    // Telecallers can only update leads assigned to them
+    if (req.user.role === 'telecaller' && oldLead.assigned_to !== req.user.id) {
+      return res.status(404).json({ status: 'error', message: 'Lead not found.', code: 'LEAD_NOT_FOUND' });
+    }
+
     // Check for duplicate phone if phone is being changed
     if (phone && phone !== oldLead.phone) {
       const duplicate = await db.query('SELECT id, name FROM leads WHERE phone = $1 AND id != $2', [phone, req.params.id]);
@@ -393,6 +403,14 @@ router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
 // DELETE /api/leads/:id — soft delete (set status to Rejected)
 router.delete('/:id', validateId, async (req, res) => {
   try {
+    // Check ownership for telecallers
+    if (req.user.role === 'telecaller') {
+      const ownerCheck = await db.query('SELECT assigned_to FROM leads WHERE id = $1', [req.params.id]);
+      if (ownerCheck.rows.length === 0 || ownerCheck.rows[0].assigned_to !== req.user.id) {
+        return res.status(404).json({ status: 'error', message: 'Lead not found.', code: 'LEAD_NOT_FOUND' });
+      }
+    }
+
     const result = await db.query(
       `UPDATE leads SET status = 'Rejected', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, name`,
       [req.params.id]
@@ -421,6 +439,14 @@ router.delete('/:id', validateId, async (req, res) => {
 // GET /api/leads/:id/history — get lead history
 router.get('/:id/history', validateId, async (req, res) => {
   try {
+    // Telecallers can only view history of leads assigned to them
+    if (req.user.role === 'telecaller') {
+      const ownerCheck = await db.query('SELECT assigned_to FROM leads WHERE id = $1', [req.params.id]);
+      if (ownerCheck.rows.length === 0 || ownerCheck.rows[0].assigned_to !== req.user.id) {
+        return res.status(404).json({ status: 'error', message: 'Lead not found.', code: 'LEAD_NOT_FOUND' });
+      }
+    }
+
     const result = await db.query(
       `SELECT lh.*, u.name as changed_by_name
        FROM lead_history lh

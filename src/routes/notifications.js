@@ -46,7 +46,11 @@ router.post('/', notificationLimiter, validateNotification, async (req, res) => 
   try {
     const { type, title, link, user_id } = req.body;
 
+    // Only admins can send notifications to other users
     const targetUserId = user_id || req.user.id;
+    if (targetUserId !== req.user.id && !['super_admin', 'manager'].includes(req.user.role)) {
+      return res.status(403).json({ status: 'error', message: 'You can only create notifications for yourself.', code: 'FORBIDDEN' });
+    }
 
     const result = await db.query(
       `INSERT INTO notifications (user_id, type, title, link) VALUES ($1, $2, $3, $4) RETURNING *`,

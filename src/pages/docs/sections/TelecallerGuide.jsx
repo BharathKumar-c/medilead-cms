@@ -71,7 +71,7 @@ const TelecallerGuide = () => {
         <ul className="list-disc list-inside text-gray-700 space-y-1 mb-4">
           <li><strong>Patient name</strong> and contact number</li>
           <li><strong>Status</strong> — Current stage in the pipeline</li>
-          <li><strong>Priority</strong> — Hot, warm, or cold</li>
+          <li><strong>Priority</strong> — High, Medium, or Low</li>
           <li><strong>Source</strong> — Where the lead came from</li>
           <li><strong>Department</strong> — Medical department of interest</li>
           <li><strong>Last activity</strong> — When the lead was last contacted</li>
@@ -323,7 +323,7 @@ const TelecallerGuide = () => {
             means missed opportunities or duplicate effort.
           </p>
           <p className="text-sm text-blue-800">
-            <strong>Call hot leads first:</strong> Prioritize by "Hot" priority. These patients
+            <strong>Call high-priority leads first:</strong> Prioritize by "High" priority. These patients
             are most likely to convert if contacted quickly.
           </p>
           <p className="text-sm text-blue-800">

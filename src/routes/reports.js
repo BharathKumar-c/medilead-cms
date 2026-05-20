@@ -45,11 +45,11 @@ router.get('/call-volume', async (req, res) => {
   try {
     const result = await db.query(`
       SELECT
-        TO_CHAR(created_at, 'Mon') as month,
+        TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') as month,
         COUNT(*) as calls
       FROM call_logs
-      GROUP BY TO_CHAR(created_at, 'Mon'), MIN(created_at)
-      ORDER BY MIN(created_at)
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY DATE_TRUNC('month', created_at)
     `);
 
     res.json({ status: 'success', data: { callVolume: result.rows } });
@@ -297,7 +297,15 @@ router.get('/appointment-stats', async (req, res) => {
   try {
     const [byStatus, byDepartment, noShowRate] = await Promise.all([
       db.query(`SELECT status, COUNT(*) as count FROM appointments GROUP BY status`),
-      db.query(`SELECT department, COUNT(*) as count FROM appointments GROUP BY department`),
+      db.query(`
+        SELECT
+          department,
+          COUNT(*) as count,
+          COUNT(*) FILTER (WHERE status = 'Completed') as completed,
+          COUNT(*) FILTER (WHERE status = 'Cancelled') as cancelled,
+          COUNT(*) FILTER (WHERE status = 'No Show') as no_show
+        FROM appointments GROUP BY department
+      `),
       db.query(`SELECT COUNT(*) FILTER (WHERE status = 'No Show') * 100.0 / NULLIF(COUNT(*), 0) as rate FROM appointments`),
     ]);
 
@@ -306,7 +314,13 @@ router.get('/appointment-stats', async (req, res) => {
       data: {
         appointmentStats: {
           byStatus: byStatus.rows.map(r => ({ status: r.status, count: parseInt(r.count) })),
-          byDepartment: byDepartment.rows.map(r => ({ department: r.department, count: parseInt(r.count) })),
+          byDepartment: byDepartment.rows.map(r => ({
+            department: r.department,
+            count: parseInt(r.count),
+            completed: parseInt(r.completed) || 0,
+            cancelled: parseInt(r.cancelled) || 0,
+            no_show: parseInt(r.no_show) || 0,
+          })),
           noShowRate: Math.round(parseFloat(noShowRate.rows[0].rate) || 0),
         },
       },
