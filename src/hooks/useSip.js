@@ -16,6 +16,15 @@ export const useSip = ({ onIncomingCall, onCallConnected, onCallEnded, onCallFai
   const connect = useCallback(async (sipUser, sipPassword) => {
     if (!sipUser || !sipPassword) return;
 
+    // Close any existing connection first
+    if (uaRef.current) {
+      try {
+        await disconnect();
+      } catch (err) {
+        console.error('Error closing previous SIP connection:', err);
+      }
+    }
+
     try {
       const uri = UserAgent.makeURI(`sip:${sipUser}@${SIP_DOMAIN}`);
       if (!uri) return;
@@ -105,16 +114,18 @@ export const useSip = ({ onIncomingCall, onCallConnected, onCallEnded, onCallFai
 
       await inviter.invite();
 
-      // Log the call
-      await api.createCallLog({
+      // Log the call (non-blocking — don't fail the call if logging fails)
+      api.createCallLog({
         caller_number: 'self',
         callee_number: number,
         direction: 'outbound',
-      });
+      }).catch(err => console.warn('Call log failed:', err));
     } catch (err) {
       console.error('Make call error:', err);
+      // Only reset UI if the SIP invite itself failed (not just logging)
       setCallState('idle');
       setCurrentCall(null);
+      sessionRef.current = null;
       if (onCallFailed) onCallFailed(err);
     }
   }, [onCallConnected, onCallEnded, onCallFailed]);

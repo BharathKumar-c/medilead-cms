@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext(null);
@@ -14,6 +14,7 @@ export const AuthProvider = ({ children }) => {
     }
   });
   const [loading, setLoading] = useState(true);
+  const profileRequestId = useRef(0);
 
   // Handle 401 from API — clear state and token
   const handleUnauthorized = useCallback(() => {
@@ -29,18 +30,23 @@ export const AuthProvider = ({ children }) => {
 
   // Check token on mount
   useEffect(() => {
+    const requestId = ++profileRequestId.current;
     const token = api.getToken();
     if (token && !user) {
       api.getProfile()
         .then(res => {
+          if (requestId !== profileRequestId.current) return;
           setUser(res.data.user);
           localStorage.setItem('user', JSON.stringify(res.data.user));
         })
         .catch(() => {
+          if (requestId !== profileRequestId.current) return;
           api.logout();
           setUser(null);
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (requestId === profileRequestId.current) setLoading(false);
+        });
     } else {
       setLoading(false);
     }

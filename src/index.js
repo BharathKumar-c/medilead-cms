@@ -55,7 +55,12 @@ io.on('connection', (socket) => {
   let authenticatedUserId;
   try {
     const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'medilead_secret_key_2024');
+    if (!process.env.JWT_SECRET) {
+      logger.error('JWT_SECRET environment variable is not set');
+      socket.disconnect(true);
+      return;
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     authenticatedUserId = decoded.id;
   } catch {
     logger.warn('Socket connection rejected: invalid token');

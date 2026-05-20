@@ -5,7 +5,7 @@ require('dotenv').config();
 
 const seed = async () => {
   // Refuse to run in production unless explicitly allowed
-  if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_SEED) {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
     console.error('Seeding is disabled in production. Set ALLOW_SEED=true to override.');
     return;
   }

@@ -25,15 +25,17 @@ export const ThemeProvider = ({ children }) => {
     }
   }, [theme]);
 
-  // Load theme from server on mount
+  // Load theme from server on mount only if no local preference exists
   useEffect(() => {
-    api.getSettings().then(res => {
-      if (res?.data?.settings?.theme) {
-        const serverTheme = res.data.settings.theme;
-        setThemeState(serverTheme);
-        localStorage.setItem('theme', serverTheme);
-      }
-    }).catch(() => {});
+    if (!localStorage.getItem('theme')) {
+      api.getSettings().then(res => {
+        if (res?.data?.settings?.theme) {
+          const serverTheme = res.data.settings.theme;
+          setThemeState(serverTheme);
+          localStorage.setItem('theme', serverTheme);
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   const setTheme = async (newTheme) => {

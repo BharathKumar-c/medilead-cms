@@ -38,18 +38,7 @@ const Header = ({ title = 'MedCloud CMS', onNewPatientClick, sidebarCollapsed, o
     loadNotifications();
   }, []);
 
-  // Socket.IO for real-time notifications
-  useSocket({
-    onNotification: (notif) => {
-      setNotifs(prev => [notif, ...prev]);
-      setUnreadCount(prev => prev + 1);
-      playNotificationSound();
-      // Flash bell icon
-      setBellFlash(true);
-      if (bellFlashTimer.current) clearTimeout(bellFlashTimer.current);
-      bellFlashTimer.current = setTimeout(() => setBellFlash(false), 3000);
-    },
-  });
+  // Socket.IO notifications handled by Layout which dispatches 'new-notification' window events
 
   // Listen for notifications dispatched by Layout (from call events)
   useEffect(() => {
