@@ -230,6 +230,10 @@ class ApiService {
     });
   }
 
+  async getCallHistoryByPhone(phone) {
+    return this.request(`/calls/phone/${encodeURIComponent(phone)}`);
+  }
+
   // Leads
   async getLeadSources() {
     return this.request('/leads/master-data');
@@ -263,6 +267,14 @@ class ApiService {
 
   async getLeadByUhid(uhid) {
     return this.request(`/leads/uhid/${encodeURIComponent(uhid)}`);
+  }
+
+  async getLeadByPhone(phone) {
+    return this.request(`/leads/phone/${encodeURIComponent(phone)}`);
+  }
+
+  async getUhidsByPhone(phone) {
+    return this.request(`/leads/uhids-by-phone/${encodeURIComponent(phone)}`);
   }
 
   async checkDuplicatePhone(phone) {

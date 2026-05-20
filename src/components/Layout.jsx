@@ -17,6 +17,7 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
+  const [prefillPhoneFromCall, setPrefillPhoneFromCall] = useState('');
   const ringSoundRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -42,6 +43,10 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
       // Show incoming call popup
       setIncomingCall(data);
       playRingSound();
+      // If no lead matched, store phone for potential lead creation
+      if (!data.leadInfo) {
+        setPrefillPhoneFromCall(data.call?.caller_number || '');
+      }
       // Auto-dismiss after 30 seconds if not answered
       setTimeout(() => {
         setIncomingCall(prev => {
@@ -283,7 +288,7 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
         </footer>
       </div>
 
-      <PatientIntakeForm isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} onSuccess={(msg) => addToast('success', 'Patient Saved', msg)} onError={(msg) => addToast('error', 'Error', msg)} />
+      <PatientIntakeForm isOpen={isFormOpen} onClose={() => { setIsFormOpen(false); setPrefillPhoneFromCall(''); }} prefillPhone={prefillPhoneFromCall} onSuccess={(msg) => addToast('success', 'Patient Saved', msg)} onError={(msg) => addToast('error', 'Error', msg)} />
 
       {/* Incoming Call Popup */}
       {incomingCall && (
@@ -300,6 +305,11 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
             setIncomingCall(null);
           }}
           onClose={() => setIncomingCall(null)}
+          onCreateLead={(phone) => {
+            setPrefillPhoneFromCall(phone);
+            setIsFormOpen(true);
+            setIncomingCall(null);
+          }}
         />
       )}
 

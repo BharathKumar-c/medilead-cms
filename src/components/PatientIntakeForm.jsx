@@ -5,7 +5,7 @@ import api from '../services/api';
 
 const emptyForm = {
   uhid: '', name: '', dob: '', age: '', contactNumber: '', alternateContact: '',
-  email: '', pincode: '', city: '', state: '', country: 'India', address: '',
+  email: '', pincode: '', area: '', city: '', state: '', country: 'India', address: '',
   leadSource: '', status: 'New', priority: 'Medium', remarks: '',
 };
 
@@ -18,6 +18,7 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
   const [leadSources, setLeadSources] = useState([]);
   const [priorities, setPriorities] = useState(['High', 'Medium', 'Low']);
   const [statuses, setStatuses] = useState(['New', 'Contacted', 'Interested', 'Follow-up', 'Appointment Booked', 'Closed', 'Rejected']);
+  const [areas, setAreas] = useState([]);
   const uhidTimerRef = useRef(null);
   const pincodeTimerRef = useRef(null);
   const uhidRequestId = useRef(0);
@@ -133,7 +134,8 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
   // PIN code lookup with 500ms debounce — online API + local fallback
   const handlePincodeChange = (e) => {
     const pincode = e.target.value.replace(/\D/g, '').slice(0, 6);
-    setFormData(prev => ({ ...prev, pincode, city: '', state: '', country: 'India' }));
+    setFormData(prev => ({ ...prev, pincode, area: '', city: '', state: '', country: 'India' }));
+    setAreas([]);
     clearError('pincode');
 
     if (pincodeTimerRef.current) clearTimeout(pincodeTimerRef.current);
@@ -147,9 +149,13 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
           if (requestId !== pincodeRequestId.current) return;
           const data = await resp.json();
           if (data[0]?.Status === 'Success' && data[0]?.PostOffice?.length > 0) {
-            const po = data[0].PostOffice[0];
+            const postOffices = data[0].PostOffice;
+            const po = postOffices[0];
+            const areaNames = [...new Set(postOffices.map(p => p.Name))];
+            setAreas(areaNames);
             setFormData(prev => ({
               ...prev,
+              area: areaNames.length === 1 ? areaNames[0] : '',
               city: po.District || po.Block || po.Name || '',
               state: po.State || '',
               country: 'India',
@@ -177,18 +183,13 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
 
   const validate = () => {
     const errs = {};
-    // UHID is optional
+    // Only name and phone are mandatory
     if (!formData.name.trim()) errs.name = 'Patient name is required';
     if (!formData.contactNumber.trim()) errs.contactNumber = 'Phone number is required';
     else if (!/^\d{10}$/.test(formData.contactNumber.replace(/\s/g, ''))) errs.contactNumber = 'Enter a valid 10-digit phone number';
-    if (!formData.email.trim()) errs.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errs.email = 'Enter a valid email address';
-    if (!formData.dob) errs.dob = 'Date of birth is required';
-    if (!formData.leadSource) errs.leadSource = 'Lead source is required';
-    if (!formData.address.trim()) errs.address = 'Address is required';
-    if (!formData.pincode.trim()) errs.pincode = 'Pincode is required';
-    if (!formData.city.trim()) errs.city = 'City is required';
-    if (!formData.state.trim()) errs.state = 'State is required';
+    // Optional fields - validate format only if provided
+    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errs.email = 'Enter a valid email address';
+    if (formData.dob && new Date(formData.dob) > new Date()) errs.dob = 'Date of birth cannot be in the future';
     return errs;
   };
 
@@ -355,32 +356,50 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div data-field="pincode">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Pincode <span className="text-error">*</span></label>
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Pincode</label>
                 <div className="relative">
                   <input type="text" placeholder="110001" maxLength={6} value={formData.pincode} onChange={handlePincodeChange} className={fieldClass('pincode')} />
                   {pincodeLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" /></div>}
                 </div>
                 <ErrorMsg field="pincode" />
               </div>
+              {areas.length > 1 ? (
+                <div>
+                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+                  <div className="relative">
+                    <select value={formData.area} onChange={(e) => setField('area', e.target.value)} className={`${fieldClass('area')} appearance-none pr-10`}>
+                      <option value="">Select area</option>
+                      {areas.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+                  <input type="text" value={formData.area} readOnly className={readOnlyClass} placeholder="Auto-fills" />
+                </div>
+              )}
               <div data-field="city">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">City <span className="text-error">*</span></label>
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">City</label>
                 <input type="text" value={formData.city} readOnly className={readOnlyClass} placeholder="Auto-fills" />
                 <ErrorMsg field="city" />
               </div>
               <div data-field="state">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">State <span className="text-error">*</span></label>
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">State</label>
                 <input type="text" value={formData.state} readOnly className={readOnlyClass} placeholder="Auto-fills" />
                 <ErrorMsg field="state" />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Country</label>
                 <input type="text" value={formData.country} readOnly className={readOnlyClass} placeholder="Auto-fills" />
               </div>
-            </div>
-
-            <div data-field="address">
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address <span className="text-error">*</span></label>
-              <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
+              <div data-field="address">
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address</label>
+                <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
               <ErrorMsg field="address" />
             </div>
           </div>

@@ -95,6 +95,27 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// GET /api/calls/phone/:phone — get call history for a phone number
+router.get('/phone/:phone', authenticate, async (req, res) => {
+  try {
+    const phone = req.params.phone.replace(/\D/g, '');
+    const result = await db.query(
+      `SELECT cl.*, l.name as lead_name
+       FROM call_logs cl
+       LEFT JOIN leads l ON cl.lead_id = l.id
+       WHERE cl.caller_number = $1
+       ORDER BY cl.created_at DESC
+       LIMIT 10`,
+      [phone]
+    );
+
+    res.json({ status: 'success', data: { calls: result.rows } });
+  } catch (err) {
+    logger.error('Call history by phone error', { error: err.message, phone: req.params.phone });
+    res.status(500).json({ status: 'error', message: 'Failed to fetch call history.', code: 'CALL_HISTORY_ERROR' });
+  }
+});
+
 // POST /api/calls — log a call (from SIP webhook or manual entry)
 router.post('/', validateCallLog, async (req, res) => {
   try {
@@ -283,9 +304,43 @@ router.post('/sip-event', validateSipEvent, async (req, res) => {
 
     // Handle incoming call popup
     if (io && event === 'incoming') {
+      let enrichedLeadInfo = null;
+
+      if (leadId) {
+        // Get call stats for this phone
+        const statsResult = await db.query(
+          `SELECT
+             COUNT(*) as total_calls,
+             COUNT(*) FILTER (WHERE status = 'missed') as missed_calls
+           FROM call_logs
+           WHERE caller_number = $1 OR lead_id = $2`,
+          [phoneNumber, leadId]
+        );
+
+        // Get lead details (alternate contact, UHID)
+        const leadDetails = await db.query(
+          'SELECT alternate_contact, uhid FROM leads WHERE id = $1',
+          [leadId]
+        );
+
+        const stats = statsResult.rows[0];
+        const details = leadDetails.rows[0] || {};
+
+        enrichedLeadInfo = {
+          id: leadId,
+          name: leadName,
+          uhid: details.uhid || null,
+          alternateContact: details.alternate_contact || null,
+          callStats: {
+            totalCalls: parseInt(stats.total_calls) || 0,
+            missedCalls: parseInt(stats.missed_calls) || 0,
+          },
+        };
+      }
+
       io.emit('incoming-call', {
         call: callLog,
-        leadInfo: leadId ? { id: leadId, name: leadName } : null,
+        leadInfo: enrichedLeadInfo,
       });
     }
 

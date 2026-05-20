@@ -14,6 +14,7 @@ const createTables = async () => {
       DROP TABLE IF EXISTS notifications CASCADE;
       DROP TABLE IF EXISTS call_logs CASCADE;
       DROP TABLE IF EXISTS lead_history CASCADE;
+      DROP TABLE IF EXISTS lead_uhids CASCADE;
       DROP TABLE IF EXISTS appointments CASCADE;
       DROP TABLE IF EXISTS leads CASCADE;
       DROP TABLE IF EXISTS branch_departments CASCADE;
@@ -178,12 +179,13 @@ const createTables = async () => {
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         initials VARCHAR(10),
-        uhid VARCHAR(50) UNIQUE,
+        uhid VARCHAR(50),
         phone VARCHAR(50),
         alternate_contact VARCHAR(50),
         email VARCHAR(255),
         dob DATE,
         address TEXT,
+        area VARCHAR(100),
         pincode VARCHAR(10),
         city VARCHAR(100),
         state VARCHAR(100),
@@ -196,6 +198,18 @@ const createTables = async () => {
         last_call_date TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Lead UHIDs junction table (multiple UHIDs per lead)
+    await client.query(`
+      CREATE TABLE lead_uhids (
+        id SERIAL PRIMARY KEY,
+        lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+        uhid VARCHAR(50) NOT NULL,
+        is_primary BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(lead_id, uhid)
       );
     `);
 
@@ -314,6 +328,12 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
       CREATE INDEX IF NOT EXISTS idx_leads_assigned_to ON leads(assigned_to);
       CREATE INDEX IF NOT EXISTS idx_leads_uhid ON leads(uhid);
+      CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
+      CREATE INDEX IF NOT EXISTS idx_leads_alternate_contact ON leads(alternate_contact);
+      CREATE INDEX IF NOT EXISTS idx_call_logs_caller_number ON call_logs(caller_number);
+      CREATE INDEX IF NOT EXISTS idx_call_logs_lead_id ON call_logs(lead_id);
+      CREATE INDEX IF NOT EXISTS idx_lead_uhids_uhid ON lead_uhids(uhid);
+      CREATE INDEX IF NOT EXISTS idx_lead_uhids_lead_id ON lead_uhids(lead_id);
       CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
       CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
       CREATE INDEX IF NOT EXISTS idx_appointments_provider ON appointments(provider_id);

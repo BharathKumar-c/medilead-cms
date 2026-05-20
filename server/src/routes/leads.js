@@ -147,7 +147,7 @@ router.get('/master-data', async (req, res) => {
 router.get('/uhid/:uhid', async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, name, uhid, phone, alternate_contact, email, dob, address, pincode, city, state, country
+      `SELECT id, name, uhid, phone, alternate_contact, email, dob, address, area, pincode, city, state, country
        FROM leads WHERE uhid = $1`,
       [req.params.uhid]
     );
@@ -160,6 +160,99 @@ router.get('/uhid/:uhid', async (req, res) => {
   } catch (err) {
     logger.error('UHID lookup error', { error: err.message, uhid: req.params.uhid });
     res.status(500).json({ status: 'error', message: 'Failed to look up UHID.', code: 'UHID_LOOKUP_ERROR' });
+  }
+});
+
+// GET /api/leads/phone/:phone — look up leads by phone with call stats
+router.get('/phone/:phone', authenticate, async (req, res) => {
+  try {
+    const phone = req.params.phone.replace(/\D/g, '');
+
+    // Find leads by primary or alternate phone
+    const leadsResult = await db.query(
+      `SELECT l.id, l.name, l.initials, l.uhid, l.phone, l.alternate_contact, l.email,
+              l.dob, l.address, l.area, l.pincode, l.city, l.state, l.country,
+              l.status, l.priority, l.lead_source, l.assigned_to, l.last_call_date,
+              l.created_at, u.name as assigned_to_name
+       FROM leads l
+       LEFT JOIN users u ON l.assigned_to = u.id
+       WHERE l.phone = $1 OR l.alternate_contact = $1
+       ORDER BY l.created_at DESC`,
+      [phone]
+    );
+
+    // Get call stats for this phone
+    const statsResult = await db.query(
+      `SELECT
+         COUNT(*) as total_calls,
+         COUNT(*) FILTER (WHERE status = 'missed') as missed_calls,
+         MAX(created_at) as last_call_at
+       FROM call_logs
+       WHERE caller_number = $1`,
+      [phone]
+    );
+
+    // Get UHIDs for matched leads
+    let uhids = [];
+    if (leadsResult.rows.length > 0) {
+      const leadIds = leadsResult.rows.map(l => l.id);
+      const uhidsResult = await db.query(
+        `SELECT DISTINCT uhid FROM lead_uhids WHERE lead_id = ANY($1)
+         UNION
+         SELECT DISTINCT uhid FROM leads WHERE id = ANY($1) AND uhid IS NOT NULL`,
+        [leadIds]
+      );
+      uhids = uhidsResult.rows.map(r => r.uhid).filter(Boolean);
+    }
+
+    const stats = statsResult.rows[0];
+    res.json({
+      status: 'success',
+      data: {
+        leads: leadsResult.rows,
+        callStats: {
+          totalCalls: parseInt(stats.total_calls) || 0,
+          missedCalls: parseInt(stats.missed_calls) || 0,
+          lastCallAt: stats.last_call_at,
+        },
+        uhids,
+      },
+    });
+  } catch (err) {
+    logger.error('Phone lookup error', { error: err.message, phone: req.params.phone });
+    res.status(500).json({ status: 'error', message: 'Failed to look up phone.', code: 'PHONE_LOOKUP_ERROR' });
+  }
+});
+
+// GET /api/leads/uhids-by-phone/:phone — get all UHIDs for a phone number
+router.get('/uhids-by-phone/:phone', authenticate, async (req, res) => {
+  try {
+    const phone = req.params.phone.replace(/\D/g, '');
+
+    // Find lead IDs for this phone
+    const leadsResult = await db.query(
+      `SELECT id FROM leads WHERE phone = $1 OR alternate_contact = $1`,
+      [phone]
+    );
+
+    if (leadsResult.rows.length === 0) {
+      return res.json({ status: 'success', data: { uhids: [] } });
+    }
+
+    const leadIds = leadsResult.rows.map(l => l.id);
+
+    // Get UHIDs from junction table and leads table
+    const uhidsResult = await db.query(
+      `SELECT DISTINCT uhid FROM lead_uhids WHERE lead_id = ANY($1)
+       UNION
+       SELECT DISTINCT uhid FROM leads WHERE id = ANY($1) AND uhid IS NOT NULL`,
+      [leadIds]
+    );
+
+    res.json({ status: 'success', data: { uhids: uhidsResult.rows.map(r => r.uhid) } });
+  } catch (err) {
+    logger.error('UHIDs by phone error', { error: err.message, phone: req.params.phone });
+    res.status(500).json({ status: 'error', message: 'Failed to fetch UHIDs.', code: 'UHIDS_LOOKUP_ERROR' });
   }
 });
 

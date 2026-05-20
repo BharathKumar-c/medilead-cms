@@ -319,6 +319,7 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
     alternateContact: lead.alternateContact || '',
     email: lead.email || '',
     pincode: lead.pincode || '',
+    area: lead.area || '',
     city: lead.city || '',
     state: lead.state || '',
     country: lead.country || 'India',
@@ -329,6 +330,7 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
     remarks: lead.clinicalRemarks || '',
   });
   const [errors, setErrors] = useState({});
+  const [areas, setAreas] = useState([]);
   const [uhidLoading, setUhidLoading] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -404,7 +406,8 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
 
   const handlePincodeChange = (e) => {
     const pincode = e.target.value.replace(/\D/g, '').slice(0, 6);
-    setFormData(prev => ({ ...prev, pincode, city: '', state: '', country: 'India' }));
+    setFormData(prev => ({ ...prev, pincode, area: '', city: '', state: '', country: 'India' }));
+    setAreas([]);
     clearError('pincode');
     if (pincodeTimerRef.current) clearTimeout(pincodeTimerRef.current);
     if (pincode.length === 6) {
@@ -414,8 +417,17 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
           const resp = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
           const data = await resp.json();
           if (data[0]?.Status === 'Success' && data[0]?.PostOffice?.length > 0) {
-            const po = data[0].PostOffice[0];
-            setFormData(prev => ({ ...prev, city: po.District || po.Block || po.Name || '', state: po.State || '', country: 'India' }));
+            const postOffices = data[0].PostOffice;
+            const po = postOffices[0];
+            const areaNames = [...new Set(postOffices.map(p => p.Name))];
+            setAreas(areaNames);
+            setFormData(prev => ({
+              ...prev,
+              area: areaNames.length === 1 ? areaNames[0] : '',
+              city: po.District || po.Block || po.Name || '',
+              state: po.State || '',
+              country: 'India',
+            }));
           } else {
             const local = pincodeData[pincode];
             if (local) setFormData(prev => ({ ...prev, city: local.city, state: local.state, country: local.country }));
@@ -430,19 +442,13 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
 
   const validate = () => {
     const errs = {};
-    // UHID is optional
+    // Only name and phone are mandatory
     if (!formData.name.trim()) errs.name = 'Patient name is required';
     if (!formData.contactNumber.trim()) errs.contactNumber = 'Phone number is required';
     else if (!/^\d{10}$/.test(formData.contactNumber.replace(/\s/g, ''))) errs.contactNumber = 'Enter a valid 10-digit phone number';
-    if (!formData.email.trim()) errs.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errs.email = 'Enter a valid email address';
-    if (!formData.dob) errs.dob = 'Date of birth is required';
-    else if (new Date(formData.dob) > new Date()) errs.dob = 'Date of birth cannot be in the future';
-    if (!formData.leadSource) errs.leadSource = 'Lead source is required';
-    if (!formData.address.trim()) errs.address = 'Address is required';
-    if (!formData.pincode.trim()) errs.pincode = 'Pincode is required';
-    if (!formData.city.trim()) errs.city = 'City is required';
-    if (!formData.state.trim()) errs.state = 'State is required';
+    // Optional fields - validate format only if provided
+    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errs.email = 'Enter a valid email address';
+    if (formData.dob && new Date(formData.dob) > new Date()) errs.dob = 'Date of birth cannot be in the future';
     return errs;
   };
 
@@ -588,32 +594,51 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div data-edit-field="pincode">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Pincode <span className="text-error">*</span></label>
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Pincode</label>
                 <div className="relative">
                   <input type="text" placeholder="110001" maxLength={6} value={formData.pincode} onChange={handlePincodeChange} className={fieldClass('pincode')} />
                   {pincodeLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" /></div>}
                 </div>
                 <ErrorMsg field="pincode" />
               </div>
+              {areas.length > 1 ? (
+                <div>
+                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+                  <div className="relative">
+                    <select value={formData.area} onChange={(e) => setField('area', e.target.value)} className={`${fieldClass('area')} appearance-none pr-10`}>
+                      <option value="">Select area</option>
+                      {areas.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+                  <input type="text" value={formData.area} readOnly className={readOnlyClass} placeholder="Auto-fills" />
+                </div>
+              )}
               <div data-edit-field="city">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">City <span className="text-error">*</span></label>
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">City</label>
                 <input type="text" value={formData.city} readOnly className={readOnlyClass} placeholder="Auto-fills" />
                 <ErrorMsg field="city" />
               </div>
               <div data-edit-field="state">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">State <span className="text-error">*</span></label>
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">State</label>
                 <input type="text" value={formData.state} readOnly className={readOnlyClass} placeholder="Auto-fills" />
                 <ErrorMsg field="state" />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Country</label>
                 <input type="text" value={formData.country} readOnly className={readOnlyClass} placeholder="Auto-fills" />
               </div>
-            </div>
-            <div data-edit-field="address">
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address <span className="text-error">*</span></label>
-              <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
-              <ErrorMsg field="address" />
+              <div data-edit-field="address">
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address</label>
+                <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
+                <ErrorMsg field="address" />
+              </div>
             </div>
           </div>
 
@@ -639,12 +664,22 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
 const ViewLeadModal = ({ lead, avatarColors, priorityColors, onClose }) => {
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [callHistory, setCallHistory] = useState([]);
+  const [loadingCalls, setLoadingCalls] = useState(true);
 
   useEffect(() => {
     api.getLeadHistory(lead.id).then(res => {
       if (res?.data?.history) setHistory(res.data.history);
     }).catch(() => {}).finally(() => setLoadingHistory(false));
-  }, [lead.id]);
+
+    if (lead.phone) {
+      api.getCallHistoryByPhone(lead.phone).then(res => {
+        if (res?.data?.calls) setCallHistory(res.data.calls);
+      }).catch(() => {}).finally(() => setLoadingCalls(false));
+    } else {
+      setLoadingCalls(false);
+    }
+  }, [lead.id, lead.phone]);
 
   const actionLabels = {
     created: 'Lead Created',
@@ -728,6 +763,47 @@ const ViewLeadModal = ({ lead, avatarColors, priorityColors, onClose }) => {
                         {new Date(h.created_at).toLocaleString('en-IN')}
                       </p>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Call History */}
+          <div className="border-t border-outline-variant pt-4">
+            <h4 className="font-h3 text-on-surface mb-3 flex items-center gap-2">
+              <Phone className="w-4 h-4 text-secondary" /> Call History
+            </h4>
+            {loadingCalls ? (
+              <p className="font-body-sm text-on-surface-variant">Loading call history...</p>
+            ) : callHistory.length === 0 ? (
+              <p className="font-body-sm text-on-surface-variant">No calls recorded yet.</p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {callHistory.map((ch) => (
+                  <div key={ch.id} className="flex items-center justify-between p-3 bg-surface-container rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {ch.status === 'missed' ? (
+                        <PhoneMissed className="w-4 h-4 text-error" />
+                      ) : ch.direction === 'inbound' ? (
+                        <PhoneIncoming className="w-4 h-4 text-success" />
+                      ) : (
+                        <PhoneOutgoing className="w-4 h-4 text-secondary" />
+                      )}
+                      <div>
+                        <p className="font-body-md text-on-surface">
+                          {ch.direction === 'inbound' ? 'Incoming' : 'Outgoing'}
+                          {ch.status === 'missed' && ' (Missed)'}
+                        </p>
+                        <p className="font-caption text-on-surface-variant">
+                          {ch.duration ? `${ch.duration}s` : 'No duration'}
+                          {ch.notes ? ` · ${ch.notes}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="font-caption text-on-surface-variant">
+                      {new Date(ch.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
                 ))}
               </div>
