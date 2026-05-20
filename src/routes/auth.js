@@ -269,20 +269,30 @@ router.post('/users', authenticate, authorize('super_admin'), validateRegister, 
 // PUT /api/auth/users/:id — update user (Super Admin)
 router.put('/users/:id', authenticate, authorize('super_admin'), validateId, validateUserUpdate, async (req, res) => {
   try {
-    const { name, email, role, specialty, phone, is_active } = req.body;
+    // Build dynamic UPDATE based on provided fields
+    const allowedFields = { name: null, email: null, role: null, specialty: null, phone: null, is_active: null };
+    const setClauses = [];
+    const params = [];
+    let paramIndex = 1;
+
+    for (const field of Object.keys(allowedFields)) {
+      if (req.body[field] !== undefined) {
+        setClauses.push(`${field} = $${paramIndex}`);
+        params.push(req.body[field]);
+        paramIndex++;
+      }
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'No fields to update.', code: 'NO_FIELDS' });
+    }
+
+    setClauses.push('updated_at = CURRENT_TIMESTAMP');
+    params.push(req.params.id);
 
     const result = await db.query(
-      `UPDATE users SET
-        name = COALESCE($1, name),
-        email = COALESCE($2, email),
-        role = COALESCE($3, role),
-        specialty = COALESCE($4, specialty),
-        phone = COALESCE($5, phone),
-        is_active = COALESCE($6, is_active),
-        updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7
-       RETURNING id, name, email, role, specialty, phone, is_active, created_at`,
-      [name, email, role, specialty, phone, is_active, req.params.id]
+      `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      params
     );
 
     if (result.rows.length === 0) {
@@ -291,7 +301,9 @@ router.put('/users/:id', authenticate, authorize('super_admin'), validateId, val
 
     logger.info('User updated by admin', { adminId: req.user.id, updatedUserId: req.params.id });
 
-    res.json({ status: 'success', data: { user: result.rows[0] } });
+    // Strip sensitive fields from response
+    const { password_hash, ...user } = result.rows[0];
+    res.json({ status: 'success', data: { user } });
   } catch (err) {
     logger.error('Update user error', { error: err.message, adminId: req.user.id, targetUserId: req.params.id });
     res.status(500).json({ status: 'error', message: 'Failed to update user.', code: 'USER_UPDATE_ERROR' });
