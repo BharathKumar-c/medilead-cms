@@ -403,6 +403,7 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
                 <ErrorMsg field="address" />
               </div>
             </div>
+          </div>
 
           {/* Clinical Remarks */}
           <div>
