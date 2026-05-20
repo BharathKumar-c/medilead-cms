@@ -85,4 +85,14 @@ export const useAuth = () => {
   return context;
 };
 
+export const usePermissions = () => {
+  const { user } = useAuth();
+  return {
+    hasPermission: (perm) => user?.permissions?.includes(perm) || false,
+    hasAnyPermission: (...perms) => perms.some(p => user?.permissions?.includes(p)),
+    hasRole: (role) => user?.roles?.includes(role) || user?.role === role || false,
+    isSuperAdmin: user?.roles?.includes('super_admin') || user?.role === 'super_admin' || false,
+  };
+};
+
 export default AuthContext;

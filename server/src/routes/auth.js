@@ -11,7 +11,7 @@ const router = express.Router();
 // POST /api/auth/register
 router.post('/register', validateRegister, async (req, res) => {
   try {
-    const { name, email, password, role, specialty, phone } = req.body;
+    const { name, email, password, specialty, phone } = req.body;
 
     // Check if user exists
     const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -27,17 +27,43 @@ router.post('/register', validateRegister, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
+    // Get default role (staff or telecaller)
+    const defaultRole = await db.query("SELECT id, name FROM roles WHERE name = 'staff' AND is_active = true");
+    const roleName = defaultRole.rows.length > 0 ? defaultRole.rows[0].name : 'staff';
+    const roleId = defaultRole.rows.length > 0 ? defaultRole.rows[0].id : null;
+
     const result = await db.query(
       `INSERT INTO users (name, email, password_hash, role, specialty, phone)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, name, email, role, specialty, phone, created_at`,
-      [name, email, passwordHash, role || 'staff', specialty, phone]
+      [name, email, passwordHash, roleName, specialty, phone]
     );
 
     const user = result.rows[0];
 
+    // Assign default role in user_roles
+    if (roleId) {
+      await db.query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)', [user.id, roleId]);
+    }
+
+    // Fetch roles and permissions
+    const rolesResult = await db.query(
+      `SELECT r.name FROM roles r INNER JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = $1`,
+      [user.id]
+    );
+    const permsResult = await db.query(
+      `SELECT DISTINCT p.name FROM permissions p
+       INNER JOIN role_permissions rp ON p.id = rp.permission_id
+       INNER JOIN user_roles ur ON rp.role_id = ur.role_id
+       WHERE ur.user_id = $1`,
+      [user.id]
+    );
+
+    const roles = rolesResult.rows.map(r => r.name);
+    const permissions = permsResult.rows.map(r => r.name);
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, roles, permissions },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
@@ -46,7 +72,7 @@ router.post('/register', validateRegister, async (req, res) => {
 
     res.status(201).json({
       status: 'success',
-      data: { user, token },
+      data: { user: { ...user, roles, permissions }, token },
     });
   } catch (err) {
     logger.error('Register error', { error: err.message, stack: err.stack });
@@ -85,8 +111,24 @@ router.post('/login', validateLogin, async (req, res) => {
       });
     }
 
+    // Fetch roles and permissions
+    const rolesResult = await db.query(
+      `SELECT r.name FROM roles r INNER JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = $1`,
+      [user.id]
+    );
+    const permsResult = await db.query(
+      `SELECT DISTINCT p.name FROM permissions p
+       INNER JOIN role_permissions rp ON p.id = rp.permission_id
+       INNER JOIN user_roles ur ON rp.role_id = ur.role_id
+       WHERE ur.user_id = $1`,
+      [user.id]
+    );
+
+    const roles = rolesResult.rows.map(r => r.name);
+    const permissions = permsResult.rows.map(r => r.name);
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, roles, permissions },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
@@ -97,7 +139,7 @@ router.post('/login', validateLogin, async (req, res) => {
 
     res.json({
       status: 'success',
-      data: { user: userData, token },
+      data: { user: { ...userData, roles, permissions }, token },
     });
   } catch (err) {
     logger.error('Login error', { error: err.message, stack: err.stack });
@@ -121,9 +163,26 @@ router.get('/me', authenticate, async (req, res) => {
       });
     }
 
+    // Fetch fresh roles and permissions
+    const rolesResult = await db.query(
+      `SELECT r.name FROM roles r INNER JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = $1`,
+      [req.user.id]
+    );
+    const permsResult = await db.query(
+      `SELECT DISTINCT p.name FROM permissions p
+       INNER JOIN role_permissions rp ON p.id = rp.permission_id
+       INNER JOIN user_roles ur ON rp.role_id = ur.role_id
+       WHERE ur.user_id = $1`,
+      [req.user.id]
+    );
+
+    const user = result.rows[0];
+    user.roles = rolesResult.rows.map(r => r.name);
+    user.permissions = permsResult.rows.map(r => r.name);
+
     res.json({
       status: 'success',
-      data: { user: result.rows[0] },
+      data: { user },
     });
   } catch (err) {
     logger.error('Get profile error', { error: err.message, userId: req.user.id });
@@ -232,6 +291,27 @@ router.get('/users', authenticate, authorize('super_admin'), async (req, res) =>
     const result = await db.query(
       'SELECT id, name, email, role, avatar_url, specialty, phone, is_active, created_at FROM users ORDER BY created_at DESC'
     );
+
+    // Fetch roles for all users
+    const userIds = result.rows.map(u => u.id);
+    if (userIds.length > 0) {
+      const rolesResult = await db.query(
+        `SELECT ur.user_id, r.name, r.display_name
+         FROM user_roles ur
+         INNER JOIN roles r ON ur.role_id = r.id
+         WHERE ur.user_id = ANY($1)`,
+        [userIds]
+      );
+      const rolesMap = {};
+      for (const row of rolesResult.rows) {
+        if (!rolesMap[row.user_id]) rolesMap[row.user_id] = [];
+        rolesMap[row.user_id].push({ name: row.name, display_name: row.display_name });
+      }
+      for (const user of result.rows) {
+        user.roles = rolesMap[user.id] || [];
+      }
+    }
+
     res.json({ status: 'success', data: { users: result.rows } });
   } catch (err) {
     logger.error('List users error', { error: err.message, userId: req.user.id });
@@ -242,11 +322,18 @@ router.get('/users', authenticate, authorize('super_admin'), async (req, res) =>
 // POST /api/auth/users — create user (Super Admin)
 router.post('/users', authenticate, authorize('super_admin'), validateRegister, async (req, res) => {
   try {
-    const { name, email, password, role, specialty, phone } = req.body;
+    const { name, email, password, role, specialty, phone, role_ids } = req.body;
 
     const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ status: 'error', message: 'User with this email already exists.', code: 'USER_EXISTS' });
+    }
+
+    // Determine role name for legacy column
+    let roleName = role || 'telecaller';
+    if (role_ids && role_ids.length > 0) {
+      const roleResult = await db.query('SELECT name FROM roles WHERE id = $1', [role_ids[0]]);
+      if (roleResult.rows.length > 0) roleName = roleResult.rows[0].name;
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -254,12 +341,36 @@ router.post('/users', authenticate, authorize('super_admin'), validateRegister, 
       `INSERT INTO users (name, email, password_hash, role, specialty, phone)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, name, email, role, specialty, phone, is_active, created_at`,
-      [name, email, passwordHash, role || 'telecaller', specialty, phone]
+      [name, email, passwordHash, roleName, specialty, phone]
     );
 
-    logger.info('User created by admin', { adminId: req.user.id, newUserId: result.rows[0].id, role });
+    const user = result.rows[0];
 
-    res.status(201).json({ status: 'success', data: { user: result.rows[0] } });
+    // Assign roles in user_roles
+    const idsToAssign = role_ids && role_ids.length > 0 ? role_ids.slice(0, 2) : [];
+    if (idsToAssign.length > 0) {
+      for (const roleId of idsToAssign) {
+        await db.query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)', [user.id, roleId]);
+      }
+    } else {
+      // Assign default role
+      const defaultRole = await db.query("SELECT id FROM roles WHERE name = $1", [roleName]);
+      if (defaultRole.rows.length > 0) {
+        await db.query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)', [user.id, defaultRole.rows[0].id]);
+      }
+    }
+
+    // Fetch assigned roles
+    const rolesResult = await db.query(
+      `SELECT r.name, r.display_name FROM roles r
+       INNER JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = $1`,
+      [user.id]
+    );
+    user.roles = rolesResult.rows;
+
+    logger.info('User created by admin', { adminId: req.user.id, newUserId: user.id, role: roleName });
+
+    res.status(201).json({ status: 'success', data: { user } });
   } catch (err) {
     logger.error('Create user error', { error: err.message, adminId: req.user.id });
     res.status(500).json({ status: 'error', message: 'Failed to create user.', code: 'USER_CREATE_ERROR' });
@@ -270,7 +381,7 @@ router.post('/users', authenticate, authorize('super_admin'), validateRegister, 
 router.put('/users/:id', authenticate, authorize('super_admin'), validateId, validateUserUpdate, async (req, res) => {
   try {
     // Protect last super admin from role change or deactivation
-    const changingRole = req.body.role !== undefined;
+    const changingRole = req.body.role !== undefined || req.body.role_ids !== undefined;
     const deactivating = req.body.is_active === false || req.body.is_active === 'false';
 
     if (changingRole || deactivating) {
@@ -302,26 +413,67 @@ router.put('/users/:id', authenticate, authorize('super_admin'), validateId, val
       }
     }
 
-    if (setClauses.length === 0) {
+    // Handle role_ids separately
+    const { role_ids } = req.body;
+    if (role_ids !== undefined) {
+      // Update legacy role column with first role
+      if (role_ids.length > 0) {
+        const roleResult = await db.query('SELECT name FROM roles WHERE id = $1', [role_ids[0]]);
+        if (roleResult.rows.length > 0) {
+          setClauses.push(`role = $${paramIndex}`);
+          params.push(roleResult.rows[0].name);
+          paramIndex++;
+        }
+      }
+    }
+
+    if (setClauses.length === 0 && role_ids === undefined) {
       return res.status(400).json({ status: 'error', message: 'No fields to update.', code: 'NO_FIELDS' });
     }
 
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(req.params.id);
+    let user;
+    if (setClauses.length > 0) {
+      setClauses.push('updated_at = CURRENT_TIMESTAMP');
+      params.push(req.params.id);
 
-    const result = await db.query(
-      `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-      params
-    );
+      const result = await db.query(
+        `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+        params
+      );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ status: 'error', message: 'User not found.', code: 'USER_NOT_FOUND' });
+      if (result.rows.length === 0) {
+        return res.status(404).json({ status: 'error', message: 'User not found.', code: 'USER_NOT_FOUND' });
+      }
+      const { password_hash, ...userData } = result.rows[0];
+      user = userData;
+    } else {
+      const result = await db.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ status: 'error', message: 'User not found.', code: 'USER_NOT_FOUND' });
+      }
+      const { password_hash, ...userData } = result.rows[0];
+      user = userData;
     }
+
+    // Update user_roles if role_ids provided
+    if (role_ids !== undefined) {
+      await db.query('DELETE FROM user_roles WHERE user_id = $1', [req.params.id]);
+      const idsToAssign = role_ids.slice(0, 2);
+      for (const roleId of idsToAssign) {
+        await db.query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)', [req.params.id, roleId]);
+      }
+    }
+
+    // Fetch assigned roles
+    const rolesResult = await db.query(
+      `SELECT r.name, r.display_name FROM roles r
+       INNER JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = $1`,
+      [req.params.id]
+    );
+    user.roles = rolesResult.rows;
 
     logger.info('User updated by admin', { adminId: req.user.id, updatedUserId: req.params.id });
 
-    // Strip sensitive fields from response
-    const { password_hash, ...user } = result.rows[0];
     res.json({ status: 'success', data: { user } });
   } catch (err) {
     logger.error('Update user error', { error: err.message, adminId: req.user.id, targetUserId: req.params.id });

@@ -250,7 +250,7 @@ const Header = ({ title = 'MedCloud CMS', onNewPatientClick, sidebarCollapsed, o
                   </div>
                   <div>
                     <p className="font-body-md font-bold text-on-surface">{user?.name}</p>
-                    <p className="font-caption text-on-surface-variant capitalize">{user?.role}</p>
+                    <p className="font-caption text-on-surface-variant capitalize">{user?.roles?.join(', ') || user?.role}</p>
                   </div>
                 </div>
               </div>

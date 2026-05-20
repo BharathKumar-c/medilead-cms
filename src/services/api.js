@@ -155,6 +155,50 @@ class ApiService {
     });
   }
 
+  // Roles
+  async getRoles() {
+    return this.request('/roles');
+  }
+
+  async getRole(id) {
+    return this.request(`/roles/${id}`);
+  }
+
+  async createRole(data) {
+    return this.request('/roles', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateRole(id, data) {
+    return this.request(`/roles/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  async deleteRole(id) {
+    return this.request(`/roles/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getRolePermissions(id) {
+    return this.request(`/roles/${id}/permissions`);
+  }
+
+  async setRolePermissions(id, permissionIds) {
+    return this.request(`/roles/${id}/permissions`, {
+      method: 'PUT',
+      body: { permission_ids: permissionIds },
+    });
+  }
+
+  async getAllPermissions() {
+    return this.request('/roles/permissions/all');
+  }
+
   // Calls (SIP)
   async getCalls(params = {}) {
     const query = new URLSearchParams(params).toString();

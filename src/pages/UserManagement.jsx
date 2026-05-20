@@ -134,9 +134,17 @@ const UserManagement = () => {
                     </td>
                     <td className="px-4 py-3 font-body-md text-on-surface-variant">{user.email}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block px-3 py-1 rounded-full font-caption font-bold text-xs ${roleColors[user.role]}`}>
-                        {roleLabels[user.role] || user.role}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {user.roles && user.roles.length > 0 ? user.roles.map(role => (
+                          <span key={role.name || role.id} className={`inline-block px-2.5 py-0.5 rounded-full font-caption font-bold text-xs ${roleColors[role.name] || 'bg-outline/10 text-on-surface-variant border border-outline-variant'}`}>
+                            {role.display_name || roleLabels[role.name] || role.name}
+                          </span>
+                        )) : (
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full font-caption font-bold text-xs ${roleColors[user.role]}`}>
+                            {roleLabels[user.role] || user.role}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-block px-3 py-1 rounded-full font-caption font-bold text-xs ${user.is_active ? 'bg-on-tertiary-container/10 text-on-tertiary-container' : 'bg-error/10 text-error'}`}>
@@ -239,11 +247,25 @@ const UserFormPanel = ({ user, onClose, onSave, onError, onSuccess }) => {
     specialty: user?.specialty || '',
     phone: user?.phone || '',
   });
+  const [selectedRoleIds, setSelectedRoleIds] = useState(() => {
+    if (user?.roles && user.roles.length > 0) {
+      return user.roles.map(r => r.id || r.role_id).filter(Boolean);
+    }
+    return [];
+  });
+  const [availableRoles, setAvailableRoles] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [showPasswordRules, setShowPasswordRules] = useState(false);
   const passwordRef = { current: null };
+
+  // Fetch available roles
+  useEffect(() => {
+    api.getRoles().then(res => {
+      setAvailableRoles(res.data.roles);
+    }).catch(() => {});
+  }, []);
 
   const setField = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -279,6 +301,7 @@ const UserFormPanel = ({ user, onClose, onSave, onError, onSuccess }) => {
           role: form.role,
           specialty: form.specialty || null,
           phone: form.phone || null,
+          role_ids: selectedRoleIds.length > 0 ? selectedRoleIds : undefined,
         });
         onSuccess(`${form.name} has been updated.`);
       } else {
@@ -289,6 +312,7 @@ const UserFormPanel = ({ user, onClose, onSave, onError, onSuccess }) => {
           role: form.role,
           specialty: form.specialty || null,
           phone: form.phone || null,
+          role_ids: selectedRoleIds.length > 0 ? selectedRoleIds : undefined,
         });
         onSuccess(`${form.name} has been created.`);
       }
@@ -372,14 +396,47 @@ const UserFormPanel = ({ user, onClose, onSave, onError, onSuccess }) => {
             </FormField>
           )}
 
-          <FormField label="Role" error={fieldErrors.role}>
-            <div className="relative">
-              <select value={form.role} onChange={(e) => setField('role', e.target.value)}
-                className={`${inputClass('role')} appearance-none pr-10`}>
-                <option value="super_admin">Super Admin</option>
-                <option value="manager">Manager</option>
-                <option value="telecaller">Telecaller</option>
-              </select>
+          <FormField label="Roles" error={fieldErrors.role}>
+            <div className="space-y-2">
+              <p className="text-xs text-on-surface-variant">Select up to 2 roles for this user.</p>
+              <div className="space-y-2 max-h-40 overflow-y-auto border border-outline-variant rounded-lg p-3">
+                {availableRoles.length === 0 ? (
+                  <p className="text-sm text-on-surface-variant">Loading roles...</p>
+                ) : availableRoles.map(role => {
+                  const isSelected = selectedRoleIds.includes(role.id);
+                  const isDisabled = !isSelected && selectedRoleIds.length >= 2;
+                  return (
+                    <label
+                      key={role.id}
+                      className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
+                        isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary/5'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        disabled={isDisabled}
+                        onChange={() => {
+                          setSelectedRoleIds(prev => {
+                            if (prev.includes(role.id)) return prev.filter(id => id !== role.id);
+                            if (prev.length >= 2) return prev;
+                            return [...prev, role.id];
+                          });
+                          // Also update legacy role field with first selected role
+                          if (!isSelected) {
+                            setField('role', role.name);
+                          }
+                        }}
+                        className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary/20"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-on-surface">{role.display_name}</p>
+                        <p className="text-xs text-on-surface-variant font-mono">{role.name}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </FormField>
 

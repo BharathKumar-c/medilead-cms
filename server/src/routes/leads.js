@@ -37,8 +37,8 @@ router.get('/', validateLeadQuery, async (req, res) => {
       paramIndex++;
     }
 
-    // If user is telecaller, only show their leads
-    if (req.user.role === 'telecaller') {
+    // If user doesn't have view_all permission, only show their leads
+    if (!req.user.permissions || !req.user.permissions.includes('leads:view_all')) {
       where.push(`l.assigned_to = $${paramIndex}`);
       params.push(req.user.id);
       paramIndex++;
@@ -164,9 +164,15 @@ router.get('/uhid/:uhid', async (req, res) => {
 // GET /api/leads/providers — list providers for dropdown
 router.get('/providers', async (req, res) => {
   try {
-    const result = await db.query(
-      `SELECT id, name, specialty FROM users WHERE role IN ('super_admin', 'manager', 'telecaller') AND is_active = true ORDER BY name`
-    );
+    const result = await db.query(`
+      SELECT DISTINCT u.id, u.name, u.specialty
+      FROM users u
+      INNER JOIN user_roles ur ON u.id = ur.user_id
+      INNER JOIN role_permissions rp ON ur.role_id = rp.role_id
+      INNER JOIN permissions p ON rp.permission_id = p.id
+      WHERE p.name = 'leads:view_providers' AND u.is_active = true
+      ORDER BY u.name
+    `);
     res.json({ status: 'success', data: { providers: result.rows } });
   } catch (err) {
     logger.error('Get providers error', { error: err.message });

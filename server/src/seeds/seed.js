@@ -26,10 +26,18 @@ const seed = async () => {
     await client.query('DELETE FROM master_priority');
     await client.query('DELETE FROM master_lead_status');
     await client.query('DELETE FROM master_doctors');
+    await client.query('DELETE FROM user_roles');
+    await client.query('DELETE FROM role_permissions');
+    await client.query('DELETE FROM permissions');
+    await client.query('DELETE FROM roles');
     await client.query('DELETE FROM users');
 
     // Reset sequences
     await client.query('ALTER SEQUENCE users_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE roles_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE permissions_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE role_permissions_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE user_roles_id_seq RESTART WITH 1');
     await client.query(
       'ALTER SEQUENCE master_lead_source_id_seq RESTART WITH 1',
     );
@@ -144,6 +152,99 @@ const seed = async () => {
     `,
       [passwordHash],
     );
+
+    // Seed Roles (RBAC)
+    await client.query(`
+      INSERT INTO roles (name, display_name, description, is_system) VALUES
+      ('super_admin', 'Super Admin', 'Full system access. Can manage users, roles, and all settings.', true),
+      ('manager', 'Manager', 'Manages leads, appointments, and views reports. Can view all data.', true),
+      ('telecaller', 'Telecaller', 'Handles calls, manages assigned leads and own appointments.', true);
+    `);
+
+    // Seed Permissions (RBAC)
+    await client.query(`
+      INSERT INTO permissions (name, display_name, description, module) VALUES
+      -- Leads
+      ('leads:view_all', 'View All Leads', 'See all leads regardless of assignment', 'leads'),
+      ('leads:view_assigned', 'View Assigned Leads', 'See only leads assigned to you', 'leads'),
+      ('leads:create', 'Create Leads', 'Create new lead records', 'leads'),
+      ('leads:update', 'Update Leads', 'Edit lead details and status', 'leads'),
+      ('leads:delete', 'Delete Leads', 'Reject or delete lead records', 'leads'),
+      ('leads:assign', 'Assign Leads', 'Assign leads to users', 'leads'),
+      ('leads:view_providers', 'View Providers', 'Appear in provider dropdowns', 'leads'),
+      -- Appointments
+      ('appointments:view_all', 'View All Appointments', 'See all appointments', 'appointments'),
+      ('appointments:view_own', 'View Own Appointments', 'See only your appointments', 'appointments'),
+      ('appointments:create', 'Create Appointments', 'Book new appointments', 'appointments'),
+      ('appointments:update', 'Update Appointments', 'Edit appointment details', 'appointments'),
+      ('appointments:cancel', 'Cancel Appointments', 'Cancel scheduled appointments', 'appointments'),
+      ('appointments:reschedule', 'Reschedule Appointments', 'Reschedule existing appointments', 'appointments'),
+      -- Calls
+      ('calls:view_all', 'View All Calls', 'See all call logs', 'calls'),
+      ('calls:create', 'Log Calls', 'Create new call log entries', 'calls'),
+      ('calls:update', 'Update Calls', 'Update call status and notes', 'calls'),
+      ('calls:receive_sip_events', 'Receive SIP Events', 'Get notified of incoming/outgoing calls', 'calls'),
+      -- Reports
+      ('reports:view', 'View Reports', 'Access reports and analytics', 'reports'),
+      ('reports:export', 'Export Reports', 'Export reports to CSV', 'reports'),
+      -- Users
+      ('users:view', 'View Users', 'View the user list', 'users'),
+      ('users:create', 'Create Users', 'Create new user accounts', 'users'),
+      ('users:update', 'Update Users', 'Edit user details', 'users'),
+      ('users:deactivate', 'Deactivate Users', 'Deactivate user accounts', 'users'),
+      ('users:reset_password', 'Reset Passwords', 'Reset user passwords', 'users'),
+      -- Roles
+      ('roles:view', 'View Roles', 'View roles and permissions', 'roles'),
+      ('roles:create', 'Create Roles', 'Create custom roles', 'roles'),
+      ('roles:update', 'Update Roles', 'Edit role permissions', 'roles'),
+      ('roles:delete', 'Delete Roles', 'Delete custom roles', 'roles'),
+      -- Dashboard
+      ('dashboard:view', 'View Dashboard', 'Access the main dashboard', 'dashboard'),
+      -- Notifications
+      ('notifications:manage', 'Manage Notifications', 'Receive and manage notifications', 'notifications');
+    `);
+
+    // Seed Role-Permission Mappings
+    // Super Admin gets ALL permissions
+    await client.query(`
+      INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r, permissions p WHERE r.name = 'super_admin';
+    `);
+
+    // Manager permissions
+    await client.query(`
+      INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r, permissions p
+      WHERE r.name = 'manager' AND p.name IN (
+        'leads:view_all', 'leads:create', 'leads:update', 'leads:delete', 'leads:assign', 'leads:view_providers',
+        'appointments:view_all', 'appointments:create', 'appointments:update', 'appointments:cancel', 'appointments:reschedule',
+        'calls:view_all', 'calls:create', 'calls:update', 'calls:receive_sip_events',
+        'reports:view', 'reports:export',
+        'users:view',
+        'dashboard:view',
+        'notifications:manage'
+      );
+    `);
+
+    // Telecaller permissions
+    await client.query(`
+      INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r, permissions p
+      WHERE r.name = 'telecaller' AND p.name IN (
+        'leads:view_assigned', 'leads:create', 'leads:update', 'leads:view_providers',
+        'appointments:view_own', 'appointments:create', 'appointments:update', 'appointments:cancel', 'appointments:reschedule',
+        'calls:view_all', 'calls:create', 'calls:update',
+        'reports:view', 'reports:export',
+        'dashboard:view',
+        'notifications:manage'
+      );
+    `);
+
+    // Seed User-Role Mappings
+    await client.query(`
+      INSERT INTO user_roles (user_id, role_id)
+      SELECT u.id, r.id FROM users u, roles r WHERE u.role = r.name;
+    `);
 
     // Seed Leads
     await client.query(`

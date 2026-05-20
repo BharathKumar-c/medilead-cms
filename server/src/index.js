@@ -169,6 +169,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/calls', require('./routes/calls'));
 app.use('/api/branches', require('./routes/branches'));
+app.use('/api/roles', require('./routes/roles'));
 
 // Serve static frontend files in production
 if (isProduction) {

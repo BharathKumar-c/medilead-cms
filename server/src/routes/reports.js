@@ -128,9 +128,12 @@ router.get('/provider-leaderboard', async (req, res) => {
         COUNT(DISTINCT a.id) as appointments,
         COUNT(DISTINCT CASE WHEN l.status = 'Closed' THEN l.id END) as conversions
       FROM users u
+      INNER JOIN user_roles ur ON u.id = ur.user_id
+      INNER JOIN role_permissions rp ON ur.role_id = rp.role_id
+      INNER JOIN permissions p ON rp.permission_id = p.id
       LEFT JOIN leads l ON l.assigned_to = u.id
       LEFT JOIN appointments a ON a.provider_id = u.id
-      WHERE u.role IN ('super_admin', 'manager', 'telecaller') AND u.is_active = true
+      WHERE p.name = 'leads:view_providers' AND u.is_active = true
       GROUP BY u.id, u.name, u.specialty
       ORDER BY conversions DESC
       LIMIT 10
@@ -208,10 +211,13 @@ router.get('/telecallers', async (req, res) => {
         COUNT(DISTINCT a.id) as appointments,
         AVG(cl.duration) FILTER (WHERE cl.status = 'connected') as avg_call_duration
       FROM users u
+      INNER JOIN user_roles ur ON u.id = ur.user_id
+      INNER JOIN role_permissions rp ON ur.role_id = rp.role_id
+      INNER JOIN permissions p ON rp.permission_id = p.id
       LEFT JOIN leads l ON l.assigned_to = u.id
       LEFT JOIN call_logs cl ON cl.user_id = u.id
       LEFT JOIN appointments a ON a.provider_id = u.id
-      WHERE u.role = 'telecaller' AND u.is_active = true
+      WHERE p.name = 'leads:view_assigned' AND u.is_active = true
       GROUP BY u.id, u.name
       ORDER BY leads DESC
     `);

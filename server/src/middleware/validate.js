@@ -63,8 +63,9 @@ const validateRegister = [
     .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
   body('role')
     .optional()
-    .isIn(['super_admin', 'manager', 'telecaller', 'staff'])
-    .withMessage('Invalid role'),
+    .trim()
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Role must be between 1 and 100 characters'),
   body('specialty')
     .optional()
     .trim()
@@ -484,8 +485,9 @@ const validateUserUpdate = [
     .normalizeEmail(),
   body('role')
     .optional()
-    .isIn(['super_admin', 'manager', 'telecaller', 'staff'])
-    .withMessage('Invalid role'),
+    .trim()
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Role must be between 1 and 100 characters'),
   body('specialty')
     .optional({ checkFalsy: true })
     .trim()

@@ -196,10 +196,16 @@ router.post('/sip-event', validateSipEvent, async (req, res) => {
 
     // Emit real-time call event to targeted rooms (not global broadcast)
     if (io) {
-      // Notify managers and admins about call events
-      const managers = await db.query("SELECT id FROM users WHERE role IN ('super_admin', 'manager') AND is_active = true");
-      for (const manager of managers.rows) {
-        io.to(`user_${manager.id}`).emit('call-event', {
+      // Notify users with receive_sip_events permission
+      const sipUsers = await db.query(`
+        SELECT DISTINCT u.id FROM users u
+        INNER JOIN user_roles ur ON u.id = ur.user_id
+        INNER JOIN role_permissions rp ON ur.role_id = rp.role_id
+        INNER JOIN permissions p ON rp.permission_id = p.id
+        WHERE p.name = 'calls:receive_sip_events' AND u.is_active = true
+      `);
+      for (const sipUser of sipUsers.rows) {
+        io.to(`user_${sipUser.id}`).emit('call-event', {
           event,
           call_id,
           caller,
@@ -284,7 +290,13 @@ router.post('/sip-event', validateSipEvent, async (req, res) => {
     }
 
     // Send notifications for all event types
-    const allUsers = await db.query("SELECT id FROM users WHERE role IN ('super_admin', 'manager', 'telecaller') AND is_active = true");
+    const allUsers = await db.query(`
+      SELECT DISTINCT u.id FROM users u
+      INNER JOIN user_roles ur ON u.id = ur.user_id
+      INNER JOIN role_permissions rp ON ur.role_id = rp.role_id
+      INNER JOIN permissions p ON rp.permission_id = p.id
+      WHERE p.name = 'notifications:manage' AND u.is_active = true
+    `);
     let notificationTitle, notificationType;
 
     if (event === 'incoming') {

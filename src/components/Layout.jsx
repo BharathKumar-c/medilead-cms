@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Inbox, Calendar, BarChart3, HelpCircle, LogOut, Stethoscope, X, Users, Phone } from 'lucide-react';
+import { LayoutDashboard, Inbox, Calendar, BarChart3, HelpCircle, LogOut, Stethoscope, X, Users, Phone, Shield } from 'lucide-react';
 import Header from './Header';
 import PatientIntakeForm from './PatientIntakeForm';
 import CallPopup from './CallPopup';
@@ -88,7 +88,7 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
   }, []);
 
   const { user, logout } = useAuth();
-  const isSuperAdmin = user?.role === 'super_admin';
+  const isSuperAdmin = user?.roles?.includes('super_admin') || user?.role === 'super_admin';
 
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -98,6 +98,7 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
     { to: '/reports', icon: BarChart3, label: 'Reports' },
     ...(isSuperAdmin ? [
       { to: '/user-management', icon: Users, label: 'User Management' },
+      { to: '/role-management', icon: Shield, label: 'Role Management' },
     ] : []),
   ];
 

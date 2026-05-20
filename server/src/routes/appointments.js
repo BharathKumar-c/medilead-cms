@@ -42,8 +42,8 @@ router.get('/', validatePagination, async (req, res) => {
       paramIndex++;
     }
 
-    // If user is telecaller, only show their appointments
-    if (req.user.role === 'telecaller') {
+    // If user doesn't have view_all permission, only show their appointments
+    if (!req.user.permissions || !req.user.permissions.includes('appointments:view_all')) {
       where.push(`a.provider_id = $${paramIndex}`);
       params.push(req.user.id);
       paramIndex++;

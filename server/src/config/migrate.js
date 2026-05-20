@@ -23,6 +23,10 @@ const createTables = async () => {
       DROP TABLE IF EXISTS master_priority CASCADE;
       DROP TABLE IF EXISTS master_lead_status CASCADE;
       DROP TABLE IF EXISTS master_doctors CASCADE;
+      DROP TABLE IF EXISTS user_roles CASCADE;
+      DROP TABLE IF EXISTS role_permissions CASCADE;
+      DROP TABLE IF EXISTS permissions CASCADE;
+      DROP TABLE IF EXISTS roles CASCADE;
       DROP TABLE IF EXISTS users CASCADE;
     `);
 
@@ -44,6 +48,54 @@ const createTables = async () => {
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Roles table (RBAC)
+    await client.query(`
+      CREATE TABLE roles (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) UNIQUE NOT NULL,
+        display_name VARCHAR(150) NOT NULL,
+        description TEXT,
+        is_system BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Permissions table (RBAC)
+    await client.query(`
+      CREATE TABLE permissions (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) UNIQUE NOT NULL,
+        display_name VARCHAR(150) NOT NULL,
+        description TEXT,
+        module VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Role-Permissions junction table
+    await client.query(`
+      CREATE TABLE role_permissions (
+        id SERIAL PRIMARY KEY,
+        role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        permission_id INTEGER NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(role_id, permission_id)
+      );
+    `);
+
+    // User-Roles junction table (max 2 roles per user enforced in application)
+    await client.query(`
+      CREATE TABLE user_roles (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, role_id)
       );
     `);
 
@@ -270,6 +322,10 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at);
       CREATE INDEX IF NOT EXISTS idx_branch_departments_branch ON branch_departments(branch_id);
       CREATE INDEX IF NOT EXISTS idx_branch_departments_dept ON branch_departments(department_id);
+      CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role_id);
+      CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON role_permissions(permission_id);
+      CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id);
     `);
 
     await client.query('COMMIT');

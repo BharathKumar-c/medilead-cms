@@ -10,49 +10,40 @@ const db = require('../config/database');
  * @param {string} [options.link] - Optional navigation link
  */
 async function notify(io, { user_id, type = 'info', title, link = null }) {
-  try {
-    const result = await db.query(
-      `INSERT INTO notifications (user_id, type, title, link) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [user_id, type, title, link]
-    );
-    const notification = result.rows[0];
+  const result = await db.query(
+    `INSERT INTO notifications (user_id, type, title, link) VALUES ($1, $2, $3, $4) RETURNING *`,
+    [user_id, type, title, link]
+  );
+  const notification = result.rows[0];
 
-    if (io) {
-      io.to(`user_${user_id}`).emit('notification', notification);
-    }
-
-    return notification;
-  } catch (err) {
-    console.error('Notification error:', err);
+  if (io) {
+    io.to(`user_${user_id}`).emit('notification', notification);
   }
+
+  return notification;
 }
 
 /**
- * Notify all users with a specific role
+ * Notify all users with a specific permission
  */
-async function notifyRole(io, role, { type, title, link }) {
-  try {
-    const users = await db.query('SELECT id FROM users WHERE role = $1 AND is_active = true', [role]);
-    for (const user of users.rows) {
-      await notify(io, { user_id: user.id, type, title, link });
-    }
-  } catch (err) {
-    console.error('Notify role error:', err);
+async function notifyByPermission(io, permission, { type, title, link }) {
+  const users = await db.query(`
+    SELECT DISTINCT u.id FROM users u
+    INNER JOIN user_roles ur ON u.id = ur.user_id
+    INNER JOIN role_permissions rp ON ur.role_id = rp.role_id
+    INNER JOIN permissions p ON rp.permission_id = p.id
+    WHERE p.name = $1 AND u.is_active = true
+  `, [permission]);
+  for (const user of users.rows) {
+    await notify(io, { user_id: user.id, type, title, link });
   }
 }
 
 /**
- * Notify all super_admins and managers
+ * Notify all super_admins and managers (legacy helper, now uses permissions)
  */
 async function notifyManagers(io, { type, title, link }) {
-  try {
-    const users = await db.query("SELECT id FROM users WHERE role IN ('super_admin', 'manager') AND is_active = true");
-    for (const user of users.rows) {
-      await notify(io, { user_id: user.id, type, title, link });
-    }
-  } catch (err) {
-    console.error('Notify managers error:', err);
-  }
+  await notifyByPermission(io, 'calls:receive_sip_events', { type, title, link });
 }
 
-module.exports = { notify, notifyRole, notifyManagers };
+module.exports = { notify, notifyByPermission, notifyManagers };

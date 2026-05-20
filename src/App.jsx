@@ -14,6 +14,8 @@ import ProfileSettings from './pages/ProfileSettings';
 import AccountSettings from './pages/AccountSettings';
 import Appearance from './pages/Appearance';
 import UserManagement from './pages/UserManagement';
+import RoleManagement from './pages/RoleManagement';
+import PermissionAssignment from './pages/PermissionAssignment';
 import TelecallerDashboard from './pages/TelecallerDashboard';
 import SIPTestPanel from './pages/SIPTestPanel';
 import DocsLanding from './pages/docs/DocsLanding';
@@ -37,7 +39,8 @@ function AdminRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user?.role !== 'super_admin') {
+  const isSuperAdmin = user?.roles?.includes('super_admin') || user?.role === 'super_admin';
+  if (!isSuperAdmin) {
     return <Navigate to="/" replace />;
   }
 
@@ -98,6 +101,8 @@ function AppRoutes() {
       <Route path="/account-settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
       <Route path="/appearance" element={<ProtectedRoute><Appearance /></ProtectedRoute>} />
       <Route path="/user-management" element={<AdminRoute><UserManagement /></AdminRoute>} />
+      <Route path="/role-management" element={<AdminRoute><RoleManagement /></AdminRoute>} />
+      <Route path="/role-management/:id/permissions" element={<AdminRoute><PermissionAssignment /></AdminRoute>} />
       <Route path="/calls" element={<ProtectedRoute><TelecallerDashboard /></ProtectedRoute>} />
       <Route path="/sip-test" element={<AdminRoute><SIPTestPanel /></AdminRoute>} />
       <Route path="*" element={<NotFound />} />
