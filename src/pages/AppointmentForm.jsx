@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -77,6 +77,7 @@ const AppointmentForm = () => {
   const [submitResult, setSubmitResult] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const doctorRequestId = useRef(0);
 
   const {
     register,
@@ -113,18 +114,23 @@ const AppointmentForm = () => {
 
   useEffect(() => {
     if (watchedDepartment) {
+      const requestId = ++doctorRequestId.current;
       // Clear doctor and time slot when department changes
       setValue('doctor_id', '');
       setValue('time_slot_id', '');
       api.getDoctors(watchedDepartment).then(res => {
+        if (requestId !== doctorRequestId.current) return;
         if (res?.data?.doctors) {
           setDoctors(res.data.doctors.map(d => ({
             value: d.id,
             label: d.name + (d.specialty ? ` — ${d.specialty}` : ''),
           })));
         }
-      }).catch(() => setDoctors([]));
+      }).catch(() => {
+        if (requestId === doctorRequestId.current) setDoctors([]);
+      });
     } else {
+      doctorRequestId.current++;
       setDoctors([]);
       setValue('doctor_id', '');
       setValue('time_slot_id', '');

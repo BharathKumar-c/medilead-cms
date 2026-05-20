@@ -134,11 +134,15 @@ router.post('/', validateCallLog, async (req, res) => {
     // Notify for missed calls
     if (status === 'missed') {
       const io = req.app.get('io');
-      await notifyManagers(io, {
-        type: 'warning',
-        title: `Missed call from ${caller_number}${leadName ? ` (${leadName})` : ''}`,
-        link: '/calls',
-      });
+      try {
+        await notifyManagers(io, {
+          type: 'warning',
+          title: `Missed call from ${caller_number}${leadName ? ` (${leadName})` : ''}`,
+          link: '/calls',
+        });
+      } catch (notifyErr) {
+        logger.warn('Failed to send missed call notification', { callId: call.id, error: notifyErr.message });
+      }
     }
 
     logger.info('Call logged', {
@@ -299,12 +303,16 @@ router.post('/sip-event', validateSipEvent, async (req, res) => {
 
     if (notificationTitle) {
       for (const u of allUsers.rows) {
-        await notify(io, {
-          user_id: u.id,
-          type: notificationType,
-          title: notificationTitle,
-          link: '/calls',
-        });
+        try {
+          await notify(io, {
+            user_id: u.id,
+            type: notificationType,
+            title: notificationTitle,
+            link: '/calls',
+          });
+        } catch (notifyErr) {
+          logger.warn('Failed to send call notification', { userId: u.id, error: notifyErr.message });
+        }
       }
     }
 

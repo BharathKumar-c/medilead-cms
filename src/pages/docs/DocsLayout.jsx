@@ -99,7 +99,7 @@ const DocsLayout = ({ children }) => {
   };
 
   const handleSearchSubmit = (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/docs/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setShowSearch(false);

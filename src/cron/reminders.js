@@ -27,12 +27,16 @@ function startFollowUpReminders(io) {
 
       for (const lead of overdue.rows) {
         if (lead.assigned_to) {
-          await notify(io, {
-            user_id: lead.assigned_to,
-            type: 'warning',
-            title: `Follow-up overdue: ${lead.name} — last contacted ${Math.floor((Date.now() - new Date(lead.last_call_date)) / 86400000)} days ago`,
-            link: '/lead-box',
-          });
+          try {
+            await notify(io, {
+              user_id: lead.assigned_to,
+              type: 'warning',
+              title: `Follow-up overdue: ${lead.name} — last contacted ${Math.floor((Date.now() - new Date(lead.last_call_date)) / 86400000)} days ago`,
+              link: '/lead-box',
+            });
+          } catch (err) {
+            console.error('Failed to send overdue notification:', err.message);
+          }
         }
       }
 
@@ -53,12 +57,16 @@ function startFollowUpReminders(io) {
 
       for (const lead of staleNew.rows) {
         if (lead.assigned_to) {
-          await notify(io, {
-            user_id: lead.assigned_to,
-            type: 'urgent',
-            title: `New lead untouched for 2+ days: ${lead.name}`,
-            link: '/lead-box',
-          });
+          try {
+            await notify(io, {
+              user_id: lead.assigned_to,
+              type: 'urgent',
+              title: `New lead untouched for 2+ days: ${lead.name}`,
+              link: '/lead-box',
+            });
+          } catch (err) {
+            console.error('Failed to send stale lead notification:', err.message);
+          }
         }
       }
 
@@ -84,12 +92,16 @@ function startFollowUpReminders(io) {
 
       for (const apt of unconfirmed.rows) {
         if (apt.provider_id) {
-          await notify(io, {
-            user_id: apt.provider_id,
-            type: 'info',
-            title: `Reminder: ${apt.patient_name} has an appointment tomorrow at ${apt.appointment_time}`,
-            link: '/appointments',
-          });
+          try {
+            await notify(io, {
+              user_id: apt.provider_id,
+              type: 'info',
+              title: `Reminder: ${apt.patient_name} has an appointment tomorrow at ${apt.appointment_time}`,
+              link: '/appointments',
+            });
+          } catch (err) {
+            console.error('Failed to send appointment reminder:', err.message);
+          }
         }
       }
 

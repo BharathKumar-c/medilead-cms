@@ -9,7 +9,9 @@ const SlotPicker = ({ doctorId, date, value, onChange, error }) => {
 
   useEffect(() => {
     if (!doctorId || !date) {
+      latestRequestId.current++;
       setSlots([]);
+      setLoading(false);
       return;
     }
 

@@ -23,10 +23,14 @@ const DocsSearch = () => {
     setResults(matched);
   }, [query]);
 
+  const escapeHtml = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
   const highlight = (text) => {
-    if (!query) return text;
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    return text.replace(regex, '<mark class="bg-yellow-200 px-0.5 rounded">$1</mark>');
+    if (!query) return escapeHtml(text);
+    const escaped = escapeHtml(text);
+    const pattern = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${pattern})`, 'gi');
+    return escaped.replace(regex, '<mark class="bg-yellow-200 px-0.5 rounded">$1</mark>');
   };
 
   return (

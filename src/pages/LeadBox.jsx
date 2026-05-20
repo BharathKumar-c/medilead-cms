@@ -437,6 +437,7 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
     if (!formData.email.trim()) errs.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errs.email = 'Enter a valid email address';
     if (!formData.dob) errs.dob = 'Date of birth is required';
+    else if (new Date(formData.dob) > new Date()) errs.dob = 'Date of birth cannot be in the future';
     if (!formData.leadSource) errs.leadSource = 'Lead source is required';
     if (!formData.address.trim()) errs.address = 'Address is required';
     if (!formData.pincode.trim()) errs.pincode = 'Pincode is required';

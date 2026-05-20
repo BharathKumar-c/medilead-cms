@@ -281,12 +281,16 @@ router.post('/', validateLead, async (req, res) => {
     // Notify assigned user
     if (assignedTo && assignedTo !== req.user.id) {
       const io = req.app.get('io');
-      await notify(io, {
-        user_id: assignedTo,
-        type: 'info',
-        title: `New lead assigned: ${name}`,
-        link: '/lead-box',
-      });
+      try {
+        await notify(io, {
+          user_id: assignedTo,
+          type: 'info',
+          title: `New lead assigned: ${name}`,
+          link: '/lead-box',
+        });
+      } catch (notifyErr) {
+        logger.warn('Failed to send assignment notification', { leadId: lead.id, error: notifyErr.message });
+      }
     }
 
     logger.info('Lead created', { leadId: lead.id, name, createdBy: req.user.id, assignedTo });
@@ -382,12 +386,16 @@ router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
     if (status && status !== oldLead.status) {
       const io = req.app.get('io');
       if (status === 'Follow-up' && lead.assigned_to) {
-        await notify(io, {
-          user_id: lead.assigned_to,
-          type: 'info',
-          title: `Lead ${name} moved to Follow-up`,
-          link: '/lead-box',
-        });
+        try {
+          await notify(io, {
+            user_id: lead.assigned_to,
+            type: 'info',
+            title: `Lead ${name} moved to Follow-up`,
+            link: '/lead-box',
+          });
+        } catch (notifyErr) {
+          logger.warn('Failed to send status notification', { leadId: lead.id, error: notifyErr.message });
+        }
       }
     }
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiEndpoints } from '../../../data/docs';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const methodColors = {
   GET: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300' },

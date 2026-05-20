@@ -90,6 +90,11 @@ const Step1PatientInfo = ({ register, errors, setValue }) => {
     const value = e.target.value;
     // Clear previous debounce
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    // Invalidate any in-flight lookup when value becomes too short
+    if (value.trim().length < 3) {
+      latestRequestId.current++;
+      setUhidLoading(false);
+    }
     // Debounce: fetch after user stops typing for 600ms
     if (value.trim().length >= 3) {
       debounceTimer.current = setTimeout(() => {

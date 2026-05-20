@@ -275,12 +275,16 @@ router.post('/', validateAppointment, async (req, res) => {
     // Notify provider
     if (providerIdInt && providerIdInt !== createdByInt) {
       const io = req.app.get('io');
-      await notify(io, {
-        user_id: providerIdInt,
-        type: 'info',
-        title: `New appointment: ${patient_name} on ${appointment_date} at ${appointment_time}`,
-        link: '/appointments',
-      });
+      try {
+        await notify(io, {
+          user_id: providerIdInt,
+          type: 'info',
+          title: `New appointment: ${patient_name} on ${appointment_date} at ${appointment_time}`,
+          link: '/appointments',
+        });
+      } catch (notifyErr) {
+        logger.warn('Failed to send appointment notification', { appointmentId: appointment.id, error: notifyErr.message });
+      }
     }
 
     logger.info('Appointment created', { appointmentId: appointment.id, patientName: patient_name, createdBy: createdByInt });
@@ -348,12 +352,16 @@ router.put('/:id', validateId, validateAppointmentUpdate, async (req, res) => {
     // Notify if status changed
     if (status && status !== oldStatus && appointment.provider_id) {
       const io = req.app.get('io');
-      await notify(io, {
-        user_id: appointment.provider_id,
-        type: status === 'Cancelled' ? 'warning' : 'info',
-        title: `Appointment ${status.toLowerCase()}: ${appointment.patient_name}`,
-        link: '/appointments',
-      });
+      try {
+        await notify(io, {
+          user_id: appointment.provider_id,
+          type: status === 'Cancelled' ? 'warning' : 'info',
+          title: `Appointment ${status.toLowerCase()}: ${appointment.patient_name}`,
+          link: '/appointments',
+        });
+      } catch (notifyErr) {
+        logger.warn('Failed to send status notification', { appointmentId: appointment.id, error: notifyErr.message });
+      }
     }
 
     logger.info('Appointment updated', { appointmentId: appointment.id, updatedBy: req.user.id });
@@ -419,12 +427,16 @@ router.put('/:id/reschedule', validateId, validateReschedule, async (req, res) =
     // Notify provider
     if (oldAppointment.provider_id) {
       const io = req.app.get('io');
-      await notify(io, {
-        user_id: oldAppointment.provider_id,
-        type: 'warning',
-        title: `Appointment rescheduled: ${oldAppointment.patient_name} to ${appointment_date} ${appointment_time}`,
-        link: '/appointments',
-      });
+      try {
+        await notify(io, {
+          user_id: oldAppointment.provider_id,
+          type: 'warning',
+          title: `Appointment rescheduled: ${oldAppointment.patient_name} to ${appointment_date} ${appointment_time}`,
+          link: '/appointments',
+        });
+      } catch (notifyErr) {
+        logger.warn('Failed to send reschedule notification', { appointmentId: req.params.id, error: notifyErr.message });
+      }
     }
 
     logger.info('Appointment rescheduled', {
@@ -476,12 +488,16 @@ router.put('/:id/cancel', validateId, async (req, res) => {
     // Notify provider
     if (existing.rows[0].provider_id) {
       const io = req.app.get('io');
-      await notify(io, {
-        user_id: existing.rows[0].provider_id,
-        type: 'warning',
-        title: `Appointment cancelled: ${existing.rows[0].patient_name}`,
-        link: '/appointments',
-      });
+      try {
+        await notify(io, {
+          user_id: existing.rows[0].provider_id,
+          type: 'warning',
+          title: `Appointment cancelled: ${existing.rows[0].patient_name}`,
+          link: '/appointments',
+        });
+      } catch (notifyErr) {
+        logger.warn('Failed to send cancellation notification', { appointmentId: req.params.id, error: notifyErr.message });
+      }
     }
 
     logger.info('Appointment cancelled', {

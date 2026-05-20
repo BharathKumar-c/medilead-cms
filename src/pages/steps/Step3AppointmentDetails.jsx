@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import FormSelect from '../components/FormSelect';
 import FormInput from '../components/FormInput';
 import SlotPicker from '../components/SlotPicker';
@@ -24,6 +24,8 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState(() => watch('branch_id') || '');
   const [selectedDepartment, setSelectedDepartment] = useState(() => watch('department_id') || '');
+  const deptRequestId = useRef(0);
+  const doctorRequestId = useRef(0);
 
   const selectedDoctor = watch('doctor_id');
   const selectedDate = watch('appointment_date');
@@ -39,8 +41,11 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
 
   // Fetch departments when branch changes
   useEffect(() => {
+    const requestId = ++deptRequestId.current;
+
     if (!selectedBranch) {
       api.getDepartments().then(res => {
+        if (requestId !== deptRequestId.current) return;
         if (res?.data?.departments) {
           const depts = Array.isArray(res.data.departments)
             ? res.data.departments.map(d => typeof d === 'string' ? { value: d, label: d } : { value: d.name, label: d.name })
@@ -52,10 +57,13 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
     }
 
     api.getBranchDepartments(selectedBranch).then(res => {
+      if (requestId !== deptRequestId.current) return;
       if (res?.data?.departments) {
         setDepartments(res.data.departments.map(d => ({ value: d.name, label: d.name })));
       }
-    }).catch(() => setDepartments([]));
+    }).catch(() => {
+      if (requestId === deptRequestId.current) setDepartments([]);
+    });
 
     setSelectedDepartment('');
     setValue('department_id', '');
@@ -69,6 +77,7 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
     if (!selectedDepartment) {
       // Only clear doctor if the form also has no department (user-initiated clear)
       if (!watch('department_id')) {
+        doctorRequestId.current++;
         setDoctors([]);
         setValue('doctor_id', '');
         setValue('provider_name', '');
@@ -76,8 +85,10 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
       return;
     }
 
+    const requestId = ++doctorRequestId.current;
     setLoadingDoctors(true);
     api.getDoctors(selectedDepartment, selectedBranch || undefined).then(res => {
+      if (requestId !== doctorRequestId.current) return;
       if (res?.data?.doctors) {
         setDoctors(res.data.doctors.map(d => ({
           value: d.id,
@@ -85,9 +96,9 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
         })));
       }
     }).catch(() => {
-      setDoctors([]);
+      if (requestId === doctorRequestId.current) setDoctors([]);
     }).finally(() => {
-      setLoadingDoctors(false);
+      if (requestId === doctorRequestId.current) setLoadingDoctors(false);
     });
   }, [selectedDepartment, selectedBranch, setValue, watch]);
 
@@ -163,7 +174,7 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
           register={register}
           errors={errors}
           required
-          min={new Date().toISOString().split('T')[0]}
+          min={(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })()}
         />
         <FormSelect
           label="Visit Type"

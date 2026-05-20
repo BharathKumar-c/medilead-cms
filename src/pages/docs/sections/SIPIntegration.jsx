@@ -207,21 +207,25 @@ const SIPIntegration = () => {
           live call monitoring dashboards and instant notifications for missed calls.
         </p>
         <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-          <pre className="text-sm text-gray-300"><code>{`// Socket.IO events emitted by the server
-socket.on('call:incoming', (data) => {
-  // data: { call_id, caller, callee, lead_name, lead_status }
+          <pre className="text-sm text-gray-300"><code>{`// Socket.IO event emitted by the server
+// Received by managers and admins on call events
+socket.on('call-event', (data) => {
+  // data: { event, call_id, caller, callee, lead_name,
+  //         lead_status, status, duration }
+  // event is one of: incoming | outgoing | answered | ended | missed
 });
 
-socket.on('call:answered', (data) => {
-  // data: { call_id, answered_by }
-});
-
-socket.on('call:ended', (data) => {
-  // data: { call_id, duration, status }
-});
-
-socket.on('call:missed', (data) => {
-  // data: { call_id, caller, missed_by }
+// Example: reacting to specific events
+socket.on('call-event', (data) => {
+  if (data.event === 'answered') {
+    // data: { call_id, answered_by }
+  }
+  if (data.event === 'ended') {
+    // data: { call_id, duration, status }
+  }
+  if (data.event === 'missed') {
+    // data: { call_id, caller, missed_by }
+  }
 });`}</code></pre>
         </div>
       </section>
