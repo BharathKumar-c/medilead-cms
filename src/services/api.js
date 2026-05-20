@@ -45,20 +45,29 @@ class ApiService {
     }
 
     const response = await fetch(url, config);
-    const data = await response.json();
+
+    // Parse response body defensively — 204 and some errors have no JSON body
+    let data = null;
+    const contentType = response.headers.get('content-type') || '';
+    if (response.status !== 204 && contentType.includes('application/json')) {
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+    }
 
     if (!response.ok) {
       if (response.status === 401) {
         this.setToken(null);
         localStorage.removeItem('user');
-        // Notify AuthContext to update state — no page reload
         if (this._onUnauthorized) {
           this._onUnauthorized();
         }
       }
-      const error = new Error(data.message || 'Request failed');
-      error.code = data.code;
-      error.errors = data.errors;
+      const error = new Error(data?.message || 'Request failed');
+      error.code = data?.code;
+      error.errors = data?.errors;
       throw error;
     }
 

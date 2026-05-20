@@ -204,8 +204,7 @@ npm run dev`}
       <section className="mb-10">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Default Login</h2>
         <p className="text-gray-700 mb-4">
-          After seeding the database, use the following credentials to log in as
-          a super admin:
+          After seeding the database, set <code className="font-mono bg-gray-100 px-1 rounded">SEED_ADMIN_EMAIL</code> and <code className="font-mono bg-gray-100 px-1 rounded">SEED_ADMIN_PASSWORD</code> in your <code className="font-mono bg-gray-100 px-1 rounded">.env</code> file, then log in with those credentials.
         </p>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -214,7 +213,7 @@ npm run dev`}
                 Email
               </p>
               <p className="text-sm font-mono text-gray-900">
-                bharath@medcloud.health
+                (set via SEED_ADMIN_EMAIL in .env)
               </p>
             </div>
             <div>

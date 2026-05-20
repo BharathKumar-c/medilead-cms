@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   HelpCircle, Phone, Mail, MessageSquare, Book, Video,
   ChevronDown, ChevronRight, ExternalLink, Search, Clock,
@@ -35,6 +36,7 @@ const faqs = [
 const HelpSupport = () => {
   const [openFaq, setOpenFaq] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const navigate = useNavigate();
 
   const filteredFaqs = faqs.filter((faq) =>
     faq.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -98,10 +100,10 @@ const HelpSupport = () => {
                 </div>
               </div>
               <p className="font-body-md text-on-surface-variant mb-4">Chat with a support agent in real-time during business hours.</p>
-              <button className="flex items-center gap-2 font-body-md font-bold text-secondary hover:underline">
+              <a href="mailto:support@medcloud.health?subject=Live%20Chat%20Request" className="flex items-center gap-2 font-body-md font-bold text-secondary hover:underline">
                 Start Chat
                 <ExternalLink className="w-4 h-4" />
-              </button>
+              </a>
             </div>
           </div>
 
@@ -114,19 +116,19 @@ const HelpSupport = () => {
               </div>
               <p className="font-body-md text-on-surface-variant mb-4">Browse our comprehensive user guide for step-by-step instructions on using MediCloud CMS.</p>
               <div className="space-y-2">
-                <a href="#" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
+                <a href="/docs/installation" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
                   <span className="font-body-md text-on-surface">Getting Started Guide</span>
                   <ChevronRight className="w-4 h-4 text-on-surface-variant" />
                 </a>
-                <a href="#" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
+                <a href="/docs/lead-management" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
                   <span className="font-body-md text-on-surface">Lead Management Workflow</span>
                   <ChevronRight className="w-4 h-4 text-on-surface-variant" />
                 </a>
-                <a href="#" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
+                <a href="/docs/appointments" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
                   <span className="font-body-md text-on-surface">Appointment Scheduling</span>
                   <ChevronRight className="w-4 h-4 text-on-surface-variant" />
                 </a>
-                <a href="#" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
+                <a href="/docs/reports" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
                   <span className="font-body-md text-on-surface">Reports & Analytics</span>
                   <ChevronRight className="w-4 h-4 text-on-surface-variant" />
                 </a>
@@ -140,7 +142,7 @@ const HelpSupport = () => {
               </div>
               <p className="font-body-md text-on-surface-variant mb-4">Watch quick video walkthroughs of key features and workflows.</p>
               <div className="space-y-2">
-                <a href="#" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
+                <button onClick={() => navigate('/docs/manager')} className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors w-full text-left">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-secondary/10 rounded flex items-center justify-center">
                       <Video className="w-4 h-4 text-secondary" />
@@ -151,8 +153,8 @@ const HelpSupport = () => {
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-on-surface-variant" />
-                </a>
-                <a href="#" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
+                </button>
+                <button onClick={() => navigate('/docs/lead-management')} className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors w-full text-left">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-secondary/10 rounded flex items-center justify-center">
                       <Video className="w-4 h-4 text-secondary" />
@@ -163,8 +165,8 @@ const HelpSupport = () => {
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-on-surface-variant" />
-                </a>
-                <a href="#" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
+                </button>
+                <button onClick={() => navigate('/docs/appointments')} className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors w-full text-left">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-secondary/10 rounded flex items-center justify-center">
                       <Video className="w-4 h-4 text-secondary" />
@@ -175,7 +177,7 @@ const HelpSupport = () => {
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-on-surface-variant" />
-                </a>
+                </button>
               </div>
             </div>
           </div>
@@ -199,16 +201,16 @@ const HelpSupport = () => {
               {filteredFaqs.length === 0 ? (
                 <div className="p-8 text-center text-on-surface-variant font-body-md">No FAQs matching your search.</div>
               ) : (
-                filteredFaqs.map((faq, i) => (
-                  <div key={i}>
+                filteredFaqs.map((faq) => (
+                  <div key={faq.question}>
                     <button
-                      onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                      onClick={() => setOpenFaq(openFaq === faq.question ? null : faq.question)}
                       className="w-full flex items-center justify-between px-6 py-4 hover:bg-surface-container-low transition-colors text-left"
                     >
                       <span className="font-body-md font-bold text-on-surface pr-4">{faq.question}</span>
-                      <ChevronDown className={`w-5 h-5 text-on-surface-variant flex-shrink-0 transition-transform ${openFaq === i ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`w-5 h-5 text-on-surface-variant flex-shrink-0 transition-transform ${openFaq === faq.question ? 'rotate-180' : ''}`} />
                     </button>
-                    {openFaq === i && (
+                    {openFaq === faq.question && (
                       <div className="px-6 pb-4">
                         <p className="font-body-md text-on-surface-variant">{faq.answer}</p>
                       </div>

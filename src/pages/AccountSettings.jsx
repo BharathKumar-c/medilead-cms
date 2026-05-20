@@ -11,6 +11,7 @@ const AccountSettings = () => {
   const [showPasswords, setShowPasswords] = useState({ current: false, newPass: false, confirm: false });
   const [settings, setSettings] = useState({ two_factor_enabled: false, email_notifications: true });
   const [saving, setSaving] = useState(false);
+  const [pendingToggle, setPendingToggle] = useState(null);
   const [toasts, setToasts] = useState([]);
 
   const addToast = (type, title, message) => {
@@ -52,14 +53,20 @@ const AccountSettings = () => {
   };
 
   const handleToggle = async (key) => {
+    // Prevent rapid clicks while a request is in flight
+    if (pendingToggle === key) return;
+
     const newValue = !settings[key];
     setSettings(prev => ({ ...prev, [key]: newValue }));
+    setPendingToggle(key);
     try {
       await api.updateSettings({ [key]: newValue });
       addToast('success', 'Setting Updated', `${key === 'two_factor_enabled' ? 'Two-Factor Authentication' : 'Email Notifications'} ${newValue ? 'enabled' : 'disabled'}.`);
     } catch {
       setSettings(prev => ({ ...prev, [key]: !newValue }));
       addToast('error', 'Update Failed', 'Could not save setting.');
+    } finally {
+      setPendingToggle(null);
     }
   };
 

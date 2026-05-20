@@ -152,7 +152,7 @@ const Reports = () => {
       ['--- Status Breakdown ---', ''],
       ...statusBreakdown.map(s => [s.status, s.count]),
     ];
-    const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
