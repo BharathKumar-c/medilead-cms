@@ -11,6 +11,9 @@ const relationships = [
   { from: 'users.id', to: 'appointments.created_by', description: 'User who created an appointment' },
 ];
 
+// Build a set of all FK field names from relationship metadata
+const fkFields = new Set(relationships.map(r => r.to.split('.')[1]));
+
 const masterTables = ['master_lead_source', 'master_department', 'master_priority', 'master_lead_status'];
 
 const DatabaseSchema = () => {
@@ -62,14 +65,14 @@ const DatabaseSchema = () => {
                       className={`px-2.5 py-1 rounded text-xs font-mono border ${
                         field === 'id'
                           ? 'bg-yellow-50 border-yellow-300 text-yellow-800'
-                          : field.includes('_id')
+                          : fkFields.has(field)
                             ? 'bg-blue-50 border-blue-200 text-blue-700'
                             : 'bg-gray-50 border-gray-200 text-gray-700'
                       }`}
                     >
                       {field}
                       {field === 'id' && <span className="ml-1 text-yellow-500">PK</span>}
-                      {field.includes('_id') && field !== 'id' && <span className="ml-1 text-blue-400">FK</span>}
+                      {fkFields.has(field) && field !== 'id' && <span className="ml-1 text-blue-400">FK</span>}
                     </span>
                   ))}
                 </div>
@@ -172,7 +175,7 @@ master_lead_status ──── leads.status (dropdown)`}</code></pre>
             <span className="text-sm text-gray-600">Primary Key</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded text-xs font-mono">*_id FK</span>
+            <span className="bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded text-xs font-mono">FK</span>
             <span className="text-sm text-gray-600">Foreign Key</span>
           </div>
           <div className="flex items-center gap-2">

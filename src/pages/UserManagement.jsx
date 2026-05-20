@@ -259,7 +259,10 @@ const UserFormPanel = ({ user, onClose, onSave, onError, onSuccess }) => {
     if (!form.name.trim()) errors.name = 'Full name is required.';
     if (!form.email.trim()) errors.email = 'Email is required.';
     if (!user && !form.password) errors.password = 'Password is required.';
-    if (!user && form.password && form.password.length < 6) errors.password = 'Password must be at least 6 characters.';
+    if (!user && form.password) {
+      const failedRule = passwordRules.find(r => !r.test(form.password));
+      if (failedRule) errors.password = failedRule.label;
+    }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);

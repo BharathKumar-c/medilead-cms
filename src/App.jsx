@@ -19,6 +19,31 @@ import SIPTestPanel from './pages/SIPTestPanel';
 import DocsLanding from './pages/docs/DocsLanding';
 import DocsRouter from './pages/docs/DocsRouter';
 
+function AdminRoute({ children }) {
+  const { isAuthenticated, loading, user } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-secondary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="font-body-md text-on-surface-variant">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== 'super_admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
 
@@ -72,7 +97,7 @@ function AppRoutes() {
       <Route path="/profile-settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
       <Route path="/account-settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
       <Route path="/appearance" element={<ProtectedRoute><Appearance /></ProtectedRoute>} />
-      <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+      <Route path="/user-management" element={<AdminRoute><UserManagement /></AdminRoute>} />
       <Route path="/calls" element={<ProtectedRoute><TelecallerDashboard /></ProtectedRoute>} />
       <Route path="/sip-test" element={<ProtectedRoute><SIPTestPanel /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />

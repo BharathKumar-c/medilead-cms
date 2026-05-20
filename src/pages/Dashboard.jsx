@@ -15,23 +15,20 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
+    loadMetrics();
+    loadActivity();
   }, []);
 
   useEffect(() => {
     loadActivity();
   }, [activityFilter]);
 
-  const loadData = async () => {
+  const loadMetrics = async () => {
     try {
-      const [metricsRes, activityRes] = await Promise.all([
-        api.getDashboardMetrics(),
-        api.getActivityLog(),
-      ]);
+      const metricsRes = await api.getDashboardMetrics();
       setMetrics(metricsRes.data);
-      setActivity(activityRes.data.activity);
     } catch (err) {
-      console.error('Failed to load dashboard:', err);
+      console.error('Failed to load metrics:', err);
     } finally {
       setLoading(false);
     }

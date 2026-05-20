@@ -32,7 +32,7 @@ const step2Schema = yup.object({
     .required('Email is required')
     .email('Invalid email format'),
   emergency_contact_name: yup.string().nullable(),
-  emergency_contact_phone: yup.string().nullable().matches(/^[0-9]{0,10}$/, 'Must be 10 digits'),
+  emergency_contact_phone: yup.string().nullable().matches(/^$|^[0-9]{10}$/, 'Must be exactly 10 digits when provided'),
 });
 
 const step3Schema = yup.object({

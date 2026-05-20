@@ -44,10 +44,33 @@ const io = new Server(server, {
 app.set('io', io);
 
 io.on('connection', (socket) => {
-  logger.info(`Socket connected: ${socket.id}`);
+  // Verify JWT from handshake auth
+  const token = socket.handshake?.auth?.token;
+  if (!token) {
+    logger.warn('Socket connection rejected: no auth token');
+    socket.disconnect(true);
+    return;
+  }
 
-  // Client joins their personal room for targeted notifications
+  let authenticatedUserId;
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'medilead_secret_key_2024');
+    authenticatedUserId = decoded.id;
+  } catch {
+    logger.warn('Socket connection rejected: invalid token');
+    socket.disconnect(true);
+    return;
+  }
+
+  logger.info(`Socket connected: ${socket.id} (user ${authenticatedUserId})`);
+
+  // Only allow joining the authenticated user's own room
   socket.on('join', (userId) => {
+    if (String(userId) !== String(authenticatedUserId)) {
+      logger.warn(`Socket join rejected: user ${authenticatedUserId} tried to join room for user ${userId}`);
+      return;
+    }
     socket.join(`user_${userId}`);
     logger.info(`User ${userId} joined room user_${userId}`);
   });
