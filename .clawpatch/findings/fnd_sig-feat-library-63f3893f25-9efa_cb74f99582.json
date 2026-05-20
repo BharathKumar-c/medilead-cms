@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-63f3893f25-9efa_cb74f99582",
+  "featureId": "feat_library_63f3893f25",
+  "title": "Outbound call logging failure resets UI while the SIP call may still be active",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "src/hooks/useSip.js",
+      "startLine": 106,
+      "endLine": 114,
+      "symbol": "makeCall",
+      "quote": "await inviter.invite();\n\n      // Log the call\n      await api.createCallLog({\n        caller_number: 'self',\n        callee_number: number,\n        direction: 'outbound',\n      });"
+    },
+    {
+      "path": "src/hooks/useSip.js",
+      "startLine": 115,
+      "endLine": 120,
+      "symbol": "makeCall",
+      "quote": "} catch (err) {\n      console.error('Make call error:', err);\n      setCallState('idle');\n      setCurrentCall(null);\n      if (onCallFailed) onCallFailed(err);\n    }"
+    }
+  ],
+  "reasoning": "The SIP invite is sent before the call log is created. If api.createCallLog fails after inviter.invite() succeeds, the catch block treats the whole call as failed and clears callState/currentCall even though the outbound SIP session may still be ringing or later connect. That makes the UI lose track of an in-progress call and reports a false call failure for a non-call-control error.",
+  "reproduction": "Mock inviter.invite() to resolve and api.createCallLog() to reject. makeCall() will set the call to ringing, then immediately reset it to idle while sessionRef still points at the inviter.",
+  "recommendation": "Separate SIP call setup errors from call-log persistence errors. Keep the call UI/session state after a successful invite, and handle logging failure independently, for example by logging/reporting it without calling onCallFailed or clearing currentCall.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests are included for this feature, and there is no regression coverage for partial failure after a successful SIP invite.",
+  "suggestedRegressionTest": "Add a hook test that stubs Inviter.invite to resolve and api.createCallLog to reject, then asserts callState/currentCall remain in the outbound call state and onCallFailed is not invoked for the logging failure.",
+  "minimumFixScope": "Update src/hooks/useSip.js makeCall so call logging is isolated from SIP invite control flow.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:05.191Z"
+    }
+  ],
+  "signature": "sig_feat-library-63f3893f25_9efa7ebf64",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T205907-d5a5de",
+  "createdAt": "2026-05-20T20:59:48.026Z",
+  "updatedAt": "2026-05-20T20:59:48.026Z"
+}

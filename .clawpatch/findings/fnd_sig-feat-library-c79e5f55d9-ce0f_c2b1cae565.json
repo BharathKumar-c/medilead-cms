@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-c79e5f55d9-ce0f_c2b1cae565",
+  "featureId": "feat_library_c79e5f55d9",
+  "title": "Notifications are added twice for the same socket event",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "src/components/Header.jsx",
+      "startLine": 42,
+      "endLine": 53,
+      "symbol": "Header useSocket onNotification",
+      "quote": "setNotifs(prev => [notif, ...prev]);\n      setUnreadCount(prev => prev + 1);"
+    },
+    {
+      "path": "src/components/Header.jsx",
+      "startLine": 56,
+      "endLine": 67,
+      "symbol": "handleNewNotification",
+      "quote": "setNotifs(prev => [notif, ...prev]);\n      setUnreadCount(prev => prev + 1);"
+    },
+    {
+      "path": "src/components/Layout.jsx",
+      "startLine": 37,
+      "endLine": 43,
+      "symbol": "Layout useSocket onNotification",
+      "quote": "window.dispatchEvent(new CustomEvent('new-notification', { detail: notif }));"
+    }
+  ],
+  "reasoning": "Header subscribes directly to socket notifications and also listens for the custom new-notification event. Layout also subscribes to the same socket notification and dispatches that custom event. When one notification arrives, Header handles it once via its own socket callback and once via the Layout-dispatched browser event, duplicating the notification row and incrementing unreadCount twice.",
+  "reproduction": "Render Layout with Header mounted, emit one socket notification, and observe Header prepends the same notification through both paths, increasing unreadCount by 2.",
+  "recommendation": "Keep a single notification delivery path for Header. Either remove Header's direct useSocket notification handler and rely on Layout's custom event, or stop Layout from dispatching notifications that Header already receives directly. Consider deduplicating by notification id as a defensive layer.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are provided for notification delivery, socket event fan-out, or unread count behavior.",
+  "suggestedRegressionTest": "Mount Layout/Header with a mocked socket notification source, emit one notification, and assert the header list contains one item and unreadCount increases by exactly one.",
+  "minimumFixScope": "Update Header/Layout notification wiring so Header receives each socket notification once.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:05.929Z"
+    }
+  ],
+  "signature": "sig_feat-library-c79e5f55d9_ce0fb19c48",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T210121-29c632",
+  "createdAt": "2026-05-20T21:01:57.587Z",
+  "updatedAt": "2026-05-20T21:01:57.587Z"
+}

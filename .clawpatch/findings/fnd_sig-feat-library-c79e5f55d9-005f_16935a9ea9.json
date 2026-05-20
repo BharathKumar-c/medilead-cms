@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-c79e5f55d9-005f_16935a9ea9",
+  "featureId": "feat_library_c79e5f55d9",
+  "title": "Stale async lookups can overwrite current patient intake fields",
+  "category": "concurrency",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "src/components/PatientIntakeForm.jsx",
+      "startLine": 82,
+      "endLine": 126,
+      "symbol": "handleUhidChange",
+      "quote": "if (uhid.length >= 4) {\n      const requestId = ++uhidRequestId.current;\n      uhidTimerRef.current = setTimeout(async () => {"
+    },
+    {
+      "path": "src/components/PatientIntakeForm.jsx",
+      "startLine": 130,
+      "endLine": 174,
+      "symbol": "handlePincodeChange",
+      "quote": "if (pincode.length === 6) {\n      const requestId = ++pincodeRequestId.current;\n      pincodeTimerRef.current = setTimeout(async () => {"
+    }
+  ],
+  "reasoning": "Both UHID and pincode handlers only advance their request id when the new value is long enough to start a lookup. If a lookup is already in flight and the user changes the field to a shorter non-lookup value, the request id remains unchanged, so the old response still passes the requestId equality check and can populate fields for an obsolete UHID or pincode. This can silently corrupt the form with stale patient/address data.",
+  "reproduction": "Enter a UHID with at least 4 characters and wait until the API request starts, then quickly edit it to a shorter different value before the response returns. The old response can still fill name/contact/address fields. Similarly, enter a 6-digit pincode, wait for fetch to start, then delete a digit; the old response can fill city/state for the deleted pincode.",
+  "recommendation": "Increment the relevant request id on every field change, not only when a lookup starts, and verify the current field value still matches the value used for the request before applying results. Optionally abort in-flight fetches where supported.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are provided for debounced lookup cancellation or out-of-order async responses in the intake form.",
+  "suggestedRegressionTest": "Use fake timers and deferred promises to simulate a UHID and pincode lookup resolving after the user changes the input to a shorter value; assert no stale fields are applied and loading state clears correctly.",
+  "minimumFixScope": "Update PatientIntakeForm lookup handlers to invalidate in-flight UHID and pincode requests on every input change and before applying async results.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:05.780Z"
+    }
+  ],
+  "signature": "sig_feat-library-c79e5f55d9_005fdc2fe1",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T210121-29c632",
+  "createdAt": "2026-05-20T21:01:57.587Z",
+  "updatedAt": "2026-05-20T21:01:57.587Z"
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-f8bf0b65a1-6693_73a36b83da",
+  "featureId": "feat_library_f8bf0b65a1",
+  "title": "JWT verification silently falls back to a hard-coded signing secret",
+  "category": "security",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "src/index.js",
+      "startLine": 52,
+      "endLine": 52,
+      "symbol": "io connection handler",
+      "quote": "const decoded = jwt.verify(token, process.env.JWT_SECRET || 'medilead_secret_key_2024');"
+    }
+  ],
+  "reasoning": "If JWT_SECRET is missing in any deployed environment, Socket.IO authentication accepts tokens signed with the public hard-coded fallback. Anyone with source access can forge a token for an arbitrary user id and join that user's notification room, bypassing the intended authentication boundary for socket events.",
+  "reproduction": "Start the server without JWT_SECRET set, sign a JWT containing a target user id with `medilead_secret_key_2024`, then connect through Socket.IO with that token and emit `join` for the same id.",
+  "recommendation": "Remove the fallback secret and fail startup when JWT_SECRET is absent. Use a startup configuration validation step so all auth paths share the same required secret.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests are linked for this feature, and there is no evidence of a startup/configuration test that asserts JWT_SECRET is mandatory.",
+  "suggestedRegressionTest": "Add a test that clears JWT_SECRET and verifies the server/socket auth initialization fails closed instead of accepting a default secret.",
+  "minimumFixScope": "src/index.js",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:06.092Z"
+    }
+  ],
+  "signature": "sig_feat-library-f8bf0b65a1_66938c6d18",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T210121-29c632",
+  "createdAt": "2026-05-20T21:01:51.574Z",
+  "updatedAt": "2026-05-20T21:01:51.574Z"
+}

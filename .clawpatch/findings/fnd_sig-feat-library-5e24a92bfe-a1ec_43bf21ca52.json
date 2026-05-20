@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-5e24a92bfe-a1ec_43bf21ca52",
+  "featureId": "feat_library_5e24a92bfe",
+  "title": "Top search “See all results” click passes a non-event into submit handler",
+  "category": "bug",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "src/pages/docs/DocsLayout.jsx",
+      "startLine": 99,
+      "endLine": 105,
+      "symbol": "handleSearchSubmit",
+      "quote": "const handleSearchSubmit = (e) => {\n    e.preventDefault();"
+    },
+    {
+      "path": "src/pages/docs/DocsLayout.jsx",
+      "startLine": 276,
+      "endLine": 279,
+      "symbol": "DocsLayout",
+      "quote": "<button\n                    onClick={handleSearchSubmit}"
+    }
+  ],
+  "reasoning": "handleSearchSubmit assumes it receives a form submit event and unconditionally calls preventDefault. The dropdown's “See all results” control wires the same function to a button onClick, where React passes a mouse event. That still has preventDefault, so the current top-search button works by accident. The handler's API is misleading and fragile: any programmatic call or reuse from a non-DOM event path will throw before navigation. This is concrete because the same function is already being used for two different event contracts in this file.",
+  "reproduction": "Call handleSearchSubmit without a DOM event, or refactor the dropdown to call it from a keyboard/action helper, and it will throw TypeError before navigating.",
+  "recommendation": "Separate the search action from event handling: create a submitSearch() function that reads searchQuery and navigates, and have form onSubmit call e.preventDefault() before submitSearch(); have button onClick call submitSearch directly.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests were included for DocsLayout search behavior or for the dropdown “See all results” action.",
+  "suggestedRegressionTest": "Add an interaction test that opens top search results, clicks “See all results,” and asserts navigation to /docs/search?q=... without relying on form submit semantics.",
+  "minimumFixScope": "Update DocsLayout search handlers around handleSearchSubmit and the dropdown button.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:04.863Z"
+    }
+  ],
+  "signature": "sig_feat-library-5e24a92bfe_a1ec96c48b",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T202026-798616",
+  "createdAt": "2026-05-20T20:20:52.248Z",
+  "updatedAt": "2026-05-20T20:20:52.248Z"
+}

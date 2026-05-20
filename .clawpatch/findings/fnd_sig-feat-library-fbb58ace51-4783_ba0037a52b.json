@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-fbb58ace51-4783_ba0037a52b",
+  "featureId": "feat_library_fbb58ace51",
+  "title": "Production seed override accepts any ALLOW_SEED value, including false",
+  "category": "data-loss",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "src/seeds/seed.js",
+      "startLine": 6,
+      "endLine": 9,
+      "symbol": "seed",
+      "quote": "if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_SEED)"
+    },
+    {
+      "path": "src/seeds/seed.js",
+      "startLine": 20,
+      "endLine": 32,
+      "symbol": "seed",
+      "quote": "await client.query('DELETE FROM department_performance');"
+    }
+  ],
+  "reasoning": "The production guard message says ALLOW_SEED=true is required, but the condition only checks whether ALLOW_SEED is truthy. In Node, values such as ALLOW_SEED=false, ALLOW_SEED=0, or ALLOW_SEED=no are all truthy strings, so the script proceeds in production and immediately deletes all rows from multiple tables before reseeding. That makes a misconfigured environment variable enough to trigger destructive production data loss.",
+  "reproduction": "Run with NODE_ENV=production ALLOW_SEED=false node src/seeds/seed.js; the guard is bypassed and the DELETE statements execute.",
+  "recommendation": "Require an explicit exact value such as process.env.ALLOW_SEED === 'true' before allowing production seeding, and fail closed for any other value.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are provided for the seed script or its production guard behavior.",
+  "suggestedRegressionTest": "Add a unit/integration test that sets NODE_ENV=production and ALLOW_SEED=false, stubs the database client, invokes seed(), and asserts that no DELETE/ALTER/INSERT queries are executed.",
+  "minimumFixScope": "Update the production guard in src/seeds/seed.js and add coverage for accepted and rejected ALLOW_SEED values.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:06.379Z"
+    }
+  ],
+  "signature": "sig_feat-library-fbb58ace51_47836ac74f",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T210121-29c632",
+  "createdAt": "2026-05-20T21:01:57.953Z",
+  "updatedAt": "2026-05-20T21:01:57.953Z"
+}

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-5e24a92bfe-6455_d46718ad82",
+  "featureId": "feat_library_5e24a92bfe",
+  "title": "Search result highlighting can inject HTML from the URL query",
+  "category": "security",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "src/pages/docs/DocsSearch.jsx",
+      "startLine": 8,
+      "endLine": 9,
+      "symbol": "DocsSearch",
+      "quote": "const query = searchParams.get('q') || '';"
+    },
+    {
+      "path": "src/pages/docs/DocsSearch.jsx",
+      "startLine": 26,
+      "endLine": 30,
+      "symbol": "highlight",
+      "quote": "return text.replace(regex, '<mark class=\"bg-yellow-200 px-0.5 rounded\">$1</mark>');"
+    },
+    {
+      "path": "src/pages/docs/DocsSearch.jsx",
+      "startLine": 68,
+      "endLine": 70,
+      "symbol": "DocsSearch",
+      "quote": "dangerouslySetInnerHTML={{ __html: highlight(item.title) }}"
+    }
+  ],
+  "reasoning": "The query parameter is user-controlled and is inserted into the replacement string used to build HTML for dangerouslySetInnerHTML. Although regex metacharacters are escaped for matching, replacement-string tokens such as $`, $', and $& are still interpreted by String.replace. A crafted query that matches within documentation text can cause surrounding documentation content to be injected into the generated HTML without escaping. If searchableContent ever contains HTML-like text, or future documentation includes examples with angle brackets, this becomes DOM injection. The same pattern is used for both result titles and content snippets.",
+  "reproduction": "Navigate to a search URL whose q value contains JavaScript replacement tokens that match documentation text and observe that highlight() emits raw HTML through dangerouslySetInnerHTML instead of React text nodes.",
+  "recommendation": "Avoid dangerouslySetInnerHTML for highlighting. Split text into escaped React text segments and render matched segments as <mark> elements, or escape both the source text and replacement output before injection.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests were included for DocsSearch, and there is no coverage for hostile or HTML-shaped query strings.",
+  "suggestedRegressionTest": "Add a DocsSearch render test with a query containing replacement tokens or HTML-like input and assert the output is rendered as text with mark elements, not interpreted HTML.",
+  "minimumFixScope": "Refactor DocsSearch.highlight and the two render sites that use dangerouslySetInnerHTML.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260520T203534-eee4a2",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence path still exists at src/pages/docs/DocsSearch.jsx. The query is still read from URL params at line 8 and the render sites still use dangerouslySetInnerHTML at lines 77 and 79, but the vulnerable highlight implementation has changed: lines 26-33 now define escapeHtml, escape both the source text and query, build the regex from the escaped query, and replace only within the escaped source. That means HTML-shaped documentation text such as <img ...> is converted to &lt;img ...&gt; before being passed to dangerouslySetInnerHTML, so it is rendered as text rather than parsed as HTML. A repository-wide search found no other DocsSearch/highlight implementation carrying the old raw text replacement pattern. There is no test script in package.json, and npm run lint was rejected by the execution policy, so the classification is based on current code inspection rather than a passing regression test.",
+      "commands": [
+        "Get-Content -Path src/pages/docs/DocsSearch.jsx | Select-Object -First 180",
+        "rg -n \"DocsSearch|docs search|highlight\\(\" .",
+        "rg -n 'dangerouslySetInnerHTML|const highlight|searchParams\\.get|<mark|escapeHtml' src",
+        "Select-String -Path src/pages/docs/DocsSearch.jsx -Pattern '.*' | Select-Object -First 110",
+        "Get-Content -Path package.json",
+        "npm run lint"
+      ],
+      "createdAt": "2026-05-20T20:52:01.983Z"
+    }
+  ],
+  "signature": "sig_feat-library-5e24a92bfe_6455cca414",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T202026-798616",
+  "createdAt": "2026-05-20T20:20:52.248Z",
+  "updatedAt": "2026-05-20T20:52:01.983Z"
+}

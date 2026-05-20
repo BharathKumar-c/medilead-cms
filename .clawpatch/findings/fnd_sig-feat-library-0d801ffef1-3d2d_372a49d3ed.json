@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-0d801ffef1-3d2d_372a49d3ed",
+  "featureId": "feat_library_0d801ffef1",
+  "title": "Out-of-order appointment option requests can show doctors or departments for the wrong selection",
+  "category": "concurrency",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "src/pages/steps/Step3AppointmentDetails.jsx",
+      "startLine": 48,
+      "endLine": 69,
+      "symbol": "useEffect selectedBranch",
+      "quote": "api.getBranchDepartments(selectedBranch).then(res => { if (res?.data?.departments) { setDepartments(res.data.departments.map(d => ({ value: d.name, label: d.name }))); } })"
+    },
+    {
+      "path": "src/pages/steps/Step3AppointmentDetails.jsx",
+      "startLine": 84,
+      "endLine": 97,
+      "symbol": "useEffect selectedDepartment",
+      "quote": "api.getDoctors(selectedDepartment, selectedBranch || undefined).then(res => { if (res?.data?.doctors) { setDoctors(res.data.doctors.map(d => ({ value: d.id, label: d.name + (d.specialty ? ` — ${d.specialty}` : ''), }))); } })"
+    }
+  ],
+  "reasoning": "The branch and doctor option fetches do not guard against stale responses. If the user changes branch or department quickly, an earlier slower response can resolve after the latest request and overwrite departments or doctors with options for the previous selection. That can leave the form displaying selectable doctors that do not match the current department or branch.",
+  "reproduction": "Select branch A, then quickly select branch B while the branch A departments request is still pending. If branch A resolves last, its departments replace branch B's departments. The same race applies when switching departments before getDoctors resolves.",
+  "recommendation": "Track a request token or use an AbortController inside each effect, and only update departments/doctors/loading state when the response still belongs to the current selectedBranch/selectedDepartment pair.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests are included for appointment option loading or request ordering behavior.",
+  "suggestedRegressionTest": "Add a component test with deferred getBranchDepartments/getDoctors promises that resolves the older request after the newer one and asserts the rendered options still match the latest selection.",
+  "minimumFixScope": "Step3AppointmentDetails async effects for branch department and doctor loading.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260520T203534-eee4a2",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence path still exists at src/pages/steps/Step3AppointmentDetails.jsx, but the cited code has changed. The current component imports useRef and defines deptRequestId and doctorRequestId. The branch/department effect increments deptRequestId for each request and checks requestId !== deptRequestId.current before calling setDepartments; catch handlers also only clear departments for the latest request. The doctor effect similarly increments doctorRequestId, checks it before setDoctors, and only clears loading state for the latest request. Clearing the department also increments doctorRequestId, invalidating in-flight doctor lookups. I found no test files and could not run npm run lint because the read-only policy rejected it, so this is based on current code inspection rather than an executable regression test.",
+      "commands": [
+        "git status --short",
+        "rg -n \"getBranchDepartments|getDoctors|selectedBranch|selectedDepartment\" src/pages/steps/Step3AppointmentDetails.jsx src -S",
+        "Get-Content -Path src/pages/steps/Step3AppointmentDetails.jsx",
+        "rg -n \"Step3AppointmentDetails|appointment option|deferred|getBranchDepartments|getDoctors\\(\" src tests __tests__ -S",
+        "Get-Content -Path package.json",
+        "rg --files -g \"*test*\" -g \"*spec*\" -g \"!node_modules\"",
+        "rg -n \"requestId|deptRequestId|doctorRequestId|AbortController|getBranchDepartments|getDoctors\" src/pages/steps/Step3AppointmentDetails.jsx src/pages/AppointmentForm.jsx src -S",
+        "npm run lint",
+        "Get-Content -Path src/pages/AppointmentForm.jsx"
+      ],
+      "createdAt": "2026-05-20T20:36:52.209Z"
+    }
+  ],
+  "signature": "sig_feat-library-0d801ffef1_3d2d10850f",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T202026-798616",
+  "createdAt": "2026-05-20T20:21:35.826Z",
+  "updatedAt": "2026-05-20T20:36:52.208Z"
+}

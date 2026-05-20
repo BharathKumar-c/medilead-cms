@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-5b4239cbbf-0197_70dfb2fa72",
+  "featureId": "feat_library_5b4239cbbf",
+  "title": "JWT verification accepts tokens without constraining algorithm or issuer/audience",
+  "category": "security",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "src/middleware/auth.js",
+      "startLine": 15,
+      "endLine": 16,
+      "symbol": "authenticate",
+      "quote": "const decoded = jwt.verify(token, process.env.JWT_SECRET);\n    req.user = decoded;"
+    }
+  ],
+  "reasoning": "The authentication middleware verifies bearer tokens using only the shared secret and then trusts the decoded payload as req.user. Without explicit allowed algorithms and expected issuer/audience, tokens signed with the same secret for another context, environment, or token class can be accepted by this API if they contain a role field. That weakens authorization boundaries because authorize later trusts req.user.role directly.",
+  "reproduction": null,
+  "recommendation": "Pass verification options to jwt.verify, including a fixed algorithm list and expected issuer/audience values, and validate the decoded payload shape before assigning req.user.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked auth tests are included, so there is no evidence that cross-context tokens, unexpected algorithms, or malformed payloads are rejected.",
+  "suggestedRegressionTest": "Add tests that a token signed with the correct secret but wrong audience/issuer is rejected, and that only the configured algorithm is accepted.",
+  "minimumFixScope": "Update authenticate in src/middleware/auth.js to supply jwt.verify options and validate decoded user claims before authorization uses them.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260520T203534-eee4a2",
+      "kind": "revalidate",
+      "status": "open",
+      "note": null,
+      "reasoning": "The original evidence path still exists at src/middleware/auth.js. The exact original call changed from jwt.verify(token, process.env.JWT_SECRET) to jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] }), so the algorithm portion is partially addressed there. However, issuer and audience are still not constrained, the decoded payload is still assigned directly to req.user, and tokens produced in src/routes/auth.js are still signed without issuer/audience claims. The same vulnerable middleware still exists unchanged at server/src/middleware/auth.js with jwt.verify(token, process.env.JWT_SECRET), and src/index.js also verifies Socket.IO tokens without algorithms/issuer/audience. No test script is defined in package.json, and I did not find auth regression tests proving wrong issuer/audience or malformed payload rejection. Therefore the finding remains open, although the original src/middleware/auth.js evidence has partially changed.",
+      "commands": [
+        "Get-Content src/middleware/auth.js",
+        "Get-Content server/src/middleware/auth.js",
+        "rg -n \"jwt\\.verify|jwt\\.sign|JWT_SECRET|issuer|audience|algorithms\" src server",
+        "Get-Content src/routes/auth.js",
+        "Get-Content src/index.js",
+        "Get-Content package.json",
+        "rg --files -g \"*auth*\" -g \"*test*\" -g \"*spec*\""
+      ],
+      "createdAt": "2026-05-20T20:49:42.016Z"
+    },
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:04.120Z"
+    }
+  ],
+  "signature": "sig_feat-library-5b4239cbbf_01975640cc",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T202026-798616",
+  "createdAt": "2026-05-20T20:21:02.063Z",
+  "updatedAt": "2026-05-20T20:49:42.016Z"
+}

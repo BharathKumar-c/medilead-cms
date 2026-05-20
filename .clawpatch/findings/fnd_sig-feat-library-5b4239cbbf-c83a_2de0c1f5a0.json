@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-5b4239cbbf-c83a_2de0c1f5a0",
+  "featureId": "feat_library_5b4239cbbf",
+  "title": "CommonJS middleware cannot load in a module-typed package",
+  "category": "build-release",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "package.json",
+      "startLine": 5,
+      "endLine": 5,
+      "symbol": null,
+      "quote": "\"type\": \"module\","
+    },
+    {
+      "path": "src/middleware/auth.js",
+      "startLine": 1,
+      "endLine": 2,
+      "symbol": null,
+      "quote": "const jwt = require('jsonwebtoken');\nrequire('dotenv').config();"
+    },
+    {
+      "path": "src/middleware/rateLimiter.js",
+      "startLine": 1,
+      "endLine": 2,
+      "symbol": null,
+      "quote": "const rateLimit = require('express-rate-limit');\nconst logger = require('../utils/logger');"
+    },
+    {
+      "path": "src/middleware/validate.js",
+      "startLine": 1,
+      "endLine": 2,
+      "symbol": null,
+      "quote": "const { body, param, query, validationResult } = require('express-validator');\nconst logger = require('../utils/logger');"
+    }
+  ],
+  "reasoning": "The package declares all .js files as ES modules, but every owned middleware file uses CommonJS require/module.exports. In Node, these files will throw at load time with require/module.exports not defined in ES module scope unless renamed to .cjs or migrated to ESM. This is a release/runtime blocker for any server path importing these middleware modules.",
+  "reproduction": "Run Node against any owned file in this package context, for example `node src/middleware/auth.js`; Node treats it as ESM because of package.json and fails before the middleware can be used.",
+  "recommendation": "Either convert the middleware files and their consumers to ES module syntax, or rename CommonJS middleware files to .cjs and update imports accordingly. Also ensure required server dependencies are declared in the package manifest if this package is meant to ship the Node middleware.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for this feature, and package.json has no test script. A lint-only workflow would not necessarily execute the files under Node's module loader.",
+  "suggestedRegressionTest": "Add a smoke test that imports each exported middleware module using the package's actual module configuration and asserts the expected exports are present.",
+  "minimumFixScope": "Align module format for src/middleware/auth.js, src/middleware/rateLimiter.js, and src/middleware/validate.js with package.json or split server middleware into a package configured for CommonJS.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260520T203534-eee4a2",
+      "kind": "revalidate",
+      "status": "open",
+      "note": null,
+      "reasoning": "The original evidence still exists in the current repository. package.json still declares \"type\": \"module\" at line 5, and src/middleware/auth.js, src/middleware/rateLimiter.js, and src/middleware/validate.js still use CommonJS require() at lines 1-2 and module.exports later in each file. Under Node's module rules, these .js files are treated as ES modules in this package context, so the CommonJS globals remain invalid unless the files are converted to ESM or renamed/configured as CommonJS. I attempted to run the reproduction with node, but command execution for node was blocked by policy in this environment; the static evidence is sufficient because the cited module-format mismatch is unchanged.",
+      "commands": [
+        "Get-Content -Path package.json | Select-Object -First 80",
+        "rg -n \"require\\(|module\\.exports|export default|export \\{\" src/middleware package.json",
+        "rg -n \"^|require|module\\.exports\" src/middleware/auth.js src/middleware/rateLimiter.js src/middleware/validate.js",
+        "node src/middleware/auth.js (blocked by policy)"
+      ],
+      "createdAt": "2026-05-20T20:51:09.937Z"
+    },
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:04.498Z"
+    }
+  ],
+  "signature": "sig_feat-library-5b4239cbbf_c83a7969a1",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T202026-798616",
+  "createdAt": "2026-05-20T20:21:02.063Z",
+  "updatedAt": "2026-05-20T20:51:09.937Z"
+}

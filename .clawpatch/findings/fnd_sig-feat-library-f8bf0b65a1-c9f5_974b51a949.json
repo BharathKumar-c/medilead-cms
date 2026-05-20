@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-f8bf0b65a1-c9f5_974b51a949",
+  "featureId": "feat_library_f8bf0b65a1",
+  "title": "Server entry cannot run under the package module/dependency setup",
+  "category": "build-release",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "package.json",
+      "startLine": 5,
+      "endLine": 10,
+      "symbol": null,
+      "quote": "\"type\": \"module\""
+    },
+    {
+      "path": "src/index.js",
+      "startLine": 1,
+      "endLine": 6,
+      "symbol": null,
+      "quote": "const express = require('express');"
+    },
+    {
+      "path": "src/index.js",
+      "startLine": 218,
+      "endLine": 218,
+      "symbol": null,
+      "quote": "module.exports = app;"
+    },
+    {
+      "path": "package.json",
+      "startLine": 12,
+      "endLine": 35,
+      "symbol": null,
+      "quote": "\"dependencies\": {"
+    }
+  ],
+  "reasoning": "The package is configured as ESM, so Node treats src/index.js as an ES module. This backend file uses CommonJS require/module.exports throughout, which will fail with 'require is not defined in ES module scope' if launched as Node source. The same entry also imports server packages such as express, cors, socket.io, helmet, dotenv, and jsonwebtoken, but those packages are not declared in package.json, so even renaming to CommonJS would still fail at runtime/install in a clean environment. This makes the Node source group unreleasable as-is.",
+  "reproduction": "In a clean checkout with dependencies installed from this package.json, run `node src/index.js`; Node will reject CommonJS usage because package.json declares `type: module`, and required backend packages are not installed from the manifest.",
+  "recommendation": "Either move the backend into its own CommonJS package with the required dependencies and scripts, or convert src/index.js to ESM imports/exports and add all server/runtime dependencies to package.json. Add an explicit server start script if this entry is intended to be shipped.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests are linked for this feature, and the available package scripts only run Vite frontend tasks, so the backend entry is not exercised.",
+  "suggestedRegressionTest": "Add a smoke test or CI command that installs from package.json and starts/imports the intended server entry successfully.",
+  "minimumFixScope": "package.json and src/index.js",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:06.233Z"
+    }
+  ],
+  "signature": "sig_feat-library-f8bf0b65a1_c9f5a1b332",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T210121-29c632",
+  "createdAt": "2026-05-20T21:01:51.574Z",
+  "updatedAt": "2026-05-20T21:01:51.574Z"
+}

@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-5b4239cbbf-6267_a288cb0754",
+  "featureId": "feat_library_5b4239cbbf",
+  "title": "Server middleware dependencies are missing from the package manifest",
+  "category": "build-release",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "src/middleware/auth.js",
+      "startLine": 1,
+      "endLine": 2,
+      "symbol": null,
+      "quote": "const jwt = require('jsonwebtoken');\nrequire('dotenv').config();"
+    },
+    {
+      "path": "src/middleware/rateLimiter.js",
+      "startLine": 1,
+      "endLine": 1,
+      "symbol": null,
+      "quote": "const rateLimit = require('express-rate-limit');"
+    },
+    {
+      "path": "src/middleware/validate.js",
+      "startLine": 1,
+      "endLine": 1,
+      "symbol": null,
+      "quote": "const { body, param, query, validationResult } = require('express-validator');"
+    },
+    {
+      "path": "package.json",
+      "startLine": 11,
+      "endLine": 38,
+      "symbol": null,
+      "quote": "\"dependencies\": {\n    \"@hookform/resolvers\": \"^5.2.2\",\n    \"axios\": \"^1.16.1\",\n    \"lucide-react\": \"^1.14.0\",\n    \"react\": \"^19.2.5\",\n    \"react-dom\": \"^19.2.5\",\n    \"react-hook-form\": \"^7.76.0\",\n    \"react-router-dom\": \"^7.15.0\",\n    \"sip.js\": \"^0.21.2\",\n    \"socket.io-client\": \"^4.8.3\",\n    \"yup\": \"^1.7.1\"\n  }"
+    }
+  ],
+  "reasoning": "The owned middleware imports jsonwebtoken, dotenv, express-rate-limit, and express-validator, but none are declared in dependencies or devDependencies. A clean install from this package manifest will not install those modules, so any runtime path that loads these middleware files fails with module resolution errors.",
+  "reproduction": "On a clean checkout, run `npm install` followed by loading any of these middleware modules; module resolution will fail for the first undeclared package import encountered.",
+  "recommendation": "Add the middleware runtime packages to dependencies, or remove these server middleware files from this package if they are not part of the shipped application. If they live in a separate backend package, move them there with that package's manifest.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included, and there is no package test script. Existing commands shown only include lint, which does not prove runtime dependencies are installed and resolvable.",
+  "suggestedRegressionTest": "Add an install/load smoke test in CI that runs after `npm ci` and imports the middleware entrypoint(s) from a clean dependency tree.",
+  "minimumFixScope": "Declare jsonwebtoken, dotenv, express-rate-limit, and express-validator in package.json dependencies, or relocate/remove the middleware from this package.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260520T203534-eee4a2",
+      "kind": "revalidate",
+      "status": "open",
+      "note": null,
+      "reasoning": "The original evidence still exists at the cited root paths: src/middleware/auth.js still requires jsonwebtoken and dotenv, src/middleware/rateLimiter.js still requires express-rate-limit, and src/middleware/validate.js still requires express-validator. The root package.json dependencies/devDependencies still do not declare any of those packages. Current code also still wires the root server tree through src/index.js, which requires ./middleware/rateLimiter and routes that require ./middleware/auth and ./middleware/validate, so a clean install from the root manifest would still be missing these runtime modules. There is now a separate server/package.json that declares these dependencies for server/src, but that does not fix the still-present root src server files against the root package manifest. npm lint and inline module-resolution smoke checks were blocked by execution policy, so the conclusion is based on current source and manifest evidence.",
+      "commands": [
+        "Get-Content -Path src/middleware/auth.js -TotalCount 20",
+        "Get-Content -Path src/middleware/rateLimiter.js -TotalCount 20",
+        "Get-Content -Path src/middleware/validate.js -TotalCount 20",
+        "Get-Content -Path package.json",
+        "rg -n \"auth|rateLimiter|validate|express-rate-limit|express-validator|jsonwebtoken|dotenv|middleware\" .",
+        "Get-Content -Path server/package.json",
+        "Get-Content -Path src/index.js -TotalCount 220",
+        "Get-Content -Path server/src/index.js -TotalCount 220",
+        "Get-ChildItem -Path . -Name",
+        "rg -n '\"(jsonwebtoken|dotenv|express-rate-limit|express-validator)\"' package.json server/package.json",
+        "npm run lint (blocked by policy at repository root)",
+        "npm run lint (blocked by policy in server/)"
+      ],
+      "createdAt": "2026-05-20T20:50:38.246Z"
+    },
+    {
+      "runId": "manual-fix",
+      "kind": "revalidate",
+      "status": "fixed",
+      "ts": "2026-05-20T21:13:04.266Z"
+    }
+  ],
+  "signature": "sig_feat-library-5b4239cbbf_62679033ff",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260520T202026-798616",
+  "createdAt": "2026-05-20T20:21:02.063Z",
+  "updatedAt": "2026-05-20T20:50:38.246Z"
+}
