@@ -33,6 +33,7 @@ server/uploads/recordings/*
 
 # Editor directories and files
 .vscode/*
+.clawpatch
 !.vscode/extensions.json
 .idea
 .DS_Store
