@@ -99,7 +99,7 @@ function AppRoutes() {
       <Route path="/appearance" element={<ProtectedRoute><Appearance /></ProtectedRoute>} />
       <Route path="/user-management" element={<AdminRoute><UserManagement /></AdminRoute>} />
       <Route path="/calls" element={<ProtectedRoute><TelecallerDashboard /></ProtectedRoute>} />
-      <Route path="/sip-test" element={<ProtectedRoute><SIPTestPanel /></ProtectedRoute>} />
+      <Route path="/sip-test" element={<AdminRoute><SIPTestPanel /></AdminRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

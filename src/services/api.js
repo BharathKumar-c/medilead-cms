@@ -66,6 +66,7 @@ class ApiService {
         }
       }
       const error = new Error(data?.message || 'Request failed');
+      error.status = response.status;
       error.code = data?.code;
       error.errors = data?.errors;
       throw error;

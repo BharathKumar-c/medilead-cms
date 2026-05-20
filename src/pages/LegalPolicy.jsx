@@ -1,4 +1,4 @@
-import { Shield, Lock, Eye, FileText, Mail, Phone } from 'lucide-react';
+import { Shield, Lock, Eye, Mail, Phone } from 'lucide-react';
 import Layout from '../components/Layout';
 
 const LegalPolicy = () => {

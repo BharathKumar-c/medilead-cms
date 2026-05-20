@@ -32,6 +32,7 @@ const SIPTestPanel = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (sending) return;
 
     if (!form.caller.trim()) {
       addToast('error', 'Validation', 'Caller phone number is required.');

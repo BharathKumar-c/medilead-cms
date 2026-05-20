@@ -99,7 +99,8 @@ const EndpointCard = ({ endpoint }) => {
 
 const APIReference = () => {
   const location = useLocation();
-  const routeSlug = location.pathname.split('/docs/')[1] || '';
+  const segments = location.pathname.split('/').filter(Boolean);
+  const routeSlug = segments[segments.length - 1] || '';
   const activeSection = routeToSection[routeSlug];
   const visibleEndpoints = activeSection
     ? { [activeSection]: apiEndpoints[activeSection] }

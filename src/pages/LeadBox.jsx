@@ -19,9 +19,9 @@ const mapLead = (l) => ({
   lastCallDate: l.last_call_date,
   status: l.status,
   leadSource: l.lead_source,
-  phone: l.phone,
-  alternateContact: l.alternate_contact,
-  email: l.email,
+  phone: l.phone || '',
+  alternateContact: l.alternate_contact || '',
+  email: l.email || '',
   dob: l.dob,
   address: l.address,
   pincode: l.pincode,
@@ -91,10 +91,11 @@ const LeadBox = () => {
     });
   }, [leads, searchTerm, statusFilter]);
 
-  const totalPages = Math.ceil(filteredLeads.length / ITEMS_PER_PAGE);
-  const paginatedLeads = filteredLeads.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const startItem = (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const endItem = Math.min(currentPage * ITEMS_PER_PAGE, filteredLeads.length);
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedLeads = filteredLeads.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
+  const startItem = filteredLeads.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
+  const endItem = Math.min(safePage * ITEMS_PER_PAGE, filteredLeads.length);
 
   const handleView = (lead) => setViewLead(lead);
   const handleEdit = (lead) => setEditLead(lead);
@@ -115,7 +116,11 @@ const LeadBox = () => {
   const handleExport = () => {
     const headers = ['Patient Name', 'UHID', 'Last Call', 'Status', 'Lead Source', 'Phone', 'Email'];
     const rows = filteredLeads.map(l => [l.name, l.uhid, l.lastCallDate, l.status, l.leadSource, l.phone, l.email]);
-    const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+    const csv = [headers.join(','), ...rows.map(r => r.map(c => {
+      const s = String(c ?? '');
+      const safe = /^[=+\-@\t]/.test(s) ? `\t${s}` : s;
+      return `"${safe.replaceAll('"', '""')}"`;
+    }).join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -251,11 +256,11 @@ const LeadBox = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t border-outline-variant gap-3">
             <span className="font-caption text-on-surface-variant">Showing {startItem}-{endItem} of {filteredLeads.length}</span>
             <div className="flex items-center gap-1">
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 rounded-lg hover:bg-surface-container transition-colors disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1} className="p-2 rounded-lg hover:bg-surface-container transition-colors disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                <button key={p} onClick={() => setCurrentPage(p)} className={`w-8 h-8 rounded-lg font-body-md transition-all ${currentPage === p ? 'bg-secondary text-white' : 'hover:bg-surface-container text-on-surface'}`}>{p}</button>
+                <button key={p} onClick={() => setCurrentPage(p)} className={`w-8 h-8 rounded-lg font-body-md transition-all ${safePage === p ? 'bg-secondary text-white' : 'hover:bg-surface-container text-on-surface'}`}>{p}</button>
               ))}
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 rounded-lg hover:bg-surface-container transition-colors disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="p-2 rounded-lg hover:bg-surface-container transition-colors disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
             </div>
           </div>
         </div>

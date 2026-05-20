@@ -145,6 +145,7 @@ const Appointments = () => {
       addToast('success', 'Completed', `Appointment for ${apt.patient_name} marked as completed.`);
       setActionMenuId(null);
       loadData();
+      loadCalendar();
     } catch (err) {
       addToast('error', 'Failed', err.message || 'Could not update.');
     }
@@ -157,6 +158,7 @@ const Appointments = () => {
       addToast('warning', 'No Show', `${apt.patient_name} marked as no show.`);
       setActionMenuId(null);
       loadData();
+      loadCalendar();
     } catch (err) {
       addToast('error', 'Failed', err.message || 'Could not update.');
     }
@@ -169,6 +171,7 @@ const Appointments = () => {
       addToast('success', 'Confirmed', `Appointment for ${apt.patient_name} confirmed.`);
       setActionMenuId(null);
       loadData();
+      loadCalendar();
     } catch (err) {
       addToast('error', 'Failed', err.message || 'Could not update.');
     }
@@ -216,7 +219,9 @@ const Appointments = () => {
               {calendarDays.map((day, i) => {
                 const dateStr = day ? `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : '';
                 const dayAppts = dateStr ? (calendarData[dateStr] || []) : [];
-                const isToday = dateStr === new Date().toISOString().split('T')[0];
+                const now = new Date();
+                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                const isToday = dateStr === todayStr;
 
                 return (
                   <div key={i} className={`min-h-[80px] p-1.5 rounded-lg border transition-colors ${
