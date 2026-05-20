@@ -221,12 +221,14 @@ npm run dev`}
               <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-1">
                 Password
               </p>
-              <p className="text-sm font-mono text-gray-900">password123</p>
+              <p className="text-sm font-mono text-gray-900">
+                (set via SEED_ADMIN_PASSWORD in .env)
+              </p>
             </div>
           </div>
         </div>
         <p className="text-sm text-gray-500 mt-3">
-          Change this password immediately in a production environment.
+          Set <code className="font-mono bg-gray-100 px-1 rounded">SEED_ADMIN_PASSWORD</code> in your .env before running the seed script. Change password immediately in production.
         </p>
       </section>
 

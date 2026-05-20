@@ -52,7 +52,7 @@ const CallPopup = ({ call, callState, onAnswer, onHangUp, onHold, onClose, leadI
                 <p className="font-body-md font-bold text-on-surface">
                   {isIncoming ? 'Incoming Call' : 'Outgoing Call'}
                 </p>
-                <p className="font-h3 text-on-surface">{call.callerNumber}</p>
+                <p className="font-h3 text-on-surface">{call.caller_number || call.callerNumber || 'Unknown'}</p>
               </div>
             </div>
             <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-container-high transition-colors">

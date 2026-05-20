@@ -87,7 +87,7 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
 
   const navItems = [
@@ -317,7 +317,7 @@ const Layout = ({ children, title = 'MedCloud CMS' }) => {
             </div>
             <div className="flex gap-3 p-6 border-t border-outline-variant">
               <button onClick={() => setLogoutConfirm(false)} className="flex-1 px-4 py-2 border border-outline-variant rounded-lg hover:bg-surface-container-low transition-all font-body-md">Cancel</button>
-              <button onClick={() => { setLogoutConfirm(false); navigate('/'); }} className="flex-1 px-4 py-2 bg-error text-on-error rounded-lg hover:opacity-90 transition-all font-body-md font-medium">Log Out</button>
+              <button onClick={() => { setLogoutConfirm(false); logout(); navigate('/login'); }} className="flex-1 px-4 py-2 bg-error text-on-error rounded-lg hover:opacity-90 transition-all font-body-md font-medium">Log Out</button>
             </div>
           </div>
         </div>

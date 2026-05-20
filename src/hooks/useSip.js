@@ -152,11 +152,14 @@ export const useSip = ({ onIncomingCall, onCallConnected, onCallEnded, onCallFai
   const holdCall = useCallback(async () => {
     if (sessionRef.current && sessionRef.current.state === SessionState.Established) {
       try {
-        const sessionDescriptionHandler = sessionRef.current.sessionDescriptionHandler;
-        if (sessionDescriptionHandler) {
-          // Toggle hold
-          setCallState(callState === 'held' ? 'connected' : 'held');
-        }
+        // TODO: Implement proper SIP hold via re-INVITE with a=sendonly SDP.
+        // Current implementation only toggles UI state — the call is NOT actually
+        // put on hold on the SIP server. A real hold requires SDP renegotiation:
+        //   1. Get current SDP from sessionDescriptionHandler
+        //   2. Modify media lines to include a=sendonly (hold) or a=active (unhold)
+        //   3. Send re-INVITE with modified SDP
+        //   4. Handle the answer SDP from the remote party
+        setCallState(callState === 'held' ? 'connected' : 'held');
       } catch (err) {
         console.error('Hold error:', err);
       }

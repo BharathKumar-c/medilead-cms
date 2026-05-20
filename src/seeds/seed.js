@@ -4,12 +4,19 @@ const createTables = require('../config/migrate');
 require('dotenv').config();
 
 const seed = async () => {
+  // Refuse to run in production unless explicitly allowed
+  if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_SEED) {
+    console.error('Seeding is disabled in production. Set ALLOW_SEED=true to override.');
+    return;
+  }
+
+  let client;
   try {
     // Create tables first
     await createTables();
     console.log('Tables created, seeding data...');
 
-    const client = await db.getClient();
+    client = await db.getClient();
     await client.query('BEGIN');
 
     // Clear existing data
@@ -110,8 +117,9 @@ const seed = async () => {
       ('Rejected');
     `);
 
-    // Seed Users
-    const passwordHash = await bcrypt.hash('password123', 10);
+    // Seed Users — use SEED_ADMIN_PASSWORD env var or generate a random one
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'password123';
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
     await client.query(
       `
       INSERT INTO users (name, email, password_hash, role, avatar_url, specialty, department, phone) VALUES
@@ -206,6 +214,10 @@ const seed = async () => {
     client.release();
   } catch (err) {
     console.error('Seeding failed:', err);
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      client.release();
+    }
     throw err;
   }
 };

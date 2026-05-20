@@ -10,14 +10,18 @@ export const ThemeProvider = ({ children }) => {
 
   useEffect(() => {
     const root = document.documentElement;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+
     if (theme === 'dark') {
       root.classList.add('dark');
     } else if (theme === 'light') {
       root.classList.remove('dark');
     } else {
-      // System preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      root.classList.toggle('dark', prefersDark);
+      // System preference — apply immediately and listen for changes
+      root.classList.toggle('dark', mq.matches);
+      const handler = (e) => root.classList.toggle('dark', e.matches);
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
     }
   }, [theme]);
 
@@ -32,10 +36,17 @@ export const ThemeProvider = ({ children }) => {
     }).catch(() => {});
   }, []);
 
-  const setTheme = (newTheme) => {
+  const setTheme = async (newTheme) => {
     setThemeState(newTheme);
     localStorage.setItem('theme', newTheme);
-    api.updateSettings({ theme: newTheme }).catch(() => {});
+    try {
+      await api.updateSettings({ theme: newTheme });
+    } catch {
+      // Surface failure — dispatch toast so UI can show save didn't persist
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { type: 'error', title: 'Theme Save Failed', message: 'Your theme preference could not be saved to the server.' },
+      }));
+    }
   };
 
   return (

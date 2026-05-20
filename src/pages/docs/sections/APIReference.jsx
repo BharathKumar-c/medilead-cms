@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { apiEndpoints } from '../../../data/docs';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -18,6 +19,16 @@ const sectionMeta = {
   dashboard: { title: 'Dashboard', description: 'Overview metrics and activity logging.' },
   reports: { title: 'Reports', description: 'Analytics, charts, data export, and performance metrics.' },
   notifications: { title: 'Notifications', description: 'Real-time notification management.' },
+};
+
+const routeToSection = {
+  'api-auth': 'auth',
+  'api-leads': 'leads',
+  'api-appointments': 'appointments',
+  'api-calls': 'calls',
+  'api-dashboard': 'dashboard',
+  'api-reports': 'reports',
+  'api-notifications': 'notifications',
 };
 
 const EndpointCard = ({ endpoint }) => {
@@ -87,20 +98,30 @@ const EndpointCard = ({ endpoint }) => {
 };
 
 const APIReference = () => {
-  const totalEndpoints = Object.values(apiEndpoints).reduce((sum, group) => sum + group.length, 0);
+  const location = useLocation();
+  const routeSlug = location.pathname.split('/docs/')[1] || '';
+  const activeSection = routeToSection[routeSlug];
+  const visibleEndpoints = activeSection
+    ? { [activeSection]: apiEndpoints[activeSection] }
+    : apiEndpoints;
+  const totalEndpoints = Object.values(visibleEndpoints).reduce((sum, group) => sum + group.length, 0);
 
   return (
     <div>
-      <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">API Reference</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+        {activeSection ? sectionMeta[activeSection]?.title || activeSection : 'Complete'} API Reference
+      </h1>
       <p className="text-gray-600 mb-8">
-        Complete reference for all {totalEndpoints} REST API endpoints across {Object.keys(apiEndpoints).length} resource groups.
-        All endpoints return JSON and require a Bearer token unless marked as Public.
+        {activeSection
+          ? `${sectionMeta[activeSection]?.description || ''} ${totalEndpoints} endpoint${totalEndpoints !== 1 ? 's' : ''}.`
+          : `Complete reference for all ${totalEndpoints} REST API endpoints across ${Object.keys(visibleEndpoints).length} resource groups. All endpoints return JSON and require a Bearer token unless marked as Public.`
+        }
       </p>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         {Object.entries(methodColors).map(([method, colors]) => {
-          const count = Object.values(apiEndpoints).flat().filter(e => e.method === method).length;
+          const count = Object.values(visibleEndpoints).flat().filter(e => e.method === method).length;
           return (
             <div key={method} className={`${colors.bg} border ${colors.border} rounded-lg px-4 py-3 text-center`}>
               <p className={`${colors.text} text-lg font-bold`}>{count}</p>
@@ -119,7 +140,7 @@ const APIReference = () => {
       </div>
 
       {/* API Groups */}
-      {Object.entries(apiEndpoints).map(([key, endpoints]) => {
+      {Object.entries(visibleEndpoints).map(([key, endpoints]) => {
         const meta = sectionMeta[key] || { title: key, description: '' };
         return (
           <section key={key} className="mb-10" id={`api-${key}`}>

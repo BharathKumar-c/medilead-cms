@@ -79,9 +79,9 @@ export const searchableContent = [
     id: 'first-login',
     section: 'Getting Started',
     title: 'First Login',
-    keywords: 'login password credentials default user sarah jenkins',
+    keywords: 'login credentials default user first login password change',
     content:
-      'Default login: bharath@medcloud.health / password123. Change password after first login.',
+      'Default login email: bharath@medcloud.health. Check your seed output or admin for the password. Change password after first login.',
   },
 
   // Roles
@@ -254,12 +254,11 @@ export const apiEndpoints = {
       method: 'POST',
       path: '/api/auth/register',
       auth: 'Public',
-      description: 'Register a new user account',
+      description: 'Register a new user account (role is server-assigned to "staff")',
       body: {
         name: 'string',
         email: 'string',
         password: 'string',
-        role: 'string',
         specialty: 'string',
         phone: 'string',
       },

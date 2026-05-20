@@ -20,6 +20,8 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
   const [statuses, setStatuses] = useState(['New', 'Contacted', 'Interested', 'Follow-up', 'Appointment Booked', 'Closed', 'Rejected']);
   const uhidTimerRef = useRef(null);
   const pincodeTimerRef = useRef(null);
+  const uhidRequestId = useRef(0);
+  const pincodeRequestId = useRef(0);
 
   useEffect(() => {
     if (isOpen) {
@@ -35,9 +37,11 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
         setFormData(prev => ({ ...prev, contactNumber: prefillPhone }));
       }
     } else {
-      // Reset form when closed
+      // Reset form and cancel pending lookups when closed
       setFormData(emptyForm);
       setErrors({});
+      if (uhidTimerRef.current) { clearTimeout(uhidTimerRef.current); uhidTimerRef.current = null; }
+      if (pincodeTimerRef.current) { clearTimeout(pincodeTimerRef.current); pincodeTimerRef.current = null; }
     }
   }, [isOpen, prefillPhone]);
 
@@ -88,6 +92,7 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
     }
 
     if (uhid.length >= 4) {
+      const requestId = ++uhidRequestId.current;
       uhidTimerRef.current = setTimeout(async () => {
         setUhidLoading(true);
         // Clear auto-filled fields before lookup
@@ -98,6 +103,7 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
         }));
         try {
           const res = await api.getLeadByUhid(uhid);
+          if (requestId !== uhidRequestId.current) return;
           if (res?.data?.patient) {
             const p = res.data.patient;
             setFormData(prev => ({
@@ -118,7 +124,7 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
         } catch {
           // Not found — fields already cleared, user can enter manually
         } finally {
-          setUhidLoading(false);
+          if (requestId === uhidRequestId.current) setUhidLoading(false);
         }
       }, 2000);
     }
@@ -133,10 +139,12 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
     if (pincodeTimerRef.current) clearTimeout(pincodeTimerRef.current);
 
     if (pincode.length === 6) {
+      const requestId = ++pincodeRequestId.current;
       pincodeTimerRef.current = setTimeout(async () => {
         setPincodeLoading(true);
         try {
           const resp = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+          if (requestId !== pincodeRequestId.current) return;
           const data = await resp.json();
           if (data[0]?.Status === 'Success' && data[0]?.PostOffice?.length > 0) {
             const po = data[0].PostOffice[0];
@@ -154,13 +162,14 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
             }
           }
         } catch {
+          if (requestId !== pincodeRequestId.current) return;
           // Offline fallback
           const local = pincodeData[pincode];
           if (local) {
             setFormData(prev => ({ ...prev, city: local.city, state: local.state, country: local.country }));
           }
         } finally {
-          setPincodeLoading(false);
+          if (requestId === pincodeRequestId.current) setPincodeLoading(false);
         }
       }, 500);
     }
