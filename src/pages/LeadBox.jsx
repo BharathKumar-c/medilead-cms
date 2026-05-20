@@ -592,7 +592,8 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
               <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               Address Details
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {/* Row 1: Pincode + Area */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div data-edit-field="pincode">
                 <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Pincode</label>
                 <div className="relative">
@@ -601,9 +602,9 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
                 </div>
                 <ErrorMsg field="pincode" />
               </div>
-              {areas.length > 1 ? (
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+              <div className="sm:col-span-3">
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+                {areas.length > 1 ? (
                   <div className="relative">
                     <select value={formData.area} onChange={(e) => setField('area', e.target.value)} className={`${fieldClass('area')} appearance-none pr-10`}>
                       <option value="">Select area</option>
@@ -611,13 +612,14 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
                   </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+                ) : (
                   <input type="text" value={formData.area} readOnly className={readOnlyClass} placeholder="Auto-fills" />
-                </div>
-              )}
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: City + State + Country */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div data-edit-field="city">
                 <label className="block font-caption text-on-surface-variant uppercase mb-1.5">City</label>
                 <input type="text" value={formData.city} readOnly className={readOnlyClass} placeholder="Auto-fills" />
@@ -628,17 +630,17 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
                 <input type="text" value={formData.state} readOnly className={readOnlyClass} placeholder="Auto-fills" />
                 <ErrorMsg field="state" />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Country</label>
                 <input type="text" value={formData.country} readOnly className={readOnlyClass} placeholder="Auto-fills" />
               </div>
-              <div data-edit-field="address">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address</label>
-                <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
-                <ErrorMsg field="address" />
-              </div>
+            </div>
+
+            {/* Row 3: Residential Address */}
+            <div data-edit-field="address">
+              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address</label>
+              <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
+              <ErrorMsg field="address" />
             </div>
           </div>
 

@@ -354,7 +354,8 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
               Address Details
             </h3>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {/* Row 1: Pincode + Area */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div data-field="pincode">
                 <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Pincode</label>
                 <div className="relative">
@@ -363,9 +364,9 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
                 </div>
                 <ErrorMsg field="pincode" />
               </div>
-              {areas.length > 1 ? (
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+              <div className="sm:col-span-3">
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+                {areas.length > 1 ? (
                   <div className="relative">
                     <select value={formData.area} onChange={(e) => setField('area', e.target.value)} className={`${fieldClass('area')} appearance-none pr-10`}>
                       <option value="">Select area</option>
@@ -373,13 +374,14 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
                   </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+                ) : (
                   <input type="text" value={formData.area} readOnly className={readOnlyClass} placeholder="Auto-fills" />
-                </div>
-              )}
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: City + State + Country */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div data-field="city">
                 <label className="block font-caption text-on-surface-variant uppercase mb-1.5">City</label>
                 <input type="text" value={formData.city} readOnly className={readOnlyClass} placeholder="Auto-fills" />
@@ -390,18 +392,17 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
                 <input type="text" value={formData.state} readOnly className={readOnlyClass} placeholder="Auto-fills" />
                 <ErrorMsg field="state" />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Country</label>
                 <input type="text" value={formData.country} readOnly className={readOnlyClass} placeholder="Auto-fills" />
               </div>
-              <div data-field="address">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address</label>
-                <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
-                <ErrorMsg field="address" />
-              </div>
+            </div>
+
+            {/* Row 3: Residential Address */}
+            <div data-field="address">
+              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address</label>
+              <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
+              <ErrorMsg field="address" />
             </div>
           </div>
 
