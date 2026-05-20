@@ -131,9 +131,9 @@ const PermissionAssignment = () => {
 
   return (
     <Layout title={`Permissions: ${role.display_name}`}>
-      <div className="space-y-6">
+      <div className="p-4 sm:p-6 lg:p-10">
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 mb-6">
           <button onClick={() => navigate('/role-management')} className="p-2 rounded-lg hover:bg-surface-container-high transition-colors">
             <ArrowLeft size={20} className="text-on-surface" />
           </button>
