@@ -1,9 +1,10 @@
 import FormInput from '../components/FormInput';
 
-const Step4MedicalReview = ({ register, errors, watch, departments, doctors }) => {
+const Step4MedicalReview = ({ register, errors, watch, departments = [], doctors = [] }) => {
   const values = watch();
 
   const getLabel = (options, value) => {
+    if (!Array.isArray(options)) return value || '—';
     const found = options.find(o => String(o.value) === String(value));
     return found ? found.label : value || '—';
   };

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
-  Users, UserPlus, Edit, Trash2, X, Shield, Eye, EyeOff, Save, Search,
-  ChevronLeft, ChevronRight, AlertTriangle,
+  UserPlus, Edit, Trash2, X, Shield, Eye, EyeOff, Save, Search,
+  AlertTriangle,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import Toast from '../components/Toast';

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Phone, PhoneCall, PhoneMissed, PhoneOff, Clock, User, Search,
+  Phone, PhoneMissed, Clock,
   ChevronLeft, ChevronRight, PhoneIncoming, PhoneOutgoing, UserPlus,
   Headphones,
 } from 'lucide-react';
@@ -230,7 +230,7 @@ const TelecallerDashboard = () => {
                             <span className="hidden sm:inline">Create Lead</span>
                           </button>
                         )}
-                        {call.recording_url && call.status === 'connected' && (
+                        {call.recording_url && (
                           <button
                             onClick={() => handlePlayRecording(call)}
                             className="p-2 bg-surface-container-high rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors"

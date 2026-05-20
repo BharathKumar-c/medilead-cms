@@ -22,8 +22,8 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
   const [departments, setDepartments] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
-  const [selectedBranch, setSelectedBranch] = useState('');
-  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState(() => watch('branch_id') || '');
+  const [selectedDepartment, setSelectedDepartment] = useState(() => watch('department_id') || '');
 
   const selectedDoctor = watch('doctor_id');
   const selectedDate = watch('appointment_date');
@@ -67,9 +67,12 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
   // Fetch doctors when department changes
   useEffect(() => {
     if (!selectedDepartment) {
-      setDoctors([]);
-      setValue('doctor_id', '');
-      setValue('provider_name', '');
+      // Only clear doctor if the form also has no department (user-initiated clear)
+      if (!watch('department_id')) {
+        setDoctors([]);
+        setValue('doctor_id', '');
+        setValue('provider_name', '');
+      }
       return;
     }
 
@@ -86,7 +89,7 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
     }).finally(() => {
       setLoadingDoctors(false);
     });
-  }, [selectedDepartment, selectedBranch, setValue]);
+  }, [selectedDepartment, selectedBranch, setValue, watch]);
 
   // Update provider_name when doctor selection changes
   useEffect(() => {

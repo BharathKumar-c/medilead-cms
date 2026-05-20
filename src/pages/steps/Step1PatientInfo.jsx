@@ -24,13 +24,18 @@ const bloodGroupOptions = [
 const Step1PatientInfo = ({ register, errors, setValue }) => {
   const [uhidLoading, setUhidLoading] = useState(false);
   const debounceTimer = useRef(null);
+  const latestRequestId = useRef(0);
 
   const fetchPatientByUhid = useCallback(async (uhid) => {
     if (!uhid || uhid.length < 3) return;
 
+    const requestId = ++latestRequestId.current;
     setUhidLoading(true);
     try {
       const res = await api.getLeadByUhid(uhid);
+      // Ignore stale response if a newer request was made
+      if (requestId !== latestRequestId.current) return;
+
       const patient = res?.data?.patient;
       if (patient) {
         // Split name into first and last
@@ -50,11 +55,17 @@ const Step1PatientInfo = ({ register, errors, setValue }) => {
         window.dispatchEvent(new CustomEvent('toast', { detail: { type: 'success', title: 'Patient Found', message: `Loaded details for ${patient.name}` } }));
       }
     } catch (err) {
+      // Ignore stale errors too
+      if (requestId !== latestRequestId.current) return;
+
       if (err.code === 'UHID_NOT_FOUND') {
         window.dispatchEvent(new CustomEvent('toast', { detail: { type: 'warning', title: 'UHID Not Found', message: 'No patient found with this UHID. Enter details manually.' } }));
       }
     } finally {
-      setUhidLoading(false);
+      // Only clear loading if this is still the latest request
+      if (requestId === latestRequestId.current) {
+        setUhidLoading(false);
+      }
     }
   }, [setValue]);
 
@@ -66,6 +77,13 @@ const Step1PatientInfo = ({ register, errors, setValue }) => {
     };
     window.addEventListener('toast', handler);
     return () => window.removeEventListener('toast', handler);
+  }, []);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
   }, []);
 
   const handleUhidChange = (e) => {
