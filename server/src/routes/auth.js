@@ -269,6 +269,25 @@ router.post('/users', authenticate, authorize('super_admin'), validateRegister, 
 // PUT /api/auth/users/:id — update user (Super Admin)
 router.put('/users/:id', authenticate, authorize('super_admin'), validateId, validateUserUpdate, async (req, res) => {
   try {
+    // Protect last super admin from role change or deactivation
+    const changingRole = req.body.role !== undefined;
+    const deactivating = req.body.is_active === false || req.body.is_active === 'false';
+
+    if (changingRole || deactivating) {
+      const targetUser = await db.query('SELECT role, is_active FROM users WHERE id = $1', [req.params.id]);
+      if (targetUser.rows.length > 0 && targetUser.rows[0].role === 'super_admin' && targetUser.rows[0].is_active) {
+        const superAdminCount = await db.query("SELECT COUNT(*) FROM users WHERE role = 'super_admin' AND is_active = true");
+        if (parseInt(superAdminCount.rows[0].count) <= 1) {
+          const action = deactivating ? 'deactivate' : 'change the role of';
+          return res.status(400).json({
+            status: 'error',
+            message: `Cannot ${action} the last active super admin. Promote another user to super admin first.`,
+            code: 'LAST_SUPER_ADMIN',
+          });
+        }
+      }
+    }
+
     // Build dynamic UPDATE based on provided fields
     const allowedFields = { name: null, email: null, role: null, specialty: null, phone: null, is_active: null };
     const setClauses = [];
@@ -341,6 +360,19 @@ router.put('/users/:id/password', authenticate, authorize('super_admin'), valida
 // DELETE /api/auth/users/:id — deactivate user (Super Admin, soft delete)
 router.delete('/users/:id', authenticate, authorize('super_admin'), validateId, async (req, res) => {
   try {
+    // Protect last super admin from deactivation
+    const targetUser = await db.query('SELECT role, is_active FROM users WHERE id = $1', [req.params.id]);
+    if (targetUser.rows.length > 0 && targetUser.rows[0].role === 'super_admin' && targetUser.rows[0].is_active) {
+      const superAdminCount = await db.query("SELECT COUNT(*) FROM users WHERE role = 'super_admin' AND is_active = true");
+      if (parseInt(superAdminCount.rows[0].count) <= 1) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Cannot deactivate the last active super admin. Promote another user to super admin first.',
+          code: 'LAST_SUPER_ADMIN',
+        });
+      }
+    }
+
     const result = await db.query(
       'UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, name',
       [req.params.id]
