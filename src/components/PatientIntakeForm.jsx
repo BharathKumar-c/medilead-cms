@@ -400,9 +400,9 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
               <div data-field="address">
                 <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address</label>
                 <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
-              <ErrorMsg field="address" />
+                <ErrorMsg field="address" />
+              </div>
             </div>
-          </div>
 
           {/* Clinical Remarks */}
           <div>
