@@ -289,13 +289,13 @@ const PatientIntakeForm = ({ isOpen, onClose, onSuccess, onError, prefillPhone =
           {/* DOB + Age + Lead Source */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div data-field="dob">
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Date of Birth <span className="text-error">*</span></label>
+              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Date of Birth</label>
               <input type="date" value={formData.dob} onChange={handleDobChange} className={fieldClass('dob')} />
               {formData.age && <p className="font-caption text-secondary mt-1 font-bold">{formData.age}</p>}
               <ErrorMsg field="dob" />
             </div>
             <div data-field="leadSource">
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Lead Source <span className="text-error">*</span></label>
+              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Lead Source</label>
               <div className="relative">
                 <select value={formData.leadSource} onChange={(e) => setField('leadSource', e.target.value)} className={selectClass('leadSource')}>
                   <option value="">Select lead source</option>
