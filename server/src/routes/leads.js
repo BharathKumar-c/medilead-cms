@@ -325,7 +325,7 @@ router.get('/:id', validateId, async (req, res) => {
 router.post('/', validateLead, async (req, res) => {
   try {
     const {
-      name, uhid, phone, alternate_contact, email, dob, address,
+      name, uhid, phone, alternate_contact, email, dob, address, area,
       pincode, city, state, country, lead_source, status, priority, clinical_remarks,
     } = req.body;
 
@@ -370,11 +370,11 @@ router.post('/', validateLead, async (req, res) => {
     }
 
     const result = await db.query(
-      `INSERT INTO leads (name, initials, uhid, phone, alternate_contact, email, dob, address,
+      `INSERT INTO leads (name, initials, uhid, phone, alternate_contact, email, dob, address, area,
         pincode, city, state, country, lead_source, status, priority, assigned_to, clinical_remarks)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING *`,
-      [name, initials, uhid, phone, alternate_contact, email, dob, address,
+      [name, initials, uhid, phone, alternate_contact, email, dob, address, area || null,
         pincode, city, state, country, lead_source, status || 'New', priority || 'Medium', assignedTo, clinical_remarks]
     );
 
@@ -411,7 +411,7 @@ router.post('/', validateLead, async (req, res) => {
 router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
   try {
     const {
-      name, uhid, phone, alternate_contact, email, dob, address,
+      name, uhid, phone, alternate_contact, email, dob, address, area,
       pincode, city, state, country, lead_source, status, priority, assigned_to, clinical_remarks,
     } = req.body;
 
@@ -444,19 +444,20 @@ router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
         email = COALESCE($5, email),
         dob = COALESCE($6, dob),
         address = COALESCE($7, address),
-        pincode = COALESCE($8, pincode),
-        city = COALESCE($9, city),
-        state = COALESCE($10, state),
-        country = COALESCE($11, country),
-        lead_source = COALESCE($12, lead_source),
-        status = COALESCE($13, status),
-        priority = COALESCE($14, priority),
-        assigned_to = COALESCE($15, assigned_to),
-        clinical_remarks = COALESCE($16, clinical_remarks),
+        area = COALESCE($8, area),
+        pincode = COALESCE($9, pincode),
+        city = COALESCE($10, city),
+        state = COALESCE($11, state),
+        country = COALESCE($12, country),
+        lead_source = COALESCE($13, lead_source),
+        status = COALESCE($14, status),
+        priority = COALESCE($15, priority),
+        assigned_to = COALESCE($16, assigned_to),
+        clinical_remarks = COALESCE($17, clinical_remarks),
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $17
+       WHERE id = $18
        RETURNING *`,
-      [name, uhid, phone, alternate_contact, email, dob, address,
+      [name, uhid, phone, alternate_contact, email, dob, address, area,
         pincode, city, state, country, lead_source, status, priority, assigned_to, clinical_remarks, req.params.id]
     );
 
