@@ -38,7 +38,9 @@ router.get('/', validateLeadQuery, async (req, res) => {
     }
 
     // If user doesn't have view_all permission, only show their leads
-    if (!req.user.permissions || !req.user.permissions.includes('leads:view_all')) {
+    const userRoles = req.user.roles || [req.user.role];
+    const isSuperAdmin = userRoles.includes('super_admin');
+    if (!isSuperAdmin && (!req.user.permissions || !req.user.permissions.includes('leads:view_all'))) {
       where.push(`l.assigned_to = $${paramIndex}`);
       params.push(req.user.id);
       paramIndex++;

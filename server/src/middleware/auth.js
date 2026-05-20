@@ -66,6 +66,12 @@ const authorize = (...args) => {
       });
     }
 
+    // Super_admin always has access
+    const userRoles = req.user.roles || [req.user.role];
+    if (userRoles.includes('super_admin')) {
+      return next();
+    }
+
     // Detect if args are permission names (contain ':') or role names
     const hasColon = args.some(a => a.includes(':'));
 
@@ -81,7 +87,6 @@ const authorize = (...args) => {
       }
     } else {
       // Legacy role-based check
-      const userRoles = req.user.roles || [req.user.role];
       const hasRole = args.some(role => userRoles.includes(role));
       if (!hasRole) {
         return res.status(403).json({

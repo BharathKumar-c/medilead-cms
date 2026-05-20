@@ -43,7 +43,9 @@ router.get('/', validatePagination, async (req, res) => {
     }
 
     // If user doesn't have view_all permission, only show their appointments
-    if (!req.user.permissions || !req.user.permissions.includes('appointments:view_all')) {
+    const userRoles = req.user.roles || [req.user.role];
+    const isSuperAdmin = userRoles.includes('super_admin');
+    if (!isSuperAdmin && (!req.user.permissions || !req.user.permissions.includes('appointments:view_all'))) {
       where.push(`a.provider_id = $${paramIndex}`);
       params.push(req.user.id);
       paramIndex++;
