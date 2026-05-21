@@ -61,7 +61,7 @@ router.get('/', validatePagination, async (req, res) => {
     });
   } catch (err) {
     logger.error('Get calls error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch calls.', code: 'CALLS_FETCH_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CALLS_FETCH_ERROR' });
   }
 });
 
@@ -91,7 +91,7 @@ router.get('/stats', async (req, res) => {
     });
   } catch (err) {
     logger.error('Call stats error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch call stats.', code: 'CALL_STATS_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CALL_STATS_ERROR' });
   }
 });
 
@@ -112,7 +112,7 @@ router.get('/phone/:phone', authenticate, async (req, res) => {
     res.json({ status: 'success', data: { calls: result.rows } });
   } catch (err) {
     logger.error('Call history by phone error', { error: err.message, phone: req.params.phone });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch call history.', code: 'CALL_HISTORY_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CALL_HISTORY_ERROR' });
   }
 });
 
@@ -174,7 +174,7 @@ router.post('/', validateCallLog, async (req, res) => {
     res.status(201).json({ status: 'success', data: { call } });
   } catch (err) {
     logger.error('Log call error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to log call.', code: 'CALL_LOG_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CALL_LOG_ERROR' });
   }
 });
 
@@ -202,7 +202,7 @@ router.put('/:id', validateId, validateCallUpdate, async (req, res) => {
     res.json({ status: 'success', data: { call: result.rows[0] } });
   } catch (err) {
     logger.error('Update call error', { error: err.message, callId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to update call.', code: 'CALL_UPDATE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CALL_UPDATE_ERROR' });
   }
 });
 
@@ -384,7 +384,7 @@ router.post('/sip-event', validateSipEvent, async (req, res) => {
     res.json({ status: 'success', message: 'SIP event processed.' });
   } catch (err) {
     logger.error('SIP event error', { error: err.message, body: req.body });
-    res.status(500).json({ status: 'error', message: 'Failed to process SIP event.', code: 'SIP_EVENT_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'SIP_EVENT_ERROR' });
   }
 });
 

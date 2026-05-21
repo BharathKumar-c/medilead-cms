@@ -21,7 +21,7 @@ router.get('/permissions/all', authenticate, authorize('roles:view'), async (req
     res.json({ status: 'success', data: { permissions: result.rows, grouped } });
   } catch (err) {
     logger.error('List permissions error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to list permissions.' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message });
   }
 });
 
@@ -41,7 +41,7 @@ router.get('/', authenticate, authorize('roles:view'), async (req, res) => {
     res.json({ status: 'success', data: { roles: result.rows } });
   } catch (err) {
     logger.error('List roles error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to list roles.' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message });
   }
 });
 
@@ -66,7 +66,7 @@ router.get('/:id', authenticate, authorize('roles:view'), async (req, res) => {
     res.json({ status: 'success', data: { role } });
   } catch (err) {
     logger.error('Get role error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to get role.' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message });
   }
 });
 
@@ -101,7 +101,7 @@ router.post('/', authenticate, authorize('roles:create'), async (req, res) => {
     res.status(201).json({ status: 'success', data: { role: result.rows[0] } });
   } catch (err) {
     logger.error('Create role error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to create role.' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message });
   }
 });
 
@@ -129,7 +129,7 @@ router.put('/:id', authenticate, authorize('roles:update'), async (req, res) => 
     res.json({ status: 'success', data: { role: result.rows[0] } });
   } catch (err) {
     logger.error('Update role error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to update role.' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message });
   }
 });
 
@@ -157,7 +157,7 @@ router.delete('/:id', authenticate, authorize('roles:delete'), async (req, res) 
     res.json({ status: 'success', message: 'Role deleted.' });
   } catch (err) {
     logger.error('Delete role error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to delete role.' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message });
   }
 });
 
@@ -174,7 +174,7 @@ router.get('/:id/permissions', authenticate, authorize('roles:view'), async (req
     res.json({ status: 'success', data: { permissions: result.rows } });
   } catch (err) {
     logger.error('Get role permissions error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to get role permissions.' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message });
   }
 });
 
@@ -231,7 +231,7 @@ router.put('/:id/permissions', authenticate, authorize('roles:update'), async (r
     res.json({ status: 'success', data: { permissions: result.rows } });
   } catch (err) {
     logger.error('Set role permissions error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to set role permissions.' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message });
   }
 });
 

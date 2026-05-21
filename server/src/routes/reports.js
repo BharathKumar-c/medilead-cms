@@ -36,7 +36,7 @@ router.get('/overview', async (req, res) => {
     });
   } catch (err) {
     logger.error('Reports overview error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch reports overview.', code: 'REPORTS_OVERVIEW_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'REPORTS_OVERVIEW_ERROR' });
   }
 });
 
@@ -55,7 +55,7 @@ router.get('/call-volume', async (req, res) => {
     res.json({ status: 'success', data: { callVolume: result.rows } });
   } catch (err) {
     logger.error('Call volume error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch call volume.', code: 'CALL_VOLUME_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CALL_VOLUME_ERROR' });
   }
 });
 
@@ -83,7 +83,7 @@ router.get('/lead-sources', async (req, res) => {
     res.json({ status: 'success', data: { sources } });
   } catch (err) {
     logger.error('Lead sources error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch lead sources.', code: 'LEAD_SOURCES_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'LEAD_SOURCES_ERROR' });
   }
 });
 
@@ -113,7 +113,7 @@ router.get('/department-performance', async (req, res) => {
     res.json({ status: 'success', data: { departments } });
   } catch (err) {
     logger.error('Department performance error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch department performance.', code: 'DEPT_PERFORMANCE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'DEPT_PERFORMANCE_ERROR' });
   }
 });
 
@@ -151,7 +151,7 @@ router.get('/provider-leaderboard', async (req, res) => {
     res.json({ status: 'success', data: { providers } });
   } catch (err) {
     logger.error('Provider leaderboard error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch provider leaderboard.', code: 'PROVIDER_LEADERBOARD_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'PROVIDER_LEADERBOARD_ERROR' });
   }
 });
 
@@ -175,7 +175,7 @@ router.get('/status-breakdown', async (req, res) => {
     res.json({ status: 'success', data: { breakdown } });
   } catch (err) {
     logger.error('Status breakdown error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch status breakdown.', code: 'STATUS_BREAKDOWN_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'STATUS_BREAKDOWN_ERROR' });
   }
 });
 
@@ -196,7 +196,7 @@ router.get('/weekly-trend', async (req, res) => {
     res.json({ status: 'success', data: { weeklyTrend: result.rows } });
   } catch (err) {
     logger.error('Weekly trend error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch weekly trend.', code: 'WEEKLY_TREND_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'WEEKLY_TREND_ERROR' });
   }
 });
 
@@ -233,7 +233,7 @@ router.get('/telecallers', async (req, res) => {
     res.json({ status: 'success', data: { telecallers } });
   } catch (err) {
     logger.error('Telecallers error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch telecaller performance.', code: 'TELECALLERS_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'TELECALLERS_ERROR' });
   }
 });
 
@@ -262,7 +262,7 @@ router.get('/conversion-funnel', async (req, res) => {
     res.json({ status: 'success', data: { funnel } });
   } catch (err) {
     logger.error('Conversion funnel error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch conversion funnel.', code: 'CONVERSION_FUNNEL_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CONVERSION_FUNNEL_ERROR' });
   }
 });
 
@@ -294,7 +294,7 @@ router.get('/call-analytics', async (req, res) => {
     });
   } catch (err) {
     logger.error('Call analytics error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch call analytics.', code: 'CALL_ANALYTICS_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CALL_ANALYTICS_ERROR' });
   }
 });
 
@@ -319,7 +319,7 @@ router.get('/appointment-stats', async (req, res) => {
     });
   } catch (err) {
     logger.error('Appointment stats error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch appointment stats.', code: 'APPOINTMENT_STATS_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'APPOINTMENT_STATS_ERROR' });
   }
 });
 
@@ -348,7 +348,7 @@ router.get('/daily-activity', async (req, res) => {
     });
   } catch (err) {
     logger.error('Daily activity error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch daily activity.', code: 'DAILY_ACTIVITY_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'DAILY_ACTIVITY_ERROR' });
   }
 });
 
@@ -418,7 +418,7 @@ router.get('/export', async (req, res) => {
     res.send(csv);
   } catch (err) {
     logger.error('Export error', { error: err.message, type: req.query.type });
-    res.status(500).json({ status: 'error', message: 'Failed to export report.', code: 'EXPORT_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'EXPORT_ERROR' });
   }
 });
 

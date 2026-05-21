@@ -186,7 +186,7 @@ router.get('/me', authenticate, async (req, res) => {
     });
   } catch (err) {
     logger.error('Get profile error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch profile.', code: 'PROFILE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'PROFILE_ERROR' });
   }
 });
 
@@ -210,7 +210,7 @@ router.put('/profile', authenticate, validateProfileUpdate, async (req, res) => 
     });
   } catch (err) {
     logger.error('Update profile error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to update profile.', code: 'PROFILE_UPDATE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'PROFILE_UPDATE_ERROR' });
   }
 });
 
@@ -242,7 +242,7 @@ router.put('/password', authenticate, validateChangePassword, async (req, res) =
     });
   } catch (err) {
     logger.error('Change password error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to change password.', code: 'PASSWORD_CHANGE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'PASSWORD_CHANGE_ERROR' });
   }
 });
 
@@ -256,7 +256,7 @@ router.get('/settings', authenticate, async (req, res) => {
     res.json({ status: 'success', data: { settings: result.rows[0] } });
   } catch (err) {
     logger.error('Get settings error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch settings.', code: 'SETTINGS_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'SETTINGS_ERROR' });
   }
 });
 
@@ -279,7 +279,7 @@ router.put('/settings', authenticate, validateSettings, async (req, res) => {
     res.json({ status: 'success', data: { settings: result.rows[0] } });
   } catch (err) {
     logger.error('Update settings error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to update settings.', code: 'SETTINGS_UPDATE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'SETTINGS_UPDATE_ERROR' });
   }
 });
 
@@ -315,7 +315,7 @@ router.get('/users', authenticate, authorize('super_admin'), async (req, res) =>
     res.json({ status: 'success', data: { users: result.rows } });
   } catch (err) {
     logger.error('List users error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch users.', code: 'USERS_LIST_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'USERS_LIST_ERROR' });
   }
 });
 
@@ -373,7 +373,7 @@ router.post('/users', authenticate, authorize('super_admin'), validateRegister, 
     res.status(201).json({ status: 'success', data: { user } });
   } catch (err) {
     logger.error('Create user error', { error: err.message, adminId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to create user.', code: 'USER_CREATE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'USER_CREATE_ERROR' });
   }
 });
 
@@ -477,7 +477,7 @@ router.put('/users/:id', authenticate, authorize('super_admin'), validateId, val
     res.json({ status: 'success', data: { user } });
   } catch (err) {
     logger.error('Update user error', { error: err.message, adminId: req.user.id, targetUserId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to update user.', code: 'USER_UPDATE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'USER_UPDATE_ERROR' });
   }
 });
 
@@ -505,7 +505,7 @@ router.put('/users/:id/password', authenticate, authorize('super_admin'), valida
     res.json({ status: 'success', message: 'Password reset successfully.' });
   } catch (err) {
     logger.error('Reset password error', { error: err.message, adminId: req.user.id, targetUserId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to reset password.', code: 'PASSWORD_RESET_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'PASSWORD_RESET_ERROR' });
   }
 });
 
@@ -539,7 +539,7 @@ router.delete('/users/:id', authenticate, authorize('super_admin'), validateId, 
     res.json({ status: 'success', message: `User ${result.rows[0].name} deactivated.` });
   } catch (err) {
     logger.error('Deactivate user error', { error: err.message, adminId: req.user.id, targetUserId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to deactivate user.', code: 'USER_DEACTIVATE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'USER_DEACTIVATE_ERROR' });
   }
 });
 

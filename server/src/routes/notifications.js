@@ -37,7 +37,7 @@ router.get('/', async (req, res) => {
     });
   } catch (err) {
     logger.error('Get notifications error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch notifications.', code: 'NOTIFICATIONS_FETCH_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'NOTIFICATIONS_FETCH_ERROR' });
   }
 });
 
@@ -72,7 +72,7 @@ router.post('/', notificationLimiter, validateNotification, async (req, res) => 
     res.status(201).json({ status: 'success', data: { notification } });
   } catch (err) {
     logger.error('Create notification error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to create notification.', code: 'NOTIFICATION_CREATE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'NOTIFICATION_CREATE_ERROR' });
   }
 });
 
@@ -91,7 +91,7 @@ router.put('/:id/read', validateId, async (req, res) => {
     res.json({ status: 'success', message: 'Notification marked as read.' });
   } catch (err) {
     logger.error('Mark notification read error', { error: err.message, notificationId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to mark notification as read.', code: 'NOTIFICATION_READ_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'NOTIFICATION_READ_ERROR' });
   }
 });
 
@@ -108,7 +108,7 @@ router.put('/read-all', async (req, res) => {
     res.json({ status: 'success', message: 'All notifications marked as read.' });
   } catch (err) {
     logger.error('Mark all notifications read error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to mark all notifications as read.', code: 'NOTIFICATIONS_READ_ALL_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'NOTIFICATIONS_READ_ALL_ERROR' });
   }
 });
 
@@ -129,7 +129,7 @@ router.delete('/:id', validateId, async (req, res) => {
     res.json({ status: 'success', message: 'Notification deleted.' });
   } catch (err) {
     logger.error('Delete notification error', { error: err.message, notificationId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to delete notification.', code: 'NOTIFICATION_DELETE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'NOTIFICATION_DELETE_ERROR' });
   }
 });
 

@@ -86,7 +86,7 @@ router.get('/', validateLeadQuery, async (req, res) => {
     });
   } catch (err) {
     logger.error('Get leads error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch leads.', code: 'LEADS_FETCH_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to fetch leads: ${err.message}`, code: 'LEADS_FETCH_ERROR' });
   }
 });
 
@@ -116,7 +116,7 @@ router.get('/metrics', async (req, res) => {
     });
   } catch (err) {
     logger.error('Lead metrics error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch lead metrics.', code: 'METRICS_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to fetch lead metrics: ${err.message}`, code: 'METRICS_ERROR' });
   }
 });
 
@@ -139,7 +139,7 @@ router.get('/master-data', async (req, res) => {
     });
   } catch (err) {
     logger.error('Master data error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch master data.', code: 'MASTER_DATA_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to fetch master data: ${err.message}`, code: 'MASTER_DATA_ERROR' });
   }
 });
 
@@ -159,7 +159,7 @@ router.get('/uhid/:uhid', async (req, res) => {
     res.json({ status: 'success', data: { patient: result.rows[0] } });
   } catch (err) {
     logger.error('UHID lookup error', { error: err.message, uhid: req.params.uhid });
-    res.status(500).json({ status: 'error', message: 'Failed to look up UHID.', code: 'UHID_LOOKUP_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to look up UHID: ${err.message}`, code: 'UHID_LOOKUP_ERROR' });
   }
 });
 
@@ -220,7 +220,7 @@ router.get('/phone/:phone', authenticate, async (req, res) => {
     });
   } catch (err) {
     logger.error('Phone lookup error', { error: err.message, phone: req.params.phone });
-    res.status(500).json({ status: 'error', message: 'Failed to look up phone.', code: 'PHONE_LOOKUP_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to look up phone: ${err.message}`, code: 'PHONE_LOOKUP_ERROR' });
   }
 });
 
@@ -252,7 +252,7 @@ router.get('/uhids-by-phone/:phone', authenticate, async (req, res) => {
     res.json({ status: 'success', data: { uhids: uhidsResult.rows.map(r => r.uhid) } });
   } catch (err) {
     logger.error('UHIDs by phone error', { error: err.message, phone: req.params.phone });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch UHIDs.', code: 'UHIDS_LOOKUP_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to fetch UHIDs: ${err.message}`, code: 'UHIDS_LOOKUP_ERROR' });
   }
 });
 
@@ -271,7 +271,7 @@ router.get('/providers', async (req, res) => {
     res.json({ status: 'success', data: { providers: result.rows } });
   } catch (err) {
     logger.error('Get providers error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch providers.', code: 'PROVIDERS_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to fetch providers: ${err.message}`, code: 'PROVIDERS_ERROR' });
   }
 });
 
@@ -295,7 +295,7 @@ router.get('/departments', async (req, res) => {
     res.json({ status: 'success', data: { departments: result.rows } });
   } catch (err) {
     logger.error('Get departments error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch departments.', code: 'DEPARTMENTS_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to fetch departments: ${err.message}`, code: 'DEPARTMENTS_ERROR' });
   }
 });
 
@@ -317,7 +317,7 @@ router.get('/:id', validateId, async (req, res) => {
     res.json({ status: 'success', data: { lead: result.rows[0] } });
   } catch (err) {
     logger.error('Get lead error', { error: err.message, leadId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch lead.', code: 'LEAD_FETCH_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to fetch lead: ${err.message}`, code: 'LEAD_FETCH_ERROR' });
   }
 });
 
@@ -403,7 +403,7 @@ router.post('/', validateLead, async (req, res) => {
     res.status(201).json({ status: 'success', data: { lead } });
   } catch (err) {
     logger.error('Create lead error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to create lead.', code: 'LEAD_CREATE_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to create lead: ${err.message}`, code: 'LEAD_CREATE_ERROR' });
   }
 });
 
@@ -501,7 +501,7 @@ router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
     res.json({ status: 'success', data: { lead } });
   } catch (err) {
     logger.error('Update lead error', { error: err.message, leadId: req.params.id, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to update lead.', code: 'LEAD_UPDATE_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to update lead: ${err.message}`, code: 'LEAD_UPDATE_ERROR' });
   }
 });
 
@@ -529,7 +529,7 @@ router.delete('/:id', validateId, async (req, res) => {
     res.json({ status: 'success', message: `Lead ${result.rows[0].name} has been rejected.` });
   } catch (err) {
     logger.error('Delete lead error', { error: err.message, leadId: req.params.id, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to delete lead.', code: 'LEAD_DELETE_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to delete lead: ${err.message}`, code: 'LEAD_DELETE_ERROR' });
   }
 });
 
@@ -548,7 +548,7 @@ router.get('/:id/history', validateId, async (req, res) => {
     res.json({ status: 'success', data: { history: result.rows } });
   } catch (err) {
     logger.error('Get lead history error', { error: err.message, leadId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch lead history.', code: 'HISTORY_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to fetch lead history: ${err.message}`, code: 'HISTORY_ERROR' });
   }
 });
 

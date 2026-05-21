@@ -73,7 +73,7 @@ router.get('/', validatePagination, async (req, res) => {
     });
   } catch (err) {
     logger.error('Get appointments error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch appointments.', code: 'APPOINTMENTS_FETCH_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'APPOINTMENTS_FETCH_ERROR' });
   }
 });
 
@@ -106,7 +106,7 @@ router.get('/today', async (req, res) => {
     });
   } catch (err) {
     logger.error('Today overview error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch today overview.', code: 'TODAY_OVERVIEW_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'TODAY_OVERVIEW_ERROR' });
   }
 });
 
@@ -146,7 +146,7 @@ router.get('/calendar', async (req, res) => {
     res.json({ status: 'success', data: { appointments: calendar } });
   } catch (err) {
     logger.error('Calendar data error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch calendar data.', code: 'CALENDAR_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CALENDAR_ERROR' });
   }
 });
 
@@ -176,7 +176,7 @@ router.get('/doctors', async (req, res) => {
     res.json({ status: 'success', data: { doctors: result.rows } });
   } catch (err) {
     logger.error('Get doctors error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch doctors.', code: 'DOCTORS_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'DOCTORS_ERROR' });
   }
 });
 
@@ -223,7 +223,7 @@ router.get('/slots', async (req, res) => {
     res.json({ status: 'success', data: { slots } });
   } catch (err) {
     logger.error('Get slots error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch slots.', code: 'SLOTS_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'SLOTS_ERROR' });
   }
 });
 
@@ -239,7 +239,7 @@ router.get('/:id', validateId, async (req, res) => {
     res.json({ status: 'success', data: { appointment: result.rows[0] } });
   } catch (err) {
     logger.error('Get appointment error', { error: err.message, appointmentId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch appointment.', code: 'APPOINTMENT_FETCH_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'APPOINTMENT_FETCH_ERROR' });
   }
 });
 
@@ -294,7 +294,7 @@ router.post('/', validateAppointment, async (req, res) => {
     res.status(201).json({ status: 'success', data: { appointment } });
   } catch (err) {
     logger.error('Create appointment error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ status: 'error', message: 'Failed to create appointment.', code: 'APPOINTMENT_CREATE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'APPOINTMENT_CREATE_ERROR' });
   }
 });
 
@@ -362,7 +362,7 @@ router.put('/:id', validateId, validateAppointmentUpdate, async (req, res) => {
     res.json({ status: 'success', data: { appointment } });
   } catch (err) {
     logger.error('Update appointment error', { error: err.message, appointmentId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to update appointment.', code: 'APPOINTMENT_UPDATE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'APPOINTMENT_UPDATE_ERROR' });
   }
 });
 
@@ -434,7 +434,7 @@ router.put('/:id/reschedule', validateId, validateReschedule, async (req, res) =
     res.json({ status: 'success', data: { appointment: result.rows[0] } });
   } catch (err) {
     logger.error('Reschedule appointment error', { error: err.message, appointmentId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to reschedule appointment.', code: 'RESCHEDULE_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'RESCHEDULE_ERROR' });
   }
 });
 
@@ -483,7 +483,7 @@ router.put('/:id/cancel', validateId, async (req, res) => {
     res.json({ status: 'success', data: { appointment: result.rows[0] } });
   } catch (err) {
     logger.error('Cancel appointment error', { error: err.message, appointmentId: req.params.id });
-    res.status(500).json({ status: 'error', message: 'Failed to cancel appointment.', code: 'CANCEL_ERROR' });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'CANCEL_ERROR' });
   }
 });
 

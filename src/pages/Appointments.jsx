@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  ChevronLeft, ChevronRight, Plus, X, Calendar,
+  ChevronLeft, ChevronRight, ChevronDown, Plus, X, Calendar,
   Clock, User, Phone, Mail, FileText, AlertTriangle, Check, Ban, MoreHorizontal,
 } from 'lucide-react';
 import Layout from '../components/Layout';
@@ -318,11 +318,14 @@ const Appointments = () => {
                 </div>
                 <div>
                   <label className="block font-caption text-on-surface-variant uppercase mb-1.5">New Time</label>
-                  <select value={rescheduleForm.time} onChange={e => setRescheduleForm(p => ({ ...p, time: e.target.value }))}
-                    className="w-full px-4 py-3 pr-10 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all appearance-none">
-                    <option value="">Select time</option>
-                    {timeSlots.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                  <div className="relative">
+                    <select value={rescheduleForm.time} onChange={e => setRescheduleForm(p => ({ ...p, time: e.target.value }))}
+                      className="w-full px-4 py-3 pr-10 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all appearance-none">
+                      <option value="">Select time</option>
+                      {timeSlots.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end gap-3">
