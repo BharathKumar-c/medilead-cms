@@ -314,6 +314,45 @@ class ApiService {
     return this.request(`/branches/${branchId}/departments`);
   }
 
+  // ── Master Data CRUD ──
+
+  // Lead Sources
+  async getMasterLeadSources() { return this.request('/masters/lead-sources'); }
+  async createMasterLeadSource(data) { return this.request('/masters/lead-sources', { method: 'POST', body: data }); }
+  async updateMasterLeadSource(id, data) { return this.request(`/masters/lead-sources/${id}`, { method: 'PUT', body: data }); }
+  async deleteMasterLeadSource(id) { return this.request(`/masters/lead-sources/${id}`, { method: 'DELETE' }); }
+
+  // Priorities
+  async getMasterPriorities() { return this.request('/masters/priorities'); }
+  async createMasterPriority(data) { return this.request('/masters/priorities', { method: 'POST', body: data }); }
+  async updateMasterPriority(id, data) { return this.request(`/masters/priorities/${id}`, { method: 'PUT', body: data }); }
+  async deleteMasterPriority(id) { return this.request(`/masters/priorities/${id}`, { method: 'DELETE' }); }
+
+  // Lead Statuses
+  async getMasterLeadStatuses() { return this.request('/masters/lead-statuses'); }
+  async createMasterLeadStatus(data) { return this.request('/masters/lead-statuses', { method: 'POST', body: data }); }
+  async updateMasterLeadStatus(id, data) { return this.request(`/masters/lead-statuses/${id}`, { method: 'PUT', body: data }); }
+  async deleteMasterLeadStatus(id) { return this.request(`/masters/lead-statuses/${id}`, { method: 'DELETE' }); }
+
+  // Departments
+  async getMasterDepartments() { return this.request('/masters/departments'); }
+  async createMasterDepartment(data) { return this.request('/masters/departments', { method: 'POST', body: data }); }
+  async updateMasterDepartment(id, data) { return this.request(`/masters/departments/${id}`, { method: 'PUT', body: data }); }
+  async deleteMasterDepartment(id) { return this.request(`/masters/departments/${id}`, { method: 'DELETE' }); }
+
+  // Branches (master)
+  async getMasterBranches() { return this.request('/masters/branches'); }
+  async createMasterBranch(data) { return this.request('/masters/branches', { method: 'POST', body: data }); }
+  async updateMasterBranch(id, data) { return this.request(`/masters/branches/${id}`, { method: 'PUT', body: data }); }
+  async deleteMasterBranch(id) { return this.request(`/masters/branches/${id}`, { method: 'DELETE' }); }
+  async getMasterBranchDepartments(branchId) { return this.request(`/masters/branches/${branchId}/departments`); }
+
+  // Doctors
+  async getMasterDoctors() { return this.request('/masters/doctors'); }
+  async createMasterDoctor(data) { return this.request('/masters/doctors', { method: 'POST', body: data }); }
+  async updateMasterDoctor(id, data) { return this.request(`/masters/doctors/${id}`, { method: 'PUT', body: data }); }
+  async deleteMasterDoctor(id) { return this.request(`/masters/doctors/${id}`, { method: 'DELETE' }); }
+
   // Appointments
   async getAppointments(params = {}) {
     const query = new URLSearchParams(params).toString();

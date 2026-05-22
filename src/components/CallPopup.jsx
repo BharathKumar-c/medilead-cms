@@ -39,7 +39,7 @@ const CallPopup = ({ call, callState, onAnswer, onHangUp, onHold, onClose, leadI
   const callerNumber = call.caller_number || call.callerNumber || 'Unknown';
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-80 bg-surface rounded-2xl shadow-2xl border border-outline-variant overflow-hidden animate-slide-up">
+    <div className="fixed bottom-6 right-6 z-50 w-80 bg-surface rounded-2xl shadow-2xl border border-outline-variant animate-slide-up">
       {/* Header */}
       <div className="px-5 py-3 bg-surface-container-high border-b border-outline-variant flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -128,15 +128,26 @@ const CallPopup = ({ call, callState, onAnswer, onHangUp, onHold, onClose, leadI
 
       {/* Actions */}
       {callState === 'ringing' && isIncoming && (
-        <div className="px-5 py-3 flex gap-3">
-          <button onClick={onAnswer} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-success text-on-primary rounded-lg font-body-md font-bold hover:opacity-90 transition-all">
-            <Phone className="w-4 h-4" />
-            Answer
-          </button>
-          <button onClick={onHangUp} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-error text-on-error rounded-lg font-body-md font-bold hover:opacity-90 transition-all">
-            <PhoneOff className="w-4 h-4" />
-            Reject
-          </button>
+        <div className="px-5 py-3 space-y-2">
+          <div className="flex gap-3">
+            <button onClick={onAnswer} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-success text-on-primary rounded-lg font-body-md font-bold hover:opacity-90 transition-all">
+              <Phone className="w-4 h-4" />
+              Answer
+            </button>
+            <button onClick={onHangUp} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-error text-on-error rounded-lg font-body-md font-bold hover:opacity-90 transition-all">
+              <PhoneOff className="w-4 h-4" />
+              Reject
+            </button>
+          </div>
+          {!leadInfo && onCreateLead && (
+            <button
+              onClick={() => onCreateLead(callerNumber)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 transition-all"
+            >
+              <UserPlus className="w-4 h-4" />
+              Create Lead for {callerNumber}
+            </button>
+          )}
         </div>
       )}
 
@@ -158,19 +169,6 @@ const CallPopup = ({ call, callState, onAnswer, onHangUp, onHold, onClose, leadI
           <button onClick={onHangUp} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-error text-on-error rounded-lg hover:opacity-90 transition-all text-sm font-medium">
             <PhoneOff className="w-4 h-4" />
             End
-          </button>
-        </div>
-      )}
-
-      {/* Create Lead button when no lead matched */}
-      {!leadInfo && callState === 'ringing' && onCreateLead && (
-        <div className="px-5 py-3 border-t border-outline-variant">
-          <button
-            onClick={() => onCreateLead(callerNumber)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 transition-all"
-          >
-            <UserPlus className="w-4 h-4" />
-            Create Lead for {callerNumber}
           </button>
         </div>
       )}

@@ -42,3 +42,7 @@ server/uploads/recordings/*
 *.njsproj
 *.sln
 *.sw?
+
+# Build artifacts
+production.zip
+production/

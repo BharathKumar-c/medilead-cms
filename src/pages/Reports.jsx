@@ -297,7 +297,9 @@ const Reports = () => {
                 {statusBreakdown.map((s, i) => {
                   const total = statusBreakdown.reduce((sum, x) => sum + parseInt(x.count), 0);
                   const pct = total > 0 ? Math.round((parseInt(s.count) / total) * 100) : 0;
-                  const colors = { New: 'bg-secondary', Contacted: 'bg-on-tertiary-container', Interested: 'bg-secondary-fixed', 'Follow-up': 'bg-on-tertiary-container', 'Appointment Booked': 'bg-on-tertiary-container', Closed: 'bg-outline-variant', Rejected: 'bg-error' };
+                  const palette = ['bg-secondary', 'bg-on-tertiary-container', 'bg-secondary-fixed', 'bg-outline-variant', 'bg-error', 'bg-on-primary-fixed-variant'];
+                  const colorIdx = s.status ? s.status.charCodeAt(0) % palette.length : 0;
+                  const colors = { [s.status]: palette[colorIdx] };
                   return (
                     <div key={i} className="flex items-center justify-between">
                       <span className="font-body-md text-on-surface">{s.status}</span>

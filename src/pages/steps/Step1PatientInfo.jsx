@@ -21,10 +21,39 @@ const bloodGroupOptions = [
   { value: 'O-', label: 'O-' },
 ];
 
-const Step1PatientInfo = ({ register, errors, setValue }) => {
+const Step1PatientInfo = ({ register, errors, setValue, watch }) => {
   const [uhidLoading, setUhidLoading] = useState(false);
   const debounceTimer = useRef(null);
   const latestRequestId = useRef(0);
+
+  const calculateAge = (dob) => {
+    if (!dob || dob.length < 10) return;
+    const birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) return;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+    return age > 0 ? age : '';
+  };
+
+  const handleDobChange = (e) => {
+    const dob = e.target.value;
+    setValue('date_of_birth', dob);
+    const age = calculateAge(dob);
+    setValue('age', age ? String(age) : '');
+  };
+
+  const handleAgeChange = (e) => {
+    const ageStr = e.target.value.replace(/\D/g, '').slice(0, 3);
+    setValue('age', ageStr);
+    if (ageStr) {
+      const birthYear = new Date().getFullYear() - parseInt(ageStr, 10);
+      setValue('date_of_birth', `${birthYear}-01-01`);
+    } else {
+      setValue('date_of_birth', '');
+    }
+  };
 
   const fetchPatientByUhid = useCallback(async (uhid) => {
     if (!uhid || uhid.length < 3) return;
@@ -137,14 +166,25 @@ const Step1PatientInfo = ({ register, errors, setValue }) => {
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <FormInput
+          label="Age"
+          name="age"
+          type="text"
+          inputMode="numeric"
+          register={register}
+          errors={errors}
+          placeholder="e.g. 35"
+          maxLength={3}
+          onChange={handleAgeChange}
+        />
         <FormInput
           label="Date of Birth"
           name="date_of_birth"
           type="date"
           register={register}
           errors={errors}
-          required
+          onChange={handleDobChange}
         />
         <FormSelect
           label="Gender"

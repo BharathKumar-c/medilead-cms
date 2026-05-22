@@ -87,7 +87,7 @@ Access the application at `http://localhost:5173`
 
 ### Default Login
 
-- **Email**: bharath@medcloud.health
+- **Email**: bharath@medway.health
 - **Password**: password123
 
 ## Project Structure
@@ -119,9 +119,11 @@ medilead-cms/
 
 | Role            | Permissions                                           |
 | --------------- | ----------------------------------------------------- |
-| **Super Admin** | Full access, user management, all reports             |
+| **Super Admin** | Full access, user management, role management, all reports |
 | **Manager**     | View all leads/appointments, reports, team management |
 | **Telecaller**  | Own leads/appointments only, call logs                |
+
+> Custom roles can be created with granular permissions (30+ permissions across modules).
 
 ## API Endpoints
 
@@ -162,6 +164,8 @@ medilead-cms/
 - `PUT /api/appointments/:id` - Update appointment
 - `PUT /api/appointments/:id/reschedule` - Reschedule
 - `PUT /api/appointments/:id/cancel` - Cancel
+- `GET /api/appointments/doctors` - List doctors (filterable by department)
+- `GET /api/appointments/slots` - Available time slots for a doctor
 
 ### Calls
 
@@ -200,6 +204,21 @@ medilead-cms/
 - `PUT /api/notifications/:id/read` - Mark as read
 - `PUT /api/notifications/read-all` - Mark all as read
 - `DELETE /api/notifications/:id` - Delete notification
+
+### Roles & Permissions
+
+- `GET /api/roles` - List all roles (Admin)
+- `GET /api/roles/permissions/all` - All permissions grouped by module (Admin)
+- `GET /api/roles/:id` - Get role with permissions (Admin)
+- `POST /api/roles` - Create custom role (Admin)
+- `PUT /api/roles/:id` - Update role (Admin)
+- `DELETE /api/roles/:id` - Delete custom role (Admin)
+- `PUT /api/roles/:id/permissions` - Assign permissions to role (Admin)
+
+### Branches & Departments
+
+- `GET /api/branches` - List active branches
+- `GET /api/branches/:id/departments` - Departments at a branch
 
 ## Security Features
 

@@ -190,7 +190,7 @@ const createTables = async () => {
         city VARCHAR(100),
         state VARCHAR(100),
         country VARCHAR(100) DEFAULT 'India',
-        status VARCHAR(20) DEFAULT 'New' CHECK (status IN ('New', 'Contacted', 'Interested', 'Follow-up', 'Appointment Booked', 'Closed', 'Rejected')),
+        status VARCHAR(50) DEFAULT 'Appointment Booked' CHECK (status IN ('Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS and Ex-Service Scheme', 'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship', 'Appointment Booked')),
         lead_source VARCHAR(100),
         priority VARCHAR(20) DEFAULT 'Medium' CHECK (priority IN ('High', 'Medium', 'Low')),
         assigned_to INTEGER REFERENCES users(id),

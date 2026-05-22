@@ -151,7 +151,7 @@ const validateLead = [
     .withMessage('Country must be less than 100 characters'),
   body('status')
     .optional()
-    .isIn(['New', 'Contacted', 'Interested', 'Follow-up', 'Appointment Booked', 'Closed', 'Rejected'])
+    .isIn(['Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS and Ex-Service Scheme', 'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship', 'Appointment Booked'])
     .withMessage('Invalid status'),
   body('priority')
     .optional()
@@ -233,7 +233,7 @@ const validateLeadUpdate = [
     .withMessage('Country must be less than 100 characters'),
   body('status')
     .optional()
-    .isIn(['New', 'Contacted', 'Interested', 'Follow-up', 'Appointment Booked', 'Closed', 'Rejected'])
+    .isIn(['Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS and Ex-Service Scheme', 'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship', 'Appointment Booked'])
     .withMessage('Invalid status'),
   body('priority')
     .optional()
@@ -579,7 +579,7 @@ const validateLeadQuery = [
     .withMessage('Search term must be less than 100 characters'),
   query('status')
     .optional()
-    .isIn(['All', 'New', 'Contacted', 'Interested', 'Follow-up', 'Appointment Booked', 'Closed', 'Rejected'])
+    .isIn(['All', 'Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS and Ex-Service Scheme', 'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship', 'Appointment Booked'])
     .withMessage('Invalid status filter'),
   query('priority')
     .optional()

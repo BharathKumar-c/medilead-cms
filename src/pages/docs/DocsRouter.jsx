@@ -37,6 +37,8 @@ const DocsRouter = () => {
         <Route path="api-dashboard" element={<APIReference />} />
         <Route path="api-reports" element={<APIReference />} />
         <Route path="api-notifications" element={<APIReference />} />
+        <Route path="api-roles" element={<APIReference />} />
+        <Route path="api-branches" element={<APIReference />} />
         <Route path="database-schema" element={<DatabaseSchema />} />
         <Route path="security" element={<Security />} />
         <Route path="*" element={<Navigate to="/docs" replace />} />

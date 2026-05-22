@@ -96,10 +96,10 @@ router.get('/metrics', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
 
     const [newToday, pending, closed, overdue] = await Promise.all([
-      db.query("SELECT COUNT(*) FROM leads WHERE status = 'New' AND DATE(created_at) = $1", [today]),
-      db.query("SELECT COUNT(*) FROM leads WHERE status IN ('New', 'Follow-up', 'Contacted')"),
-      db.query("SELECT COUNT(*) FROM leads WHERE status = 'Closed'"),
-      db.query("SELECT COUNT(*) FROM leads WHERE status = 'Follow-up' AND last_call_date < NOW() - INTERVAL '3 days'"),
+      db.query("SELECT COUNT(*) FROM leads WHERE DATE(created_at) = $1", [today]),
+      db.query("SELECT COUNT(*) FROM leads WHERE status != 'Appointment Booked'"),
+      db.query("SELECT COUNT(*) FROM leads WHERE status = 'Appointment Booked'"),
+      db.query("SELECT COUNT(*) FROM leads WHERE last_call_date IS NOT NULL AND last_call_date < NOW() - INTERVAL '3 days' AND status != 'Appointment Booked'"),
     ]);
 
     const total = parseInt(pending.rows[0].count) + parseInt(closed.rows[0].count);

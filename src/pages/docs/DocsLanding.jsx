@@ -83,7 +83,7 @@ const DocsLanding = () => {
             MediLead CMS
           </h1>
           <p className="text-lg sm:text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-            Complete guide to managing patients, appointments, calls, and reports for your healthcare practice.
+            Complete guide to managing patients, appointments, calls, and reports for your healthcare practice. Supports RBAC, multi-branch workflows, and SIP integration.
           </p>
 
           {/* Search */}
@@ -187,10 +187,10 @@ const DocsLanding = () => {
         <section className="py-16 border-t border-gray-200">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
             {[
-              { value: '55+', label: 'API Endpoints' },
-              { value: '13', label: 'Database Tables' },
+              { value: '75+', label: 'API Endpoints' },
+              { value: '21', label: 'Database Tables' },
               { value: '3', label: 'User Roles' },
-              { value: '14', label: 'UI Pages' },
+              { value: '18+', label: 'UI Pages' },
             ].map(stat => (
               <div key={stat.label} className="p-6 bg-white border border-gray-200 rounded-xl">
                 <p className="text-3xl font-bold text-blue-600 mb-1">{stat.value}</p>

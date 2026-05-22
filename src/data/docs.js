@@ -44,6 +44,8 @@ export const docsNavigation = [
       {id: 'api-dashboard', title: 'Dashboard API'},
       {id: 'api-reports', title: 'Reports API'},
       {id: 'api-notifications', title: 'Notifications API'},
+      {id: 'api-roles', title: 'Roles & Permissions API'},
+      {id: 'api-branches', title: 'Branches API'},
     ],
   },
   {
@@ -81,7 +83,7 @@ export const searchableContent = [
     title: 'First Login',
     keywords: 'login credentials default user first login password change',
     content:
-      'Default login email: bharath@medcloud.health. Check your seed output or admin for the password. Change password after first login.',
+      'Default login email: bharath@medway.health. Check your seed output or admin for the password. Change password after first login.',
   },
 
   // Roles
@@ -221,6 +223,23 @@ export const searchableContent = [
   },
 
   // Technical
+  {
+    id: 'api-roles',
+    section: 'API Reference',
+    title: 'Roles & Permissions API',
+    keywords:
+      'roles permissions rbac custom role create update delete assign user management',
+    content:
+      'Full CRUD for roles and permissions. Create custom roles, assign permissions, manage role-based access control.',
+  },
+  {
+    id: 'api-branches',
+    section: 'API Reference',
+    title: 'Branches API',
+    keywords: 'branches departments multi-branch hospital location',
+    content:
+      'List branches and departments. Multi-branch architecture for hospital networks.',
+  },
   {
     id: 'database-schema',
     section: 'Technical',
@@ -515,6 +534,20 @@ export const apiEndpoints = {
       auth: 'Required',
       description: 'List providers for dropdown',
     },
+    {
+      method: 'GET',
+      path: '/api/appointments/doctors',
+      auth: 'Required',
+      description: 'List doctors, filterable by department',
+      params: 'department',
+    },
+    {
+      method: 'GET',
+      path: '/api/appointments/slots',
+      auth: 'Required',
+      description: 'Get available time slots for a doctor on a date (30-min intervals)',
+      params: 'doctor_id, date',
+    },
   ],
   calls: [
     {
@@ -720,6 +753,67 @@ export const apiEndpoints = {
       description: 'Delete a notification',
     },
   ],
+  roles: [
+    {
+      method: 'GET',
+      path: '/api/roles',
+      auth: 'Super Admin',
+      description: 'List all roles with permission and user counts',
+    },
+    {
+      method: 'GET',
+      path: '/api/roles/permissions/all',
+      auth: 'Super Admin',
+      description: 'Get all permissions grouped by module',
+    },
+    {
+      method: 'GET',
+      path: '/api/roles/:id',
+      auth: 'Super Admin',
+      description: 'Get single role with its permissions',
+    },
+    {
+      method: 'POST',
+      path: '/api/roles',
+      auth: 'Super Admin',
+      description: 'Create a custom role',
+      body: {name: 'string', display_name: 'string', description: 'string'},
+    },
+    {
+      method: 'PUT',
+      path: '/api/roles/:id',
+      auth: 'Super Admin',
+      description: 'Update a role display name or description',
+      body: {display_name: 'string', description: 'string'},
+    },
+    {
+      method: 'DELETE',
+      path: '/api/roles/:id',
+      auth: 'Super Admin',
+      description: 'Delete a custom role (blocks system roles and roles with users)',
+    },
+    {
+      method: 'PUT',
+      path: '/api/roles/:id/permissions',
+      auth: 'Super Admin',
+      description: 'Replace all permissions for a role (transactional)',
+      body: {permission_ids: 'integer[]'},
+    },
+  ],
+  branches: [
+    {
+      method: 'GET',
+      path: '/api/branches',
+      auth: 'Required',
+      description: 'List all active branches',
+    },
+    {
+      method: 'GET',
+      path: '/api/branches/:id/departments',
+      auth: 'Required',
+      description: 'Get departments available at a specific branch',
+    },
+  ],
 };
 
 export const rolePermissions = {
@@ -916,5 +1010,45 @@ export const databaseTables = [
     name: 'master_lead_status',
     description: 'Lead status options',
     fields: ['id', 'name'],
+  },
+  {
+    name: 'roles',
+    description: 'RBAC roles (system and custom)',
+    fields: ['id', 'name', 'display_name', 'description', 'is_system', 'is_active'],
+  },
+  {
+    name: 'permissions',
+    description: 'RBAC permissions grouped by module',
+    fields: ['id', 'name', 'display_name', 'description', 'module'],
+  },
+  {
+    name: 'role_permissions',
+    description: 'Role-to-permission junction table',
+    fields: ['id', 'role_id', 'permission_id'],
+  },
+  {
+    name: 'user_roles',
+    description: 'User-to-role junction table (max 2 roles per user)',
+    fields: ['id', 'user_id', 'role_id'],
+  },
+  {
+    name: 'master_branches',
+    description: 'Hospital branch locations',
+    fields: ['id', 'name', 'address', 'city', 'state', 'phone', 'email', 'is_active'],
+  },
+  {
+    name: 'branch_departments',
+    description: 'Branch-to-department junction table',
+    fields: ['id', 'branch_id', 'department_id'],
+  },
+  {
+    name: 'master_doctors',
+    description: 'Doctor directory with specialties',
+    fields: ['id', 'name', 'department', 'specialty', 'qualification', 'phone', 'email', 'is_active'],
+  },
+  {
+    name: 'lead_uhids',
+    description: 'Multiple UHIDs per lead (junction table)',
+    fields: ['id', 'lead_id', 'uhid'],
   },
 ];

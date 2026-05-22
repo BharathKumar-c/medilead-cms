@@ -19,6 +19,8 @@ const sectionMeta = {
   dashboard: { title: 'Dashboard', description: 'Overview metrics and activity logging.' },
   reports: { title: 'Reports', description: 'Analytics, charts, data export, and performance metrics.' },
   notifications: { title: 'Notifications', description: 'Real-time notification management.' },
+  roles: { title: 'Roles & Permissions', description: 'RBAC role and permission management. Create custom roles, assign permissions, and control access.' },
+  branches: { title: 'Branches', description: 'Multi-branch architecture. List branches and departments across hospital locations.' },
 };
 
 const routeToSection = {
@@ -29,6 +31,8 @@ const routeToSection = {
   'api-dashboard': 'dashboard',
   'api-reports': 'reports',
   'api-notifications': 'notifications',
+  'api-roles': 'roles',
+  'api-branches': 'branches',
 };
 
 const EndpointCard = ({ endpoint }) => {

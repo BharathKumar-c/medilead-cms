@@ -17,7 +17,7 @@ const breadcrumbMap = {
   '/appearance': [{ label: 'Dashboard', to: '/' }, { label: 'Appearance', to: '/appearance' }],
 };
 
-const Header = ({ title = 'MedCloud CMS', onNewPatientClick, sidebarCollapsed, onToggleSidebar }) => {
+const Header = ({ title = 'Medway CMS', onNewPatientClick, sidebarCollapsed, onToggleSidebar }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();

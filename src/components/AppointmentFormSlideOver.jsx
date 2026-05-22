@@ -14,9 +14,8 @@ import api from '../services/api';
 const step1Schema = yup.object({
   first_name: yup.string().required('First name is required').min(2, 'Minimum 2 characters'),
   last_name: yup.string().required('Last name is required').min(2, 'Minimum 2 characters'),
-  date_of_birth: yup.string()
-    .required('Date of birth is required')
-    .test('is-past', 'Must be a past date', val => val ? new Date(val) < new Date() : false),
+  date_of_birth: yup.string().nullable(),
+  age: yup.string().nullable(),
   gender: yup.string().required('Gender is required'),
   blood_group: yup.string().nullable(),
   patient_uhid: yup.string().nullable(),
@@ -26,11 +25,9 @@ const step2Schema = yup.object({
   mobile: yup.string()
     .required('Mobile number is required')
     .matches(/^[0-9]{10}$/, 'Must be 10 digits'),
-  email: yup.string()
-    .required('Email is required')
-    .email('Invalid email format'),
+  email: yup.string().notRequired().nullable(),
   emergency_contact_name: yup.string().nullable(),
-  emergency_contact_phone: yup.string().nullable().matches(/^[0-9]{0,10}$/, 'Must be 10 digits'),
+  emergency_contact_phone: yup.string().nullable().matches(/^$|^[0-9]{10}$/, 'Must be exactly 10 digits when provided'),
 });
 
 const step3Schema = yup.object({
@@ -46,22 +43,18 @@ const step3Schema = yup.object({
       return new Date(val) >= today;
     }),
   time_slot_id: yup.string().required('Please select a time slot'),
-  visit_type: yup.string().required('Visit type is required'),
-  mode: yup.string().required('Consultation mode is required'),
+  visit_type: yup.string().nullable(),
+  mode: yup.string().nullable(),
 });
 
 const step4Schema = yup.object({
-  chief_complaint: yup.string()
-    .required('Chief complaint is required')
-    .min(10, 'Minimum 10 characters'),
+  chief_complaint: yup.string().nullable(),
   known_allergies: yup.string().nullable(),
   current_medications: yup.string().nullable(),
   existing_conditions: yup.string().nullable(),
   insurance_details: yup.string().nullable(),
   special_notes: yup.string().nullable(),
-  consent_given: yup.boolean()
-    .required('Consent is required')
-    .oneOf([true], 'You must agree to proceed'),
+  consent_given: yup.boolean().nullable(),
 });
 
 const schemas = [step1Schema, step2Schema, step3Schema, step4Schema];
@@ -70,7 +63,7 @@ const stepLabels = ['Patient Info', 'Contact', 'Appointment', 'Review'];
 const TOTAL_STEPS = 4;
 
 const defaultFormValues = {
-  first_name: '', last_name: '', date_of_birth: '', gender: '', blood_group: '', patient_uhid: '',
+  first_name: '', last_name: '', date_of_birth: '', age: '', gender: '', blood_group: '', patient_uhid: '',
   mobile: '', email: '', emergency_contact_name: '', emergency_contact_phone: '',
   branch_id: '', department_id: '', doctor_id: '', provider_name: '', appointment_date: '', time_slot_id: '', visit_type: '', mode: '',
   chief_complaint: '', known_allergies: '', current_medications: '', existing_conditions: '',
@@ -90,6 +83,8 @@ const AppointmentFormSlideOver = ({ isOpen, onClose, onSuccess, onError }) => {
     setValue,
     control,
     reset,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm({
     resolver: yupResolver(schemas[currentStep - 1]),
@@ -108,7 +103,18 @@ const AppointmentFormSlideOver = ({ isOpen, onClose, onSuccess, onError }) => {
 
   const handleNext = async () => {
     const valid = await trigger();
-    if (valid && currentStep < TOTAL_STEPS) {
+    if (!valid) return;
+    // Manual DOB/Age check for step 1
+    if (currentStep === 1) {
+      const dob = watch('date_of_birth');
+      const age = watch('age');
+      if (!dob && !age) {
+        setError('date_of_birth', { type: 'manual', message: 'Either Date of Birth or Age is required' });
+        return;
+      }
+    }
+    clearErrors('date_of_birth');
+    if (currentStep < TOTAL_STEPS) {
       setCurrentStep(prev => prev + 1);
     }
   };
@@ -256,7 +262,7 @@ const AppointmentFormSlideOver = ({ isOpen, onClose, onSuccess, onError }) => {
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-5">
             {renderStep()}
           </div>

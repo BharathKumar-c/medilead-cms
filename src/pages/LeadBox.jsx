@@ -196,7 +196,7 @@ const LeadBox = () => {
             </button>
             {filterOpen && (
               <div className="absolute right-0 mt-1 w-48 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg z-10 py-1">
-                {['All', 'New', 'Contacted', 'Interested', 'Follow-up', 'Appointment Booked', 'Closed', 'Rejected'].map(s => (
+                {['All', ...statuses].map(s => (
                   <button key={s} onClick={() => { setStatusFilter(s); setCurrentPage(1); setFilterOpen(false); }} className={`block w-full text-left px-4 py-2 font-body-md hover:bg-surface-container transition-colors ${statusFilter === s ? 'text-secondary font-bold' : 'text-on-surface'}`}>{s}</button>
                 ))}
               </div>
@@ -336,7 +336,7 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
   const [submitting, setSubmitting] = useState(false);
   const [leadSources, setLeadSources] = useState([]);
   const [priorities, setPriorities] = useState(['High', 'Medium', 'Low']);
-  const [statuses, setStatuses] = useState(['New', 'Contacted', 'Interested', 'Follow-up', 'Appointment Booked', 'Closed', 'Rejected']);
+  const [statuses, setStatuses] = useState(['Appointment Booked']);
   const uhidTimerRef = useRef(null);
   const pincodeTimerRef = useRef(null);
 

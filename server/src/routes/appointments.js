@@ -248,8 +248,14 @@ router.post('/', validateAppointment, async (req, res) => {
   try {
     const { patient_name, phone, email, department, provider_id, provider_name, appointment_date, appointment_time, notes } = req.body;
 
-    const providerIdInt = provider_id ? parseInt(provider_id) : null;
+    let providerIdInt = provider_id ? parseInt(provider_id) : null;
     const createdByInt = req.user?.id ? parseInt(req.user.id) : null;
+
+    // Verify provider_id exists in users table (doctor IDs from master_doctors may not match users)
+    if (providerIdInt) {
+      const userCheck = await db.query('SELECT id FROM users WHERE id = $1', [providerIdInt]);
+      if (userCheck.rows.length === 0) providerIdInt = null;
+    }
     const initials = patient_name ? patient_name.split(' ').map(w => w[0]).join('').toUpperCase().substring(0, 2) : null;
 
     // Check for scheduling conflicts
@@ -308,13 +314,20 @@ router.put('/:id', validateId, validateAppointmentUpdate, async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Appointment not found.', code: 'APPOINTMENT_NOT_FOUND' });
     }
 
+    // Verify provider_id exists in users table
+    let validProviderId = provider_id;
+    if (provider_id) {
+      const userCheck = await db.query('SELECT id FROM users WHERE id = $1', [parseInt(provider_id)]);
+      if (userCheck.rows.length === 0) validProviderId = null;
+    }
+
     // Check for scheduling conflicts if date/time/provider changed
-    if (provider_id && appointment_date && appointment_time) {
+    if (validProviderId && appointment_date && appointment_time) {
       const conflict = await db.query(
         `SELECT id FROM appointments
          WHERE provider_id = $1 AND appointment_date = $2 AND appointment_time = $3
          AND status NOT IN ('Cancelled', 'No Show') AND id != $4`,
-        [provider_id, appointment_date, appointment_time, req.params.id]
+        [validProviderId, appointment_date, appointment_time, req.params.id]
       );
 
       if (conflict.rows.length > 0) {
@@ -340,7 +353,7 @@ router.put('/:id', validateId, validateAppointmentUpdate, async (req, res) => {
         status = COALESCE($10, status),
         updated_at = CURRENT_TIMESTAMP
        WHERE id = $11 RETURNING *`,
-      [patient_name, phone, email, department, provider_id, provider_name, appointment_date, appointment_time, notes, status, req.params.id]
+      [patient_name, phone, email, department, validProviderId, provider_name, appointment_date, appointment_time, notes, status, req.params.id]
     );
 
     const oldStatus = existing.rows[0].status;

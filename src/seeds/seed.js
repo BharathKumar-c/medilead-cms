@@ -123,9 +123,9 @@ const seed = async () => {
     await client.query(
       `
       INSERT INTO users (name, email, password_hash, role, avatar_url, specialty, department, phone) VALUES
-      ('Dr. Bharath', 'bharath@medcloud.health', $1, 'super_admin', 'https://lh3.googleusercontent.com/aida-public/AB6AXuCOJVgByGPGQAOvoTcNGQV_NX_OMcIg3eU1cLQ2-Mj8k8dIjUoTX4t8hAn1ZLFAP-3YgTba0ky7z0LQ9BvsxS7EmBSACsHotr4mDK82M9UUAKdUJd6Ekf43be78zUYxNv8cH8NyZV7MvHbi4dBAVPh2uioqGLFT6av3FaqeybGP8hmIW_3R24NOv5UkC6vijgNoMzXXTKwXlqs2jKUgTHokMdOxv4CTLigSbZLChZ24Q61c0iQMy5VEiu4-MzYjoVjeEEFmCeZcQiE', 'Chief Surgeon', 'Cardiology', '9876543210'),
-      ('Dr. Alan Turing', 'alan.turing@medcloud.health', $1, 'manager', NULL, 'Neurologist', 'Neurology', '9876543211'),
-      ('Priya Sharma', 'priya.sharma@medcloud.health', $1, 'telecaller', NULL, NULL, 'General Consultation', '9876543212');
+      ('Dr. Bharath', 'bharath@medway.health', $1, 'super_admin', 'https://lh3.googleusercontent.com/aida-public/AB6AXuCOJVgByGPGQAOvoTcNGQV_NX_OMcIg3eU1cLQ2-Mj8k8dIjUoTX4t8hAn1ZLFAP-3YgTba0ky7z0LQ9BvsxS7EmBSACsHotr4mDK82M9UUAKdUJd6Ekf43be78zUYxNv8cH8NyZV7MvHbi4dBAVPh2uioqGLFT6av3FaqeybGP8hmIW_3R24NOv5UkC6vijgNoMzXXTKwXlqs2jKUgTHokMdOxv4CTLigSbZLChZ24Q61c0iQMy5VEiu4-MzYjoVjeEEFmCeZcQiE', 'Chief Surgeon', 'Cardiology', '9876543210'),
+      ('Dr. Alan Turing', 'alan.turing@medway.health', $1, 'manager', NULL, 'Neurologist', 'Neurology', '9876543211'),
+      ('Priya Sharma', 'priya.sharma@medway.health', $1, 'telecaller', NULL, NULL, 'General Consultation', '9876543212');
     `,
       [passwordHash],
     );

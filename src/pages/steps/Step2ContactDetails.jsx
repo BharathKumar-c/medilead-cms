@@ -21,7 +21,6 @@ const Step2ContactDetails = ({ register, errors }) => {
           register={register}
           errors={errors}
           placeholder="patient@email.com"
-          required
         />
       </div>
 

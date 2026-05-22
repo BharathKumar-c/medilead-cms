@@ -29,7 +29,7 @@ const faqs = [
   },
   {
     question: 'What do the different lead statuses mean?',
-    answer: 'New: A recently created lead that hasn\'t been contacted yet. Follow-up: A lead that requires additional contact or action. Closed: A lead that has been successfully processed or is no longer active.',
+    answer: 'New: A recently created lead that hasn\'t been contacted yet. Contacted: Initial contact has been made. Interested: The lead has shown interest in services. Follow-up: Requires additional contact or action. Appointment Booked: An appointment has been scheduled. Closed: Successfully processed or converted. Rejected: No longer active or not a valid lead.',
   },
 ];
 
@@ -83,8 +83,8 @@ const HelpSupport = () => {
                 </div>
               </div>
               <p className="font-body-md text-on-surface-variant mb-4">Send us a detailed message and we'll get back to you promptly.</p>
-              <a href="mailto:support@medcloud.health" className="flex items-center gap-2 font-body-md font-bold text-secondary hover:underline">
-                support@medcloud.health
+              <a href="mailto:support@medway.health" className="flex items-center gap-2 font-body-md font-bold text-secondary hover:underline">
+                support@medway.health
                 <ExternalLink className="w-4 h-4" />
               </a>
             </div>
@@ -100,7 +100,7 @@ const HelpSupport = () => {
                 </div>
               </div>
               <p className="font-body-md text-on-surface-variant mb-4">Chat with a support agent in real-time during business hours.</p>
-              <a href="mailto:support@medcloud.health?subject=Live%20Chat%20Request" className="flex items-center gap-2 font-body-md font-bold text-secondary hover:underline">
+              <a href="mailto:support@medway.health?subject=Live%20Chat%20Request" className="flex items-center gap-2 font-body-md font-bold text-secondary hover:underline">
                 Start Chat
                 <ExternalLink className="w-4 h-4" />
               </a>
@@ -114,7 +114,7 @@ const HelpSupport = () => {
                 <Book className="w-6 h-6 text-secondary" />
                 <h3 className="font-h3 text-on-surface">Documentation</h3>
               </div>
-              <p className="font-body-md text-on-surface-variant mb-4">Browse our comprehensive user guide for step-by-step instructions on using MediCloud CMS.</p>
+              <p className="font-body-md text-on-surface-variant mb-4">Browse our comprehensive user guide for step-by-step instructions on using MediLead CMS.</p>
               <div className="space-y-2">
                 <a href="/docs/installation" className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors">
                   <span className="font-body-md text-on-surface">Getting Started Guide</span>
@@ -227,11 +227,11 @@ const HelpSupport = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="p-4 bg-surface-container-low rounded-xl">
                 <p className="font-caption text-on-surface-variant uppercase">Version</p>
-                <p className="font-body-md font-bold text-on-surface">2.4.1</p>
+                <p className="font-body-md font-bold text-on-surface">2.5.0</p>
               </div>
               <div className="p-4 bg-surface-container-low rounded-xl">
                 <p className="font-caption text-on-surface-variant uppercase">Last Updated</p>
-                <p className="font-body-md font-bold text-on-surface">Oct 20, 2024</p>
+                <p className="font-body-md font-bold text-on-surface">May 21, 2026</p>
               </div>
               <div className="p-4 bg-surface-container-low rounded-xl">
                 <p className="font-caption text-on-surface-variant uppercase">Status</p>

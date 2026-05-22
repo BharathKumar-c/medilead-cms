@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronLeft, ChevronRight, ChevronDown, Plus, X, Calendar,
   Clock, User, Phone, Mail, FileText, AlertTriangle, Check, Ban, MoreHorizontal,
@@ -25,6 +26,7 @@ const Appointments = () => {
   const [cancelReason, setCancelReason] = useState('');
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [actionMenuId, setActionMenuId] = useState(null);
+  const [actionMenuPos, setActionMenuPos] = useState({ top: 0, right: 0 });
   const [toasts, setToasts] = useState([]);
 
   const [rescheduleForm, setRescheduleForm] = useState({ date: '', time: '' });
@@ -252,11 +254,11 @@ const Appointments = () => {
           </div>
 
           {/* Upcoming Appointments List */}
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm">
             <div className="px-5 py-4 border-b border-outline-variant">
               <h3 className="font-h3 text-on-surface">Upcoming Appointments</h3>
             </div>
-            <div className="max-h-[500px] overflow-y-auto">
+            <div>
               {loading ? (
                 <div className="p-6 text-center font-body-md text-on-surface-variant">Loading...</div>
               ) : appointments.length === 0 ? (
@@ -274,26 +276,17 @@ const Appointments = () => {
                       </div>
                     </div>
                     <div className="relative">
-                      <button onClick={() => setActionMenuId(actionMenuId === apt.id ? null : apt.id)}
+                      <button onClick={(e) => {
+                        if (actionMenuId === apt.id) { setActionMenuId(null); }
+                        else {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setActionMenuId(apt.id);
+                          setActionMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                        }
+                      }}
                         className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors">
                         <MoreHorizontal className="w-4 h-4 text-on-surface-variant" />
                       </button>
-                      {actionMenuId === apt.id && (
-                        <div className="absolute right-0 top-full mt-1 w-44 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg z-10 py-1">
-                          {apt.status === 'Scheduled' && (
-                            <button onClick={() => { handleConfirm(apt); setActionMenuId(null); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><Check className="w-4 h-4 text-on-tertiary-container" /> Confirm</button>
-                          )}
-                          {(apt.status === 'Scheduled' || apt.status === 'Confirmed') && (
-                            <>
-                              <button onClick={() => { handleComplete(apt); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><Check className="w-4 h-4 text-on-tertiary-container" /> Mark Complete</button>
-                              <button onClick={() => { setRescheduleModal(apt); setActionMenuId(null); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><Calendar className="w-4 h-4 text-secondary" /> Reschedule</button>
-                              <button onClick={() => { handleNoShow(apt); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-on-tertiary-container" /> No Show</button>
-                              <button onClick={() => { setCancelConfirm(apt); setActionMenuId(null); }} className="w-full text-left px-4 py-2 font-body-md text-error hover:bg-error/5 flex items-center gap-2"><Ban className="w-4 h-4" /> Cancel</button>
-                            </>
-                          )}
-                          <button onClick={() => { setSelectedAppointment(apt); setActionMenuId(null); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><FileText className="w-4 h-4 text-on-surface-variant" /> View Details</button>
-                        </div>
-                      )}
                     </div>
                   </div>
                   <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-full font-caption text-[10px] font-bold ${getStatusStyles(apt.status)}`}>{apt.status}</span>
@@ -302,6 +295,33 @@ const Appointments = () => {
             </div>
           </div>
         </div>
+
+        {/* Action Menu Portal — renders outside overflow containers */}
+        {actionMenuId && (() => {
+          const apt = appointments.find(a => a.id === actionMenuId);
+          if (!apt) return null;
+          return createPortal(
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setActionMenuId(null)} />
+              <div className="fixed z-50 w-44 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg py-1"
+                style={{ top: actionMenuPos.top, right: actionMenuPos.right }}>
+                {apt.status === 'Scheduled' && (
+                  <button onClick={() => { handleConfirm(apt); setActionMenuId(null); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><Check className="w-4 h-4 text-on-tertiary-container" /> Confirm</button>
+                )}
+                {(apt.status === 'Scheduled' || apt.status === 'Confirmed') && (
+                  <>
+                    <button onClick={() => { handleComplete(apt); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><Check className="w-4 h-4 text-on-tertiary-container" /> Mark Complete</button>
+                    <button onClick={() => { setRescheduleModal(apt); setActionMenuId(null); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><Calendar className="w-4 h-4 text-secondary" /> Reschedule</button>
+                    <button onClick={() => { handleNoShow(apt); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-on-tertiary-container" /> No Show</button>
+                    <button onClick={() => { setCancelConfirm(apt); setActionMenuId(null); }} className="w-full text-left px-4 py-2 font-body-md text-error hover:bg-error/5 flex items-center gap-2"><Ban className="w-4 h-4" /> Cancel</button>
+                  </>
+                )}
+                <button onClick={() => { setSelectedAppointment(apt); setActionMenuId(null); }} className="w-full text-left px-4 py-2 font-body-md text-on-surface hover:bg-surface-container flex items-center gap-2"><FileText className="w-4 h-4 text-on-surface-variant" /> View Details</button>
+              </div>
+            </>,
+            document.body
+          );
+        })()}
 
         {/* Reschedule Modal */}
         {rescheduleModal && (

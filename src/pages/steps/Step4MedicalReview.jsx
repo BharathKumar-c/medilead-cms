@@ -16,7 +16,7 @@ const Step4MedicalReview = ({ register, errors, watch, departments = [], doctors
 
         <div>
           <label htmlFor="chief_complaint" className="block font-caption text-on-surface-variant uppercase mb-1.5">
-            Chief Complaint <span className="text-error">*</span>
+            Chief Complaint
           </label>
           <textarea
             id="chief_complaint"
@@ -90,7 +90,7 @@ const Step4MedicalReview = ({ register, errors, watch, departments = [], doctors
             className="mt-1 w-4 h-4 rounded border-outline-variant text-secondary focus:ring-secondary"
           />
           <label htmlFor="consent_given" className="font-body-md text-on-surface cursor-pointer">
-            I confirm that the information provided is accurate and I consent to the appointment booking. <span className="text-error">*</span>
+            I confirm that the information provided is accurate and I consent to the appointment booking.
           </label>
         </div>
         {errors.consent_given && (
@@ -105,6 +105,7 @@ const Step4MedicalReview = ({ register, errors, watch, departments = [], doctors
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <SummaryRow label="Patient" value={`${values.first_name || ''} ${values.last_name || ''}`.trim() || '—'} />
             <SummaryRow label="Date of Birth" value={values.date_of_birth || '—'} />
+            <SummaryRow label="Age" value={values.age ? `${values.age} yrs` : '—'} />
             <SummaryRow label="Gender" value={values.gender || '—'} />
             <SummaryRow label="Blood Group" value={values.blood_group || '—'} />
             <SummaryRow label="Mobile" value={values.mobile || '—'} />

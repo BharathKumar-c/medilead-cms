@@ -17,7 +17,7 @@ const LegalPolicy = () => {
               <div>
                 <h3 className="font-h3 text-on-surface mb-2">Our Commitment to Privacy</h3>
                 <p className="font-body-md text-on-surface-variant">
-                  MedCloud Systems is committed to protecting the privacy and security of patient health information.
+                  Medway Systems is committed to protecting the privacy and security of patient health information.
                   This policy describes how we collect, use, and safeguard your data in compliance with HIPAA and applicable healthcare regulations.
                 </p>
               </div>
@@ -107,7 +107,7 @@ const LegalPolicy = () => {
               <div className="flex gap-4">
                 <div className="flex items-center gap-3 p-4 bg-surface-container-low rounded-xl">
                   <Mail className="w-5 h-5 text-secondary" />
-                  <span className="font-body-md text-on-surface">privacy@medcloud.health</span>
+                  <span className="font-body-md text-on-surface">privacy@medway.health</span>
                 </div>
                 <div className="flex items-center gap-3 p-4 bg-surface-container-low rounded-xl">
                   <Phone className="w-5 h-5 text-secondary" />

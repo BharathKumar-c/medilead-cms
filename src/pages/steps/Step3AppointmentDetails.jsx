@@ -183,7 +183,6 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
           errors={errors}
           options={visitTypeOptions}
           placeholder="Select visit type"
-          required
         />
       </div>
 
@@ -194,7 +193,6 @@ const Step3AppointmentDetails = ({ register, errors, setValue, watch, control })
         errors={errors}
         options={modeOptions}
         placeholder="Select mode"
-        required
       />
 
       <SlotPicker
