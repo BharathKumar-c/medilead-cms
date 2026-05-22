@@ -10,6 +10,8 @@ const db = require('./config/database');
 const logger = require('./utils/logger');
 const { startFollowUpReminders } = require('./cron/reminders');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
+const licenseGuard = require('./middleware/licenseGuard');
+const licenseModule = require('./license/licenseModule');
 
 const app = express();
 const server = http.createServer(app);
@@ -134,6 +136,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// License guard — must be before all API routes; exempts /internal/license/unlock
+app.use(licenseGuard);
+
 // Apply rate limiting
 app.use('/api/', apiLimiter);
 app.use('/api/auth/login', authLimiter);
@@ -171,6 +176,9 @@ app.use('/api/calls', require('./routes/calls'));
 app.use('/api/branches', require('./routes/branches'));
 app.use('/api/roles', require('./routes/roles'));
 app.use('/api/masters', require('./routes/masters'));
+
+// License unlock endpoint (IP-whitelisted, rate-limited)
+app.use('/internal/license/unlock', require('./routes/licenseUnlock'));
 
 // Serve static frontend files in production
 if (isProduction) {
@@ -278,6 +286,9 @@ server.listen(PORT, () => {
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`Health check: http://localhost:${PORT}/api/health`);
   logger.info('Socket.IO ready');
+
+  // Start license watcher (jittered ~60 min interval)
+  licenseModule.startWatcher();
 
   // Start background jobs
   startFollowUpReminders(io);

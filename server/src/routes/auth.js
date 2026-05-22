@@ -5,6 +5,7 @@ const db = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validateLogin, validateRegister, validateChangePassword, validateUserUpdate, validateProfileUpdate, validateSettings, validateId } = require('../middleware/validate');
 const logger = require('../utils/logger');
+const licenseModule = require('../license/licenseModule');
 
 const router = express.Router();
 
@@ -83,6 +84,21 @@ router.post('/register', validateRegister, async (req, res) => {
 // POST /api/auth/login
 router.post('/login', validateLogin, async (req, res) => {
   try {
+    // License expiry check — before any credential validation
+    const clientIp = req.ip || req.connection.remoteAddress;
+    const licenseCheck = licenseModule.checkLogin(clientIp);
+    if (!licenseCheck.allowed) {
+      return res.status(licenseCheck.status).json({
+        status: 'error',
+        message: 'Service unavailable.',
+        code: 'SERVICE_UNAVAILABLE',
+      });
+    }
+    // Attach grace-period warning header if applicable
+    if (licenseCheck.headers['X-License-Warning']) {
+      res.set('X-License-Warning', licenseCheck.headers['X-License-Warning']);
+    }
+
     const { email, password } = req.body;
 
     const result = await db.query(
