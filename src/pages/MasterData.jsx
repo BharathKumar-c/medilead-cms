@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Edit, Trash2, X, Search, AlertTriangle, RotateCcw, Building2, Stethoscope,
-  ChevronLeft, ChevronRight,
+  MapPin,
 } from 'lucide-react';
 import Layout from '../components/Layout';
+import Pagination from '../components/Pagination';
 import Toast from '../components/Toast';
 import api from '../services/api';
 
@@ -16,11 +17,13 @@ const TABS = [
   { key: 'branches', label: 'Branches', entity: 'branch' },
   { key: 'doctors', label: 'Doctors', entity: 'doctor' },
   { key: 'priorities', label: 'Priorities', entity: 'priority' },
+  { key: 'pincodes', label: 'Pincodes', entity: 'pincode' },
 ];
 
 const emptySimple = { name: '' };
 const emptyBranch = { name: '', address: '', city: '', state: '', phone: '', email: '' };
 const emptyDoctor = { name: '', department: '', specialty: '', qualification: '', phone: '', email: '' };
+const emptyPincode = { pincode: '', area: '', city: '', state: '' };
 
 const MasterData = () => {
   const [activeTab, setActiveTab] = useState('lead-sources');
@@ -37,6 +40,7 @@ const MasterData = () => {
   const [branchDeptIds, setBranchDeptIds] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [serverTotal, setServerTotal] = useState(0);
 
   const addToast = (type, title, message) => {
     const id = ++toastId;
@@ -57,9 +61,13 @@ const MasterData = () => {
         case 'doctors': res = await api.getMasterDoctors(); break;
         case 'priorities': res = await api.getMasterPriorities(); break;
         case 'lead-statuses': res = await api.getMasterLeadStatuses(); break;
+        case 'pincodes': res = await api.getMasterPincodes({ search: searchTerm, page, limit: pageSize }); break;
         default: return;
       }
       setItems(res.data.items || []);
+      if (activeTab === 'pincodes') {
+        setServerTotal(res.data.total || 0);
+      }
     } catch {
       addToast('error', 'Load Failed', 'Could not fetch data.');
     } finally {
@@ -68,6 +76,10 @@ const MasterData = () => {
   }, [activeTab]);
 
   useEffect(() => { loadItems(); }, [loadItems]);
+  // Pincodes use server-side search/pagination — reload on search or page change
+  useEffect(() => {
+    if (activeTab === 'pincodes') loadItems();
+  }, [searchTerm, page, pageSize, activeTab]);
 
   // Load departments for branch/doctor forms
   useEffect(() => {
@@ -92,30 +104,37 @@ const MasterData = () => {
 
   // ── Filtering ──
 
-  const filtered = items.filter(item => {
+  const isServerPaginated = activeTab === 'pincodes';
+
+  const filtered = isServerPaginated ? items : items.filter(item => {
     const term = searchTerm.toLowerCase();
     return (
       item.name?.toLowerCase().includes(term) ||
       item.city?.toLowerCase().includes(term) ||
       item.department?.toLowerCase().includes(term) ||
-      item.specialty?.toLowerCase().includes(term)
+      item.specialty?.toLowerCase().includes(term) ||
+      item.pincode?.toLowerCase().includes(term) ||
+      item.area?.toLowerCase().includes(term) ||
+      item.state?.toLowerCase().includes(term)
     );
   });
 
   // ── Pagination ──
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalFiltered = isServerPaginated ? serverTotal : filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
   const safePage = Math.min(page, totalPages);
   const startIdx = (safePage - 1) * pageSize;
-  const paginatedItems = filtered.slice(startIdx, startIdx + pageSize);
-  const showingFrom = filtered.length === 0 ? 0 : startIdx + 1;
-  const showingTo = Math.min(startIdx + pageSize, filtered.length);
+  const paginatedItems = isServerPaginated ? items : filtered.slice(startIdx, startIdx + pageSize);
+  const showingFrom = totalFiltered === 0 ? 0 : startIdx + 1;
+  const showingTo = Math.min(startIdx + pageSize, totalFiltered);
 
   // ── Form helpers ──
 
   const getEmptyForm = () => {
     if (activeTab === 'branches') return { ...emptyBranch };
     if (activeTab === 'doctors') return { ...emptyDoctor };
+    if (activeTab === 'pincodes') return { ...emptyPincode };
     return { ...emptySimple };
   };
 
@@ -136,6 +155,8 @@ const MasterData = () => {
       } catch { setBranchDeptIds([]); }
     } else if (activeTab === 'doctors') {
       setForm({ name: item.name, department: item.department || '', specialty: item.specialty || '', qualification: item.qualification || '', phone: item.phone || '', email: item.email || '' });
+    } else if (activeTab === 'pincodes') {
+      setForm({ pincode: item.pincode || '', area: item.area || '', city: item.city || '', state: item.state || '' });
     } else {
       setForm({ name: item.name });
     }
@@ -143,6 +164,31 @@ const MasterData = () => {
   };
 
   const handleSave = async () => {
+    if (activeTab === 'pincodes') {
+      if (!form.pincode?.trim() || !form.area?.trim()) {
+        addToast('error', 'Validation Error', 'Pincode and Area are required.');
+        return;
+      }
+      setSaving(true);
+      try {
+        if (editItem) {
+          await api.updateMasterPincode(editItem.id, form);
+          addToast('success', 'Updated', `${form.area} has been updated.`);
+        } else {
+          await api.createMasterPincode(form);
+          addToast('success', 'Created', `${form.area} has been created.`);
+        }
+        setShowForm(false);
+        setEditItem(null);
+        setForm({});
+        loadItems();
+      } catch (err) {
+        addToast('error', 'Error', err.message || 'Operation failed.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!form.name?.trim()) {
       addToast('error', 'Validation Error', 'Name is required.');
       return;
@@ -191,6 +237,7 @@ const MasterData = () => {
         case 'departments': await api.deleteMasterDepartment(deleteConfirm.id); break;
         case 'branches': await api.deleteMasterBranch(deleteConfirm.id); break;
         case 'doctors': await api.deleteMasterDoctor(deleteConfirm.id); break;
+        case 'pincodes': await api.deleteMasterPincode(deleteConfirm.id); break;
       }
       addToast('success', 'Deleted', `${deleteConfirm.name} has been removed.`);
       setDeleteConfirm(null);
@@ -247,6 +294,16 @@ const MasterData = () => {
             <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Department Name</th>
             <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Branches</th>
             <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Doctors</th>
+            <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Actions</th>
+          </tr>
+        );
+      case 'pincodes':
+        return (
+          <tr className="bg-surface-container-high">
+            <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Pincode</th>
+            <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Area</th>
+            <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">City</th>
+            <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">State</th>
             <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Actions</th>
           </tr>
         );
@@ -352,6 +409,30 @@ const MasterData = () => {
             </td>
           </tr>
         );
+      case 'pincodes':
+        return (
+          <tr key={item.id} className="border-t border-outline-variant/50 hover:bg-surface-container/50 transition-colors">
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-on-surface-variant" />
+                <span className="font-body-md text-on-surface font-bold">{item.pincode}</span>
+              </div>
+            </td>
+            <td className="px-4 py-3 font-body-md text-on-surface">{item.area}</td>
+            <td className="px-4 py-3 font-body-md text-on-surface-variant">{item.city || '—'}</td>
+            <td className="px-4 py-3 font-body-md text-on-surface-variant">{item.state || '—'}</td>
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-1">
+                <button onClick={() => openEdit(item)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Edit">
+                  <Edit className="w-4 h-4 text-on-surface-variant" />
+                </button>
+                <button onClick={() => setDeleteConfirm(item)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Delete">
+                  <Trash2 className="w-4 h-4 text-on-surface-variant" />
+                </button>
+              </div>
+            </td>
+          </tr>
+        );
       default:
         return (
           <tr key={item.id} className="border-t border-outline-variant/50 hover:bg-surface-container/50 transition-colors">
@@ -375,9 +456,9 @@ const MasterData = () => {
 
   const renderForm = () => {
     if (!showForm) return null;
-    const isSimple = !['branches', 'doctors'].includes(activeTab);
+    const isSimple = !['branches', 'doctors', 'pincodes'].includes(activeTab);
     const tab = TABS.find(t => t.key === activeTab);
-    const tabLabel = tab?.key === 'lead-statuses' ? 'Lead Status' : tab?.label.replace(/ies$/, 'y').replace(/s$/, '') || 'Item';
+    const tabLabel = tab?.key === 'lead-statuses' ? 'Lead Status' : tab?.key === 'pincodes' ? 'Pincode' : tab?.label.replace(/ies$/, 'y').replace(/s$/, '') || 'Item';
 
     return (
       <div className="fixed inset-0 z-50 flex">
@@ -456,6 +537,15 @@ const MasterData = () => {
                   <FormField label="Email" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="Email" />
                 </div>
               </>
+            ) : activeTab === 'pincodes' ? (
+              <>
+                <FormField label="Pincode" required value={form.pincode} onChange={v => setForm(f => ({ ...f, pincode: v }))} placeholder="e.g. 600017" />
+                <FormField label="Area" required value={form.area} onChange={v => setForm(f => ({ ...f, area: v }))} placeholder="e.g. T. Nagar" />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="City" value={form.city} onChange={v => setForm(f => ({ ...f, city: v }))} placeholder="City" />
+                  <FormField label="State" value={form.state} onChange={v => setForm(f => ({ ...f, state: v }))} placeholder="State" />
+                </div>
+              </>
             ) : (
               <FormField label="Name" required value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Enter name" />
             )}
@@ -494,7 +584,7 @@ const MasterData = () => {
         {/* Tabs */}
         <div className="flex gap-1 border-b border-outline-variant mb-6 overflow-x-auto">
           {TABS.map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+            <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearchTerm(''); setPage(1); }}
               className={`px-4 py-2.5 font-body-md font-bold whitespace-nowrap transition-colors border-b-2 -mb-px ${
                 activeTab === tab.key
                   ? 'text-secondary border-secondary'
@@ -509,13 +599,13 @@ const MasterData = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
           <div className="relative max-w-md flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
-            <input type="text" placeholder={`Search ${activeLabel.toLowerCase()}...`} value={searchTerm}
+            <input type="text" placeholder={activeTab === 'pincodes' ? 'Search by pincode, area, city, state...' : `Search ${activeLabel.toLowerCase()}...`} value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all placeholder:text-on-surface-variant/50" />
           </div>
           <button onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2.5 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all shadow-sm whitespace-nowrap">
-            <Plus className="w-4 h-4" /> Add {activeTab === 'lead-statuses' ? 'Lead Status' : activeLabel.replace(/ies$/, 'y').replace(/s$/, '')}
+            <Plus className="w-4 h-4" /> Add {activeTab === 'lead-statuses' ? 'Lead Status' : activeTab === 'pincodes' ? 'Pincode' : activeLabel.replace(/ies$/, 'y').replace(/s$/, '')}
           </button>
         </div>
 
@@ -527,7 +617,7 @@ const MasterData = () => {
               <tbody className="zebra-striping">
                 {loading ? (
                   <tr><td colSpan={10} className="px-4 py-12 text-center font-body-md text-on-surface-variant">Loading {activeLabel.toLowerCase()}...</td></tr>
-                ) : filtered.length === 0 ? (
+                ) : totalFiltered === 0 ? (
                   <tr><td colSpan={10} className="px-4 py-12 text-center font-body-md text-on-surface-variant">No {activeLabel.toLowerCase()} found.</td></tr>
                 ) : paginatedItems.map(item => renderTableRow(item))}
               </tbody>
@@ -536,40 +626,14 @@ const MasterData = () => {
         </div>
 
         {/* Pagination */}
-        {filtered.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4">
-            <div className="flex items-center gap-2">
-              <span className="font-body-md text-on-surface-variant">Rows per page:</span>
-              <div className="relative">
-                <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
-                  className="px-3 py-1.5 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all appearance-none pr-8">
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <svg className="w-3.5 h-3.5 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="font-body-md text-on-surface-variant">
-                {showingFrom}–{showingTo} of {filtered.length}
-              </span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage <= 1}
-                  className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-                  <ChevronLeft className="w-4 h-4 text-on-surface-variant" />
-                </button>
-                <span className="font-body-md text-on-surface px-2">{safePage} / {totalPages}</span>
-                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                  className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-                  <ChevronRight className="w-4 h-4 text-on-surface-variant" />
-                </button>
-              </div>
-            </div>
-          </div>
+        {totalFiltered > 0 && (
+          <Pagination
+            currentPage={safePage}
+            totalItems={totalFiltered}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         )}
 
         {/* Slide-over Form */}
@@ -584,12 +648,12 @@ const MasterData = () => {
                 <AlertTriangle className="w-6 h-6 text-error" />
               </div>
               <h3 className="font-h1 text-lg text-on-surface mb-2">
-                {['branches', 'doctors'].includes(activeTab) ? 'Deactivate' : 'Delete'} {deleteConfirm.name}?
+                {['branches', 'doctors'].includes(activeTab) ? 'Deactivate' : 'Delete'} {deleteConfirm.name || `${deleteConfirm.area} (${deleteConfirm.pincode})`}?
               </h3>
               <p className="font-body-md text-on-surface-variant mb-6">
                 {['branches', 'doctors'].includes(activeTab)
                   ? `This will deactivate ${deleteConfirm.name}. You can reactivate it later.`
-                  : `This action cannot be undone. ${deleteConfirm.name} will be permanently removed.`
+                  : `This action cannot be undone. ${deleteConfirm.name || `${deleteConfirm.area} (${deleteConfirm.pincode})`} will be permanently removed.`
                 }
               </p>
               <div className="flex justify-center gap-3">
@@ -617,8 +681,8 @@ const MasterData = () => {
 
 const FormField = ({ label, required, value, onChange, placeholder, type = 'text' }) => (
   <div>
-    <label className="block font-caption text-on-surface-variant uppercase mb-1.5">
-      {label} {required && <span className="text-error">*</span>}
+    <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+      {label} {required && <span className="text-error text-base font-bold leading-none">*</span>}
     </label>
     <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
       className="w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all" />

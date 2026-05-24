@@ -44,18 +44,34 @@ const validateLogin = [
 
 const validateRegister = [
   body('name')
+    .optional()
     .trim()
-    .notEmpty()
-    .withMessage('Name is required')
     .isLength({ min: 2, max: 255 })
     .withMessage('Name must be between 2 and 255 characters')
     .matches(/^[a-zA-Z\s]+$/)
     .withMessage('Name can only contain letters and spaces'),
+  body('first_name')
+    .trim()
+    .notEmpty()
+    .withMessage('First name is required')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('First name must be between 1 and 100 characters'),
+  body('last_name')
+    .trim()
+    .notEmpty()
+    .withMessage('Last name is required')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Last name must be between 1 and 100 characters'),
   body('email')
     .trim()
     .isEmail()
     .withMessage('Please provide a valid email address')
     .normalizeEmail(),
+  body('employee_id')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('Employee ID must be less than 50 characters'),
   body('password')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long')
@@ -71,6 +87,34 @@ const validateRegister = [
     .trim()
     .isLength({ max: 255 })
     .withMessage('Specialty must be less than 255 characters'),
+  body('department')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Department must be less than 100 characters'),
+  body('designation')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 })
+    .withMessage('Designation must be less than 255 characters'),
+  body('intercom_number')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('Intercom number must be less than 50 characters'),
+  body('allowed_departments')
+    .optional()
+    .isArray()
+    .withMessage('Allowed departments must be an array'),
+  body('allowed_departments.*')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Each department must be less than 100 characters'),
+  body('date_of_birth')
+    .optional({ checkFalsy: true })
+    .isISO8601()
+    .withMessage('Please provide a valid date of birth'),
   body('phone')
     .optional()
     .trim()
@@ -98,10 +142,13 @@ const validateLead = [
     .notEmpty()
     .withMessage('Patient name is required')
     .isLength({ min: 2, max: 255 })
-    .withMessage('Name must be between 2 and 255 characters'),
+    .withMessage('Name must be between 2 and 255 characters')
+    .matches(/^[a-zA-Z\s.'-]+$/)
+    .withMessage('Name contains invalid characters'),
   body('phone')
-    .optional({ checkFalsy: true })
     .trim()
+    .notEmpty()
+    .withMessage('Phone number is required')
     .matches(/^[0-9]{10}$/)
     .withMessage('Phone number must be 10 digits'),
   body('alternate_contact')
@@ -124,6 +171,10 @@ const validateLead = [
     .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('Please provide a valid date of birth'),
+  body('gender')
+    .optional({ checkFalsy: true })
+    .isIn(['Male', 'Female', 'Other'])
+    .withMessage('Gender must be Male, Female, or Other'),
   body('address')
     .optional({ checkFalsy: true })
     .trim()
@@ -166,11 +217,17 @@ const validateLead = [
     .optional({ checkFalsy: true })
     .isInt({ min: 1 })
     .withMessage('Invalid assigned user'),
+  body('branch_id')
+    .notEmpty()
+    .withMessage('Branch is required')
+    .isInt({ min: 1 })
+    .withMessage('Invalid branch'),
   body('clinical_remarks')
-    .optional({ checkFalsy: true })
     .trim()
-    .isLength({ max: 5000 })
-    .withMessage('Clinical remarks must be less than 5000 characters'),
+    .notEmpty()
+    .withMessage('Remarks are required')
+    .isLength({ min: 2, max: 5000 })
+    .withMessage('Remarks must be between 2 and 5000 characters'),
   handleValidationErrors,
 ];
 
@@ -206,6 +263,10 @@ const validateLeadUpdate = [
     .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('Please provide a valid date of birth'),
+  body('gender')
+    .optional({ checkFalsy: true })
+    .isIn(['Male', 'Female', 'Other'])
+    .withMessage('Gender must be Male, Female, or Other'),
   body('address')
     .optional({ checkFalsy: true })
     .trim()
@@ -248,6 +309,10 @@ const validateLeadUpdate = [
     .optional({ checkFalsy: true })
     .isInt({ min: 1 })
     .withMessage('Invalid assigned user'),
+  body('branch_id')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 })
+    .withMessage('Invalid branch'),
   body('clinical_remarks')
     .optional({ checkFalsy: true })
     .trim()
@@ -477,12 +542,27 @@ const validateUserUpdate = [
     .withMessage('Name must be between 2 and 255 characters')
     .matches(/^[a-zA-Z\s]+$/)
     .withMessage('Name can only contain letters and spaces'),
+  body('first_name')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('First name must be less than 100 characters'),
+  body('last_name')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Last name must be less than 100 characters'),
   body('email')
     .optional()
     .trim()
     .isEmail()
     .withMessage('Please provide a valid email address')
     .normalizeEmail(),
+  body('employee_id')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('Employee ID must be less than 50 characters'),
   body('role')
     .optional()
     .trim()
@@ -493,6 +573,34 @@ const validateUserUpdate = [
     .trim()
     .isLength({ max: 255 })
     .withMessage('Specialty must be less than 255 characters'),
+  body('department')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Department must be less than 100 characters'),
+  body('designation')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 })
+    .withMessage('Designation must be less than 255 characters'),
+  body('intercom_number')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('Intercom number must be less than 50 characters'),
+  body('allowed_departments')
+    .optional()
+    .isArray()
+    .withMessage('Allowed departments must be an array'),
+  body('allowed_departments.*')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Each department must be less than 100 characters'),
+  body('date_of_birth')
+    .optional({ checkFalsy: true })
+    .isISO8601()
+    .withMessage('Please provide a valid date of birth'),
   body('phone')
     .optional({ checkFalsy: true })
     .trim()
@@ -585,6 +693,10 @@ const validateLeadQuery = [
     .optional()
     .isIn(['High', 'Medium', 'Low'])
     .withMessage('Invalid priority filter'),
+  query('branch_id')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Invalid branch filter'),
   query('sort')
     .optional()
     .isIn(['created_at', 'name', 'last_call_date', 'status', 'priority'])
@@ -593,6 +705,37 @@ const validateLeadQuery = [
     .optional()
     .isIn(['ASC', 'DESC'])
     .withMessage('Invalid sort order'),
+  handleValidationErrors,
+];
+
+// Telephony vendor webhook validations
+const validateTelephonyWebhook = [
+  body('caller_phone_number')
+    .trim()
+    .notEmpty()
+    .withMessage('caller_phone_number is required')
+    .matches(/^\+?[0-9]{7,15}$/)
+    .withMessage('caller_phone_number must be a valid phone number (7-15 digits, optional + prefix)'),
+  body('call_status')
+    .trim()
+    .notEmpty()
+    .withMessage('call_status is required')
+    .isIn(['initiated', 'ringing', 'in-progress', 'completed', 'failed', 'missed'])
+    .withMessage('call_status must be one of: initiated, ringing, in-progress, completed, failed, missed'),
+  body('timestamp')
+    .notEmpty()
+    .withMessage('timestamp is required')
+    .isISO8601()
+    .withMessage('timestamp must be a valid ISO 8601 datetime'),
+  body('vendor_call_id')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('vendor_call_id must be less than 100 characters'),
+  body('duration_seconds')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('duration_seconds must be a non-negative integer'),
   handleValidationErrors,
 ];
 
@@ -608,6 +751,7 @@ module.exports = {
   validateCallLog,
   validateCallUpdate,
   validateSipEvent,
+  validateTelephonyWebhook,
   validateNotification,
   validateUserUpdate,
   validateProfileUpdate,

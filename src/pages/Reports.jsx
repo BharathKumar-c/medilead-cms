@@ -5,6 +5,8 @@ import {
   Users, Target, Activity,
 } from 'lucide-react';
 import Layout from '../components/Layout';
+import Pagination from '../components/Pagination';
+import ExportPanel from '../components/ExportPanel';
 import api from '../services/api';
 
 const Reports = () => {
@@ -20,7 +22,15 @@ const Reports = () => {
   const [callAnalytics, setCallAnalytics] = useState({ byStatus: [], byDirection: [], byHour: [], avgDuration: 0 });
   const [appointmentStats, setAppointmentStats] = useState({ byStatus: [], byDepartment: [], noShowRate: 0 });
   const [dailyActivity, setDailyActivity] = useState({ newLeads: 0, callsToday: 0, appointmentsToday: 0, statusChanges: 0 });
+  const [branchLeads, setBranchLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [telecallerPage, setTelecallerPage] = useState(1);
+  const [telecallerPageSize, setTelecallerPageSize] = useState(10);
+  const [branchPage, setBranchPage] = useState(1);
+  const [branchPageSize, setBranchPageSize] = useState(10);
+  const [providerPage, setProviderPage] = useState(1);
+  const [providerPageSize, setProviderPageSize] = useState(10);
 
   useEffect(() => { loadAllReports(); }, []);
 
@@ -40,6 +50,7 @@ const Reports = () => {
         api.getCallAnalytics().catch(() => null),
         api.getAppointmentStats().catch(() => null),
         api.getDailyActivity().catch(() => null),
+        api.getBranchLeadReport().catch(() => null),
       ]);
       if (res[0]?.data) setOverview(res[0].data);
       if (res[1]?.data?.callVolume) setCallVolume(res[1].data.callVolume);
@@ -122,6 +133,7 @@ const Reports = () => {
         });
       }
       if (res[11]?.data?.dailyActivity) setDailyActivity(res[11].data.dailyActivity);
+      if (res[12]?.data?.branches) setBranchLeads(res[12].data.branches);
     } catch (err) {
       console.error('Failed to load reports:', err);
     } finally {
@@ -134,35 +146,7 @@ const Reports = () => {
   const maxDeptCalls = Math.max(...deptPerformance.map(d => parseInt(d.calls) || 0), 1);
 
   const handleExport = () => {
-    const headers = ['Metric', 'Value'];
-    const rows = [
-      ['Total Calls', overview.totalCalls],
-      ['Total Leads', overview.totalLeads],
-      ['Total Appointments', overview.totalAppointments],
-      ['Conversion Rate', `${overview.conversionRate}%`],
-      ['Patient Satisfaction', `${overview.patientSatisfaction}%`],
-      ['', ''],
-      ['--- Telecaller Performance ---', ''],
-      ['Name', 'Total Leads | Closed | Calls | Missed | Avg Duration (s) | Appointments'],
-      ...telecallers.map(t => [t.name, `${t.total_leads} | ${t.closed_leads} | ${t.total_calls} | ${t.missed_calls} | ${t.avg_call_duration} | ${t.appointments}`]),
-      ['', ''],
-      ['--- Lead Sources ---', ''],
-      ...leadSources.map(s => [s.source, `${s.count} (${s.percentage}%)`]),
-      ['', ''],
-      ['--- Status Breakdown ---', ''],
-      ...statusBreakdown.map(s => [s.status, s.count]),
-    ];
-    const escapeField = (val) => {
-      const s = String(val ?? '');
-      const escaped = '"' + s.replaceAll('"', '""') + '"';
-      return /^[=+\-@]/.test(s) ? '\t' + escaped : escaped;
-    };
-    const csv = [headers, ...rows].map(r => r.map(escapeField).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'medilead-reports.csv'; a.click();
-    URL.revokeObjectURL(url);
+    setExportOpen(true);
   };
 
   if (loading) {
@@ -177,6 +161,7 @@ const Reports = () => {
   }
 
   return (
+    <>
     <Layout title="Reports">
       <div className="p-4 sm:p-6 lg:p-10">
         <div className="max-w-[1440px] mx-auto space-y-6 lg:space-y-8">
@@ -338,31 +323,41 @@ const Reports = () => {
                 <tbody className="zebra-striping">
                   {telecallers.length === 0 ? (
                     <tr><td colSpan={8} className="px-4 py-8 text-center font-body-md text-on-surface-variant">No telecallers found.</td></tr>
-                  ) : telecallers.map(t => (
-                    <tr key={t.id} className="border-t border-outline-variant/50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-white font-bold text-xs">
-                            {t.name?.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  ) : (() => {
+                    const startIdx = (telecallerPage - 1) * telecallerPageSize;
+                    const paginatedTelecallers = telecallers.slice(startIdx, startIdx + telecallerPageSize);
+                    return paginatedTelecallers.map(t => (
+                      <tr key={t.id} className="border-t border-outline-variant/50">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-white font-bold text-xs">
+                              {t.name?.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                            </div>
+                            <div>
+                              <p className="font-body-md font-bold text-on-surface">{t.name}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-body-md font-bold text-on-surface">{t.name}</p>
-                            <p className="font-caption text-on-surface-variant">{t.specialty || 'Telecaller'}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{t.total_leads}</td>
-                      <td className="px-4 py-3 text-center font-data-tabular text-on-tertiary-container font-bold">{t.closed_leads}</td>
-                      <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{t.active_leads}</td>
-                      <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{t.total_calls}</td>
-                      <td className="px-4 py-3 text-center font-data-tabular text-error">{t.missed_calls}</td>
-                      <td className="px-4 py-3 text-center font-data-tabular text-on-surface-variant">{Math.floor(t.avg_call_duration / 60)}:{String(t.avg_call_duration % 60).padStart(2, '0')}</td>
-                      <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{t.appointments}</td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{t.total_leads}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-tertiary-container font-bold">{t.closed_leads}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{t.active_leads}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{t.total_calls}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-error">{t.missed_calls}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface-variant">{Math.floor(t.avg_call_duration / 60)}:{String(t.avg_call_duration % 60).padStart(2, '0')}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{t.appointments}</td>
+                      </tr>
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>
+            <Pagination
+              currentPage={telecallerPage}
+              totalItems={telecallers.length}
+              pageSize={telecallerPageSize}
+              onPageChange={setTelecallerPage}
+              onPageSizeChange={setTelecallerPageSize}
+            />
           </div>
 
           {/* Call Analytics + Appointment Stats */}
@@ -429,6 +424,54 @@ const Reports = () => {
             </div>
           </div>
 
+          {/* Branch Leads */}
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-outline-variant">
+              <h3 className="font-h3 text-on-surface flex items-center gap-2"><BarChart3 className="w-5 h-5 text-secondary" /> Branch Leads</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-surface-container-high">
+                    <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Branch</th>
+                    <th className="px-4 py-3 text-center font-label-caps text-on-surface-variant">Total</th>
+                    <th className="px-4 py-3 text-center font-label-caps text-on-surface-variant">Active</th>
+                    <th className="px-4 py-3 text-center font-label-caps text-on-surface-variant">Closed</th>
+                    <th className="px-4 py-3 text-center font-label-caps text-on-surface-variant">Rejected</th>
+                    <th className="px-4 py-3 text-center font-label-caps text-on-surface-variant">Conversion</th>
+                  </tr>
+                </thead>
+                <tbody className="zebra-striping">
+                  {branchLeads.length === 0 ? (
+                    <tr><td colSpan={6} className="px-4 py-3 text-center font-body-sm text-on-surface-variant">No data</td></tr>
+                  ) : (() => {
+                    const startIdx = (branchPage - 1) * branchPageSize;
+                    const paginatedBranchLeads = branchLeads.slice(startIdx, startIdx + branchPageSize);
+                    return paginatedBranchLeads.map((b, i) => (
+                      <tr key={i} className="border-t border-outline-variant/50">
+                        <td className="px-4 py-3 font-body-md font-bold text-on-surface">{b.branch}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{b.totalLeads}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{b.activeLeads}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{b.closedLeads}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{b.rejectedLeads}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`font-data-tabular font-bold ${b.conversionRate >= 50 ? 'text-on-tertiary-container' : b.conversionRate >= 25 ? 'text-on-tertiary-container' : 'text-error'}`}>{b.conversionRate}%</span>
+                        </td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              currentPage={branchPage}
+              totalItems={branchLeads.length}
+              pageSize={branchPageSize}
+              onPageChange={setBranchPage}
+              onPageSizeChange={setBranchPageSize}
+            />
+          </div>
+
           {/* Provider Leaderboard */}
           <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-outline-variant">
@@ -445,31 +488,46 @@ const Reports = () => {
                   </tr>
                 </thead>
                 <tbody className="zebra-striping">
-                  {providerLeaderboard.map((p, i) => (
-                    <tr key={i} className="border-t border-outline-variant/50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="font-body-md font-bold text-secondary">#{i + 1}</span>
-                          <div>
-                            <p className="font-body-md font-bold text-on-surface">{p.name}</p>
-                            <p className="font-caption text-on-surface-variant">{p.specialty || '—'}</p>
+                  {providerLeaderboard.length === 0 ? (
+                    <tr><td colSpan={4} className="px-4 py-3 text-center font-body-sm text-on-surface-variant">No data</td></tr>
+                  ) : (() => {
+                    const startIdx = (providerPage - 1) * providerPageSize;
+                    const paginatedProviders = providerLeaderboard.slice(startIdx, startIdx + providerPageSize);
+                    return paginatedProviders.map((p, i) => (
+                      <tr key={i} className="border-t border-outline-variant/50">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <span className="font-body-md font-bold text-secondary">#{startIdx + i + 1}</span>
+                            <div>
+                              <p className="font-body-md font-bold text-on-surface">{p.name}</p>
+                              <p className="font-caption text-on-surface-variant">{p.specialty || '—'}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{p.leads}</td>
-                      <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{p.appointments}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`font-data-tabular font-bold ${p.satisfaction >= 80 ? 'text-on-tertiary-container' : p.satisfaction >= 60 ? 'text-on-tertiary-container' : 'text-error'}`}>{p.satisfaction}%</span>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{p.leads}</td>
+                        <td className="px-4 py-3 text-center font-data-tabular text-on-surface">{p.appointments}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`font-data-tabular font-bold ${p.satisfaction >= 80 ? 'text-on-tertiary-container' : p.satisfaction >= 60 ? 'text-on-tertiary-container' : 'text-error'}`}>{p.satisfaction}%</span>
+                        </td>
+                      </tr>
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>
+            <Pagination
+              currentPage={providerPage}
+              totalItems={providerLeaderboard.length}
+              pageSize={providerPageSize}
+              onPageChange={setProviderPage}
+              onPageSizeChange={setProviderPageSize}
+            />
           </div>
         </div>
       </div>
     </Layout>
+    <ExportPanel isOpen={exportOpen} onClose={() => setExportOpen(false)} />
+    </>
   );
 };
 

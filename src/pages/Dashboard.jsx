@@ -2,30 +2,40 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Phone, TrendingUp, PhoneOff, Zap, PhoneIncoming, CircleCheck,
-  User, Download, ArrowRight, Clock,
+  User, Download, ArrowRight, Clock, Users, UserPlus, Target,
 } from 'lucide-react';
 import Layout from '../components/Layout';
+import Pagination from '../components/Pagination';
 import api from '../services/api';
+
+const RANGES = [
+  { key: 'today', label: 'Today' },
+  { key: 'month', label: 'This Month' },
+  { key: 'all', label: 'All' },
+];
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [timeRange, setTimeRange] = useState('all');
   const [activityFilter, setActivityFilter] = useState('All');
   const [metrics, setMetrics] = useState(null);
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityPageSize, setActivityPageSize] = useState(10);
 
   useEffect(() => {
     loadMetrics();
     loadActivity();
-  }, []);
+  }, [timeRange, activityFilter]);
 
   useEffect(() => {
-    loadActivity();
+    setActivityPage(1);
   }, [activityFilter]);
 
   const loadMetrics = async () => {
     try {
-      const metricsRes = await api.getDashboardMetrics();
+      const metricsRes = await api.getDashboardMetrics(timeRange);
       setMetrics(metricsRes.data);
     } catch (err) {
       console.error('Failed to load metrics:', err);
@@ -37,31 +47,26 @@ const Dashboard = () => {
   const loadActivity = async () => {
     try {
       const filter = activityFilter === 'All' ? '' : activityFilter;
-      const res = await api.getActivityLog(filter);
+      const res = await api.getActivityLog(filter, timeRange);
       setActivity(res.data.activity);
     } catch (err) {
       console.error('Failed to load activity:', err);
     }
   };
 
-  const escapeCsvField = (val) => {
-    const s = String(val ?? '');
-    const needsPrefix = /^[=+\-@]/.test(s);
-    const escaped = '"' + s.replaceAll('"', '""') + '"';
-    return needsPrefix ? '\t' + escaped : escaped;
-  };
-
-  const handleExportCSV = () => {
-    const headers = ['Patient Name', 'Call Type', 'Time', 'Status', 'Duration'];
-    const rows = activity.map((r) => [r.patient_name, r.call_type, new Date(r.created_at).toLocaleTimeString(), r.status, r.duration]);
-    const csv = [headers, ...rows].map((r) => r.map(escapeCsvField).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'activity-log.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportCSV = async () => {
+    try {
+      const filter = activityFilter === 'All' ? '' : activityFilter;
+      const blob = await api.exportActivityLog(filter, timeRange);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `activity-log-${timeRange}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
   };
 
   if (loading) {
@@ -76,16 +81,35 @@ const Dashboard = () => {
 
   const m = metrics || {};
 
+  const rangeLabel = timeRange === 'today' ? 'Today' : timeRange === 'month' ? 'This Month' : 'All Time';
+
   return (
     <Layout title="Dashboard">
       <div className="data-stage p-4 sm:p-6 lg:p-10">
-        <header className="mb-6 lg:mb-8">
-          <h2 className="font-h1 text-[24px] sm:text-[28px] lg:text-[32px] text-on-background">
-            Clinical Performance Overview
-          </h2>
-          <p className="font-body-md sm:font-body-lg text-on-surface-variant">
-            Real-time call analytics and patient lead management.
-          </p>
+        <header className="mb-6 lg:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+          <div>
+            <h2 className="font-h1 text-[24px] sm:text-[28px] lg:text-[32px] text-on-background">
+              Clinical Performance Overview
+            </h2>
+            <p className="font-body-md sm:font-body-lg text-on-surface-variant">
+              Real-time call analytics and patient lead management.
+            </p>
+          </div>
+          {/* Time Range Button Group */}
+          <div className="flex items-center bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+            {RANGES.map((r, i) => (
+              <button
+                key={r.key}
+                onClick={() => setTimeRange(r.key)}
+                className={`px-4 py-2 font-body-md font-bold transition-all ${
+                  timeRange === r.key
+                    ? 'bg-secondary text-on-secondary'
+                    : 'text-on-surface-variant hover:bg-surface-container'
+                } ${i > 0 ? 'border-l border-outline-variant' : ''}`}>
+                {r.label}
+              </button>
+            ))}
+          </div>
         </header>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 sm:gap-6">
@@ -93,7 +117,7 @@ const Dashboard = () => {
           <div onClick={() => navigate('/reports')} className="sm:col-span-2 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-secondary cursor-pointer hover:shadow-md transition-all group">
             <div className="flex justify-between items-start mb-4">
               <div className="p-2 bg-surface-container-low rounded-lg text-secondary"><Phone className="w-5 h-5" /></div>
-              <div className="text-on-tertiary-container flex items-center text-caption font-bold"><TrendingUp className="w-4 h-4 mr-1" />{m.totalCalls?.trend}</div>
+              <span className="text-caption text-on-surface-variant font-bold">{rangeLabel}</span>
             </div>
             <h3 className="font-label-caps text-outline mb-1 uppercase tracking-widest">Number of All Calls</h3>
             <div className="flex items-end gap-4">
@@ -158,6 +182,44 @@ const Dashboard = () => {
             </div>
           </div>
 
+          {/* Overall Leads */}
+          <div onClick={() => navigate('/lead-box')} className="sm:col-span-2 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-primary cursor-pointer hover:shadow-md transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-2 bg-primary/10 rounded-lg text-primary"><Users className="w-5 h-5" /></div>
+            </div>
+            <h3 className="font-label-caps text-outline mb-1 uppercase tracking-widest">Overall Leads</h3>
+            <p className="font-h1 text-on-surface">{m.overallLeads?.total?.toLocaleString()}</p>
+            <p className="font-body-md text-on-surface-variant">{rangeLabel === 'All Time' ? 'All leads in the system' : `Leads ${rangeLabel.toLowerCase()}`}</p>
+          </div>
+
+          {/* New Leads Today */}
+          <div onClick={() => navigate('/lead-box')} className="sm:col-span-2 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-tertiary cursor-pointer hover:shadow-md transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-2 bg-tertiary/10 rounded-lg text-tertiary"><UserPlus className="w-5 h-5" /></div>
+            </div>
+            <h3 className="font-label-caps text-outline mb-1 uppercase tracking-widest">New Leads Today</h3>
+            <p className="font-h1 text-on-surface">{m.newLeadsToday?.total}</p>
+            <p className="font-body-md text-on-surface-variant">Leads created today</p>
+          </div>
+
+          {/* Total Leads */}
+          <div onClick={() => navigate('/lead-box')} className="sm:col-span-2 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-secondary cursor-pointer hover:shadow-md transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-2 bg-secondary/10 rounded-lg text-secondary"><Target className="w-5 h-5" /></div>
+            </div>
+            <h3 className="font-label-caps text-outline mb-1 uppercase tracking-widest">Total Leads</h3>
+            <div className="flex items-end gap-4">
+              <div>
+                <p className="font-h1 text-on-surface">{m.totalLeads?.total?.toLocaleString()}</p>
+                <p className="font-caption text-on-surface-variant">Cumulative Count</p>
+              </div>
+              <div className="border-l border-outline-variant pl-4">
+                <p className="font-h3 text-error">{m.totalLeads?.highPriority}</p>
+                <p className="font-caption text-on-surface-variant">High Priority</p>
+              </div>
+            </div>
+          </div>
+
           {/* Activity Log */}
           <div className="sm:col-span-2 lg:col-span-12 mt-4 sm:mt-8">
             <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
@@ -177,36 +239,62 @@ const Dashboard = () => {
                 </button>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[600px]">
+                <table className="w-full text-left border-collapse min-w-[700px]">
                   <thead>
                     <tr className="bg-surface">
+                      <th className="font-label-caps text-outline px-6 py-4">Call Code</th>
+                      <th className="font-label-caps text-outline px-6 py-4">Caller</th>
                       <th className="font-label-caps text-outline px-6 py-4">Patient Name</th>
-                      <th className="font-label-caps text-outline px-6 py-4">Call Type</th>
-                      <th className="font-label-caps text-outline px-6 py-4">Time</th>
+                      <th className="font-label-caps text-outline px-6 py-4">Direction</th>
                       <th className="font-label-caps text-outline px-6 py-4">Status</th>
                       <th className="font-label-caps text-outline px-6 py-4">Duration</th>
+                      <th className="font-label-caps text-outline px-6 py-4">Agent</th>
+                      <th className="font-label-caps text-outline px-6 py-4">Time</th>
                     </tr>
                   </thead>
                   <tbody className="font-data-tabular text-data-tabular">
                     {activity.length === 0 ? (
-                      <tr><td colSpan={5} className="px-6 py-12 text-center text-on-surface-variant">No activity matching filter.</td></tr>
+                      <tr><td colSpan={8} className="px-6 py-12 text-center text-on-surface-variant">No activity matching filter.</td></tr>
                     ) : (
-                      activity.map((row, index) => (
-                        <tr key={row.id} className={`border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors ${index % 2 === 1 ? 'bg-surface-container-lowest/30' : ''}`}>
-                          <td className="px-6 py-4 text-on-surface font-bold">{row.patient_name}</td>
-                          <td className="px-6 py-4 text-on-surface-variant">{row.call_type}</td>
-                          <td className="px-6 py-4 text-on-surface-variant"><div className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(row.created_at).toLocaleTimeString()}</div></td>
-                          <td className="px-6 py-4"><span className={`px-4 py-1 rounded-full text-caption font-bold border ${row.status === 'Answered' ? 'bg-surface-container-high text-on-tertiary-container border-on-tertiary-container/20' : 'bg-error-container text-error border-error/20'}`}>{row.status}</span></td>
-                          <td className="px-6 py-4 text-on-surface-variant">{row.duration}</td>
-                        </tr>
-                      ))
+                      activity.map((row, index) => {
+                        const isMissed = row.status === 'missed';
+                        const isInbound = row.direction === 'inbound';
+                        return (
+                          <tr key={row.id} className={`border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors ${index % 2 === 1 ? 'bg-surface-container-lowest/30' : ''}`}>
+                            <td className="px-6 py-4 text-secondary font-bold">{row.code || '—'}</td>
+                            <td className="px-6 py-4 text-on-surface-variant">{row.caller_number || '—'}</td>
+                            <td className="px-6 py-4 text-on-surface font-bold">{row.lead_name || '—'}</td>
+                            <td className="px-6 py-4 text-on-surface-variant capitalize">{row.direction || '—'}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-3 py-1 rounded-full text-caption font-bold border ${
+                                isMissed
+                                  ? 'bg-error-container text-error border-error/20'
+                                  : 'bg-on-tertiary-container/10 text-on-tertiary-container border-on-tertiary-container/20'
+                              }`}>
+                                {row.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-on-surface-variant">
+                              {row.duration ? `${Math.floor(row.duration / 60)}:${String(row.duration % 60).padStart(2, '0')}` : '—'}
+                            </td>
+                            <td className="px-6 py-4 text-on-surface-variant">{row.agent_name || '—'}</td>
+                            <td className="px-6 py-4 text-on-surface-variant">
+                              <div className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(row.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
               </div>
-              <div className="px-4 sm:px-6 py-3 border-t border-outline-variant bg-surface-container-lowest">
-                <span className="font-caption text-on-surface-variant">Showing {activity.length} entries</span>
-              </div>
+              <Pagination
+                currentPage={activityPage}
+                totalItems={activity.length}
+                pageSize={activityPageSize}
+                onPageChange={setActivityPage}
+                onPageSizeChange={setActivityPageSize}
+              />
             </div>
           </div>
         </div>

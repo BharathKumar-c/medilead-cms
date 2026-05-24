@@ -4,6 +4,7 @@ class ApiService {
   constructor() {
     this.token = localStorage.getItem('token');
     this._onUnauthorized = null;
+    this._onServiceUnavailable = null;
   }
 
   setToken(token) {
@@ -21,6 +22,10 @@ class ApiService {
 
   onUnauthorized(callback) {
     this._onUnauthorized = callback;
+  }
+
+  onServiceUnavailable(callback) {
+    this._onServiceUnavailable = callback;
   }
 
   async request(endpoint, options = {}) {
@@ -63,6 +68,11 @@ class ApiService {
         localStorage.removeItem('user');
         if (this._onUnauthorized) {
           this._onUnauthorized();
+        }
+      }
+      if (response.status === 503 && data?.code === 'SERVICE_UNAVAILABLE') {
+        if (this._onServiceUnavailable) {
+          this._onServiceUnavailable();
         }
       }
       const error = new Error(data?.message || 'Request failed');
@@ -234,6 +244,15 @@ class ApiService {
     return this.request(`/calls/phone/${encodeURIComponent(phone)}`);
   }
 
+  async getTelephonyCallLogs(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/calls/telephony${query ? `?${query}` : ''}`);
+  }
+
+  async getTelephonyCallStats() {
+    return this.request('/calls/telephony/stats');
+  }
+
   // Leads
   async getLeadSources() {
     return this.request('/leads/master-data');
@@ -269,6 +288,10 @@ class ApiService {
     return this.request(`/leads/uhid/${encodeURIComponent(uhid)}`);
   }
 
+  async lookupPincode(pincode) {
+    return this.request(`/leads/pincode/${encodeURIComponent(pincode)}`);
+  }
+
   async getLeadByPhone(phone) {
     return this.request(`/leads/phone/${encodeURIComponent(phone)}`);
   }
@@ -297,6 +320,10 @@ class ApiService {
       method: 'PUT',
       body: leadData,
     });
+  }
+
+  async assignLead(leadId, userId) {
+    return this.request(`/leads/${leadId}/assign`, { method: 'PUT', body: { assigned_to: userId } });
   }
 
   async deleteLead(id) {
@@ -352,6 +379,15 @@ class ApiService {
   async createMasterDoctor(data) { return this.request('/masters/doctors', { method: 'POST', body: data }); }
   async updateMasterDoctor(id, data) { return this.request(`/masters/doctors/${id}`, { method: 'PUT', body: data }); }
   async deleteMasterDoctor(id) { return this.request(`/masters/doctors/${id}`, { method: 'DELETE' }); }
+
+  // Pincodes
+  async getMasterPincodes(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/masters/pincodes${query ? `?${query}` : ''}`);
+  }
+  async createMasterPincode(data) { return this.request('/masters/pincodes', { method: 'POST', body: data }); }
+  async updateMasterPincode(id, data) { return this.request(`/masters/pincodes/${id}`, { method: 'PUT', body: data }); }
+  async deleteMasterPincode(id) { return this.request(`/masters/pincodes/${id}`, { method: 'DELETE' }); }
 
   // Appointments
   async getAppointments(params = {}) {
@@ -430,13 +466,29 @@ class ApiService {
   }
 
   // Dashboard
-  async getDashboardMetrics() {
-    return this.request('/dashboard/metrics');
+  async getDashboardMetrics(range = 'all') {
+    return this.request(`/dashboard/metrics?range=${range}`);
   }
 
-  async getActivityLog(filter) {
-    const query = filter ? `?filter=${filter}` : '';
+  async getActivityLog(filter, range = 'all') {
+    const params = new URLSearchParams();
+    if (filter) params.set('type', filter);
+    if (range) params.set('range', range);
+    const query = params.toString() ? `?${params.toString()}` : '';
     return this.request(`/dashboard/activity${query}`);
+  }
+
+  async exportActivityLog(filter, range = 'all') {
+    const params = new URLSearchParams();
+    if (filter) params.set('type', filter);
+    if (range) params.set('range', range);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE}/dashboard/activity/export${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Export failed');
+    return res.blob();
   }
 
   // Reports
@@ -488,6 +540,32 @@ class ApiService {
     return this.request('/reports/daily-activity');
   }
 
+  async getBranchLeadReport() {
+    return this.request('/reports/branch-leads');
+  }
+
+  // Report Exports
+  async getExportSummary(type, from, to) {
+    return this.request(`/reports/export/summary?type=${type}&from=${from}&to=${to}`);
+  }
+  async createExport(data) {
+    return this.request('/reports/export', { method: 'POST', body: data });
+  }
+  async getExportJobs() {
+    return this.request('/reports/export/jobs');
+  }
+  async checkExportStatus(id) {
+    return this.request(`/reports/export/check/${id}`);
+  }
+  async downloadExport(id) {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE}/reports/export/download/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Download failed');
+    return res.blob();
+  }
+
   // Notifications
   async getNotifications(unreadOnly = false) {
     const query = unreadOnly ? '?unread_only=true' : '';
@@ -516,6 +594,80 @@ class ApiService {
   async deleteNotification(id) {
     return this.request(`/notifications/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async unlockLicense(unlockKey) {
+    const serverBase = API_BASE.endsWith('/api')
+      ? API_BASE.slice(0, -4)
+      : API_BASE;
+    const url = `${serverBase}/internal/license/unlock`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unlockKey }),
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      const error = new Error(data?.message || 'Unlock failed');
+      error.status = response.status;
+      error.code = data?.code;
+      throw error;
+    }
+
+    return data;
+  }
+
+  async getLicenseStatus() {
+    return this.request('/license/status');
+  }
+
+  async verifyLicenseKey(accessKey) {
+    return this.request('/license/verify-key', {
+      method: 'POST',
+      body: JSON.stringify({ accessKey }),
+    });
+  }
+
+  async updateLicenseExpiry(expiryDate) {
+    const serverBase = API_BASE.endsWith('/api')
+      ? API_BASE.slice(0, -4)
+      : API_BASE;
+    const url = `${serverBase}/internal/license/update-expiry`;
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiryDate }),
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      const error = new Error(data?.message || 'Update failed');
+      error.status = response.status;
+      error.code = data?.code;
+      throw error;
+    }
+
+    return data;
+  }
+
+  // Forgot / Reset Password
+  async forgotPassword(email) {
+    return this.request('/auth/forgot-password', {
+      method: 'POST',
+      body: { email },
+    });
+  }
+
+  async resetPassword(token, newPassword) {
+    return this.request('/auth/reset-password', {
+      method: 'POST',
+      body: { token, newPassword },
     });
   }
 

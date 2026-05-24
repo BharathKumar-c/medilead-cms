@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   HelpCircle, Phone, Mail, MessageSquare, Book, Video,
   ChevronDown, ChevronRight, ExternalLink, Search, Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 
@@ -181,6 +182,22 @@ const HelpSupport = () => {
               </div>
             </div>
           </div>
+
+          {/* License Management Link */}
+          <button
+            onClick={() => navigate('/license-management')}
+            className="w-full bg-surface-container-lowest border border-outline-variant border-t-2 border-t-primary rounded-xl shadow-sm p-6 hover:shadow-md transition-all text-left group">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-primary-fixed rounded-xl">
+                <ShieldCheck className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-h3 text-on-surface">License Management</h3>
+                <p className="font-caption text-on-surface-variant">View and manage the system license. Access key required.</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-on-surface-variant group-hover:translate-x-1 transition-transform" />
+            </div>
+          </button>
 
           {/* FAQ */}
           <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-hidden">

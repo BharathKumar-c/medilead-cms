@@ -1,20 +1,77 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import {useState, useMemo, useEffect, useRef} from 'react';
 import {
-  Filter, Download, Eye, Edit, Trash2, X, UserPlus, Phone,
-  CircleCheck, AlertTriangle, Search, ChevronLeft, ChevronRight,
-  Calendar, Mail, MapPin, FileText, User, Clock, ChevronDown,
+  Filter,
+  Download,
+  Eye,
+  Edit,
+  Trash2,
+  X,
+  UserPlus,
+  Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneMissed,
+  PhoneOff,
+  CircleCheck,
+  AlertTriangle,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Mail,
+  MapPin,
+  FileText,
+  User,
+  Clock,
+  ChevronDown,
+  CalendarDays,
+  Users,
+  UserCircle,
+  List,
 } from 'lucide-react';
 import Layout from '../components/Layout';
-import { leadBoxMetrics as defaultMetrics, pincodeData } from '../data/mockData';
+import Pagination from '../components/Pagination';
+import {leadBoxMetrics as defaultMetrics, pincodeData} from '../data/mockData';
 import api from '../services/api';
 import Toast from '../components/Toast';
 
-const ITEMS_PER_PAGE = 5;
+const formatRelativeTime = (dateStr) => {
+  if (!dateStr) return '—';
+  const now = new Date();
+  const then = new Date(dateStr);
+  const diffMs = now - then;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHrs = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHrs / 24);
+
+  if (diffSec < 60) return 'Just now';
+  if (diffMin < 60) return `${diffMin} minute${diffMin > 1 ? 's' : ''} ago`;
+  if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
+  if (diffDays <= 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  return then.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const DEFAULT_PAGE_SIZE = 10;
 
 const mapLead = (l) => ({
   id: l.id,
+  code: l.code || '',
   name: l.name,
-  initials: l.initials,
+  initials: (
+    l.initials ||
+    l.name
+      ?.split(' ')
+      .map((w) => w[0])
+      .join('')
+      .substring(0, 2)
+  ).toUpperCase(),
   uhid: l.uhid,
   lastCallDate: l.last_call_date,
   status: l.status,
@@ -30,8 +87,15 @@ const mapLead = (l) => ({
   country: l.country,
   clinicalRemarks: l.clinical_remarks,
   priority: l.priority,
+  branchId: l.branch_id || '',
+  branchName: l.branch_name || '',
   assignedTo: l.assigned_to_name || '',
+  assignedToId: l.assigned_to || '',
+  assignedBy: l.assigned_by_name || '',
+  createdByName: l.created_by_name || '',
   createdAt: l.created_at,
+  followUpDate: l.follow_up_date || '',
+  createdBy: l.created_by || '',
 });
 
 let toastId = 0;
@@ -42,20 +106,43 @@ const LeadBox = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [statuses, setStatuses] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [viewMode, setViewMode] = useState('all'); // 'today' | 'my' | 'all'
   const [viewLead, setViewLead] = useState(null);
   const [editLead, setEditLead] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [assignLead, setAssignLead] = useState(null);
+  const [assignUserId, setAssignUserId] = useState('');
+  const [users, setUsers] = useState([]);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [filterSearch, setFilterSearch] = useState('');
+  const filterRef = useRef(null);
   const [toasts, setToasts] = useState([]);
 
   const addToast = (type, title, message) => {
     const id = ++toastId;
-    setToasts(prev => [...prev, { id, type, title, message }]);
+    setToasts((prev) => [...prev, {id, type, title, message}]);
   };
-  const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+  const removeToast = (id) =>
+    setToasts((prev) => prev.filter((t) => t.id !== id));
 
-  useEffect(() => { loadLeads(); }, []);
+  useEffect(() => {
+    loadLeads();
+    api
+      .getLeadStatuses()
+      .then((res) => {
+        if (res?.data?.statuses) setStatuses(res.data.statuses);
+      })
+      .catch(() => {});
+    api
+      .getUsers()
+      .then((res) => {
+        if (res?.data?.users) setUsers(res.data.users);
+      })
+      .catch(() => {});
+  }, [viewMode]);
 
   useEffect(() => {
     const handler = () => loadLeads();
@@ -63,11 +150,12 @@ const LeadBox = () => {
     return () => window.removeEventListener('leadCreated', handler);
   }, []);
 
-  const loadLeads = async () => {
+  const loadLeads = async (view) => {
     setLoading(true);
     try {
+      const viewParam = view || viewMode;
       const [leadsRes, metricsRes] = await Promise.all([
-        api.getLeads({ limit: 100 }),
+        api.getLeads({limit: 100, view: viewParam}),
         api.getLeadMetrics(),
       ]);
       setLeads(leadsRes.data.leads.map(mapLead));
@@ -79,6 +167,18 @@ const LeadBox = () => {
     }
   };
 
+  // Close filter dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (filterRef.current && !filterRef.current.contains(e.target)) {
+        setFilterOpen(false);
+        setFilterSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
       const matchesSearch =
@@ -86,16 +186,18 @@ const LeadBox = () => {
         (lead.uhid || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         lead.phone.includes(searchTerm);
-      const matchesStatus = statusFilter === 'All' || lead.status === statusFilter;
+      const matchesStatus =
+        statusFilter === 'All' || lead.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [leads, searchTerm, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const paginatedLeads = filteredLeads.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
-  const startItem = filteredLeads.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
-  const endItem = Math.min(safePage * ITEMS_PER_PAGE, filteredLeads.length);
+  const paginatedLeads = filteredLeads.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  );
 
   const handleView = (lead) => setViewLead(lead);
   const handleEdit = (lead) => setEditLead(lead);
@@ -105,51 +207,117 @@ const LeadBox = () => {
     try {
       await api.deleteLead(deleteConfirm.id);
       setDeleteConfirm(null);
-      addToast('success', 'Lead Deleted', `${deleteConfirm.name} has been removed.`);
-      if (paginatedLeads.length === 1 && currentPage > 1) setCurrentPage(p => p - 1);
+      addToast(
+        'success',
+        'Lead Deleted',
+        `${deleteConfirm.name} has been removed.`,
+      );
+      if (paginatedLeads.length === 1 && currentPage > 1)
+        setCurrentPage((p) => p - 1);
       loadLeads();
     } catch (err) {
-      addToast('error', 'Delete Failed', err.message || 'Could not delete lead.');
+      addToast(
+        'error',
+        'Delete Failed',
+        err.message || 'Could not delete lead.',
+      );
+    }
+  };
+
+  const handleAssign = async () => {
+    if (!assignUserId || !assignLead) return;
+    try {
+      await api.assignLead(assignLead.id, parseInt(assignUserId));
+      const agentName =
+        users.find((u) => u.id === parseInt(assignUserId))?.name || 'agent';
+      addToast(
+        'success',
+        'Lead Assigned',
+        `${assignLead.name} assigned to ${agentName}.`,
+      );
+      setAssignLead(null);
+      setAssignUserId('');
+      loadLeads();
+    } catch (err) {
+      addToast(
+        'error',
+        'Assign Failed',
+        err.message || 'Could not assign lead.',
+      );
     }
   };
 
   const handleExport = () => {
-    const headers = ['Patient Name', 'UHID', 'Last Call', 'Status', 'Lead Source', 'Phone', 'Email'];
-    const rows = filteredLeads.map(l => [l.name, l.uhid, l.lastCallDate, l.status, l.leadSource, l.phone, l.email]);
-    const csv = [headers.join(','), ...rows.map(r => r.map(c => {
-      const s = String(c ?? '');
-      const safe = /^[=+\-@\t]/.test(s) ? `\t${s}` : s;
-      return `"${safe.replaceAll('"', '""')}"`;
-    }).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const headers = [
+      'Lead Code',
+      'Patient Name',
+      'Phone',
+      'Status',
+      'Priority',
+      'Created By',
+      'Assigned To',
+      'Branch',
+      'Email',
+    ];
+    const rows = filteredLeads.map((l) => [
+      l.code,
+      l.name,
+      l.phone,
+      l.status,
+      l.priority,
+      l.createdByName,
+      l.assignedTo,
+      l.branchName,
+      l.email,
+    ]);
+    const csv = [
+      headers.join(','),
+      ...rows.map((r) =>
+        r
+          .map((c) => {
+            const s = String(c ?? '');
+            const safe = /^[=+\-@\t]/.test(s) ? `\t${s}` : s;
+            return `"${safe.replaceAll('"', '""')}"`;
+          })
+          .join(','),
+      ),
+    ].join('\n');
+    const blob = new Blob([csv], {type: 'text/csv'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'leads-export.csv'; a.click();
+    a.href = url;
+    a.download = 'leads-export.csv';
+    a.click();
     URL.revokeObjectURL(url);
   };
 
   const statusColors = {
-    'New': 'bg-secondary/10 text-secondary border border-secondary/20',
-    'Contacted': 'bg-on-tertiary-container/10 text-on-tertiary-container border border-on-tertiary-container/20',
-    'Interested': 'bg-secondary-fixed/10 text-secondary border border-secondary-fixed/20',
-    'Follow-up': 'bg-on-tertiary-container/10 text-on-tertiary-container border border-on-tertiary-container/20',
-    'Appointment Booked': 'bg-on-tertiary-container/10 text-on-tertiary-container border border-on-tertiary-container/20',
-    'Closed': 'bg-surface-container-high text-on-surface-variant border border-outline-variant',
-    'Rejected': 'bg-error/10 text-error border border-error/20',
+    New: 'bg-secondary/10 text-secondary border border-secondary/20',
+    Contacted:
+      'bg-on-tertiary-container/10 text-on-tertiary-container border border-on-tertiary-container/20',
+    Interested:
+      'bg-secondary-fixed/10 text-secondary border border-secondary-fixed/20',
+    'Follow-up':
+      'bg-on-tertiary-container/10 text-on-tertiary-container border border-on-tertiary-container/20',
+    'Appointment Booked':
+      'bg-on-tertiary-container/10 text-on-tertiary-container border border-on-tertiary-container/20',
+    Closed:
+      'bg-surface-container-high text-on-surface-variant border border-outline-variant',
+    Rejected: 'bg-error/10 text-error border border-error/20',
   };
   const avatarColors = {
-    'New': 'bg-secondary text-white',
-    'Contacted': 'bg-on-tertiary-container text-white',
-    'Interested': 'bg-secondary text-white',
+    New: 'bg-secondary text-white',
+    Contacted: 'bg-on-tertiary-container text-white',
+    Interested: 'bg-secondary text-white',
     'Follow-up': 'bg-on-tertiary-container text-white',
     'Appointment Booked': 'bg-on-tertiary-container text-white',
-    'Closed': 'bg-outline-variant text-on-surface-variant',
-    'Rejected': 'bg-error text-white',
+    Closed: 'bg-outline-variant text-on-surface-variant',
+    Rejected: 'bg-error text-white',
   };
   const priorityColors = {
-    'High': 'text-error font-bold',
-    'Medium': 'text-on-tertiary-container font-bold',
-    'Low': 'text-on-surface-variant',
+    High: 'text-error font-bold',
+    Medium: 'text-on-tertiary-container font-bold',
+    Low: 'text-on-surface-variant',
   };
 
   return (
@@ -157,10 +325,15 @@ const LeadBox = () => {
       <div className="p-4 sm:p-6 lg:p-10 data-stage">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-          <h1 className="font-h1 text-[24px] sm:text-[28px] lg:text-[32px] text-on-background">Lead Box</h1>
+          <h1 className="font-h1 text-[24px] sm:text-[28px] lg:text-[32px] text-on-background">
+            Lead Box
+          </h1>
           <div className="flex items-center gap-2">
-            <button onClick={handleExport} className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all text-sm">
-              <Download className="w-4 h-4" /> <span className="hidden sm:inline">Export</span>
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all text-sm">
+              <Download className="w-4 h-4" />{' '}
+              <span className="hidden sm:inline">Export</span>
             </button>
           </div>
         </div>
@@ -168,108 +341,295 @@ const LeadBox = () => {
         {/* Metric Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           {[
-            { label: 'New Leads Today', value: metrics.newLeadsToday?.count ?? metrics.newLeadsToday ?? 0, trend: metrics.newLeadsToday?.trend, border: 'border-t-secondary', icon: <UserPlus className="w-5 h-5 text-secondary" /> },
-            { label: 'Pending Follow-ups', value: metrics.pendingFollowups, border: 'border-t-on-tertiary-container', icon: <Phone className="w-5 h-5 text-on-tertiary-container" /> },
-            { label: 'Conversion Rate', value: metrics.conversionRate, border: 'border-t-secondary-fixed', icon: <CircleCheck className="w-5 h-5 text-secondary-fixed-dim" /> },
-            { label: 'Overdue Responses', value: metrics.overdueResponses, border: 'border-t-error', icon: <AlertTriangle className="w-5 h-5 text-error" /> },
+            {
+              label: 'New Leads Today',
+              value: metrics.newLeadsToday ?? 0,
+              border: 'border-t-secondary',
+              icon: <UserPlus className="w-5 h-5 text-secondary" />,
+            },
+            {
+              label: 'Follow-up Leads',
+              value: metrics.alreadyLeads ?? 0,
+              border: 'border-t-on-tertiary-container',
+              icon: <Phone className="w-5 h-5 text-on-tertiary-container" />,
+            },
+            {
+              label: 'Conversion Rate',
+              value: metrics.conversionRate ?? '0%',
+              border: 'border-t-secondary-fixed',
+              icon: (
+                <CircleCheck className="w-5 h-5 text-secondary-fixed-dim" />
+              ),
+            },
+            {
+              label: 'Overdue Responses',
+              value: metrics.overdueResponses ?? 0,
+              border: 'border-t-error',
+              icon: <AlertTriangle className="w-5 h-5 text-error" />,
+            },
           ].map((card, i) => (
-            <div key={i} className={`bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-5 metric-card-accent ${card.border} shadow-sm`}>
+            <div
+              key={i}
+              className={`bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-5 metric-card-accent ${card.border} shadow-sm`}>
               <div className="flex items-center justify-between mb-2">
-                <span className="font-caption text-on-surface-variant">{card.label}</span>
+                <span className="font-caption text-on-surface-variant">
+                  {card.label}
+                </span>
                 {card.icon}
               </div>
               <div className="font-h2 text-on-surface">{card.value}</div>
-              {card.trend && <span className="font-caption text-on-tertiary-container">{card.trend}</span>}
             </div>
           ))}
         </div>
 
-        {/* Search & Filter Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
-            <input type="text" placeholder="Search by name, UHID, email, or phone..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="w-full pl-10 pr-4 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all placeholder:text-on-surface-variant/50" />
+        {/* View Mode Buttons + Search & Filter Bar */}
+        <div className="flex flex-col gap-3 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              {
+                key: 'today',
+                label: 'Today Leads',
+                icon: <CalendarDays className="w-4 h-4" />,
+              },
+              {
+                key: 'my',
+                label: 'My Leads',
+                icon: <UserCircle className="w-4 h-4" />,
+              },
+              {
+                key: 'all',
+                label: 'All Leads',
+                icon: <List className="w-4 h-4" />,
+              },
+            ].map((btn) => (
+              <button
+                key={btn.key}
+                onClick={() => {
+                  setViewMode(btn.key);
+                  setStatusFilter('All');
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-body-md font-bold transition-all ${
+                  viewMode === btn.key
+                    ? 'bg-secondary text-on-secondary shadow-sm'
+                    : 'border border-outline-variant text-on-surface bg-surface-container-lowest hover:bg-surface-container'
+                }`}>
+                {btn.icon} {btn.label}
+              </button>
+            ))}
+            <span className="font-caption text-on-surface-variant ml-1">
+              {filteredLeads.length} lead{filteredLeads.length !== 1 ? 's' : ''}
+            </span>
           </div>
-          <div className="relative">
-            <button onClick={() => setFilterOpen(!filterOpen)} className="flex items-center gap-2 px-4 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest hover:bg-surface-container transition-all w-full sm:w-auto justify-between">
-              <Filter className="w-4 h-4" /> {statusFilter} <ChevronDown className="w-4 h-4" />
-            </button>
-            {filterOpen && (
-              <div className="absolute right-0 mt-1 w-48 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg z-10 py-1">
-                {['All', ...statuses].map(s => (
-                  <button key={s} onClick={() => { setStatusFilter(s); setCurrentPage(1); setFilterOpen(false); }} className={`block w-full text-left px-4 py-2 font-body-md hover:bg-surface-container transition-colors ${statusFilter === s ? 'text-secondary font-bold' : 'text-on-surface'}`}>{s}</button>
-                ))}
-              </div>
-            )}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
+              <input
+                type="text"
+                placeholder="Search by name, UHID, email, or phone..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all placeholder:text-on-surface-variant/50"
+              />
+            </div>
+            <div className="relative" ref={filterRef}>
+              <button
+                onClick={() => {
+                  setFilterOpen(!filterOpen);
+                  setFilterSearch('');
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest hover:bg-surface-container transition-all w-full sm:w-auto justify-between">
+                <Filter className="w-4 h-4" /> {statusFilter}{' '}
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              {filterOpen && (
+                <div className="absolute right-0 mt-1 w-56 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg z-10 py-1">
+                  <div className="px-3 py-2 border-b border-outline-variant">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-on-surface-variant" />
+                      <input
+                        type="text"
+                        value={filterSearch}
+                        onChange={(e) => setFilterSearch(e.target.value)}
+                        placeholder="Search status..."
+                        className="w-full pl-8 pr-3 py-1.5 border border-outline-variant rounded-lg font-body-sm text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary transition-all"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {['All', ...statuses]
+                      .filter((s) =>
+                        s.toLowerCase().includes(filterSearch.toLowerCase()),
+                      )
+                      .map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => {
+                            setStatusFilter(s);
+                            setCurrentPage(1);
+                            setFilterOpen(false);
+                            setFilterSearch('');
+                          }}
+                          className={`block w-full text-left px-4 py-2 font-body-md hover:bg-surface-container transition-colors ${statusFilter === s ? 'text-secondary font-bold' : 'text-on-surface'}`}>
+                          {s}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Table */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-[1200px]">
               <thead>
                 <tr className="bg-surface-container-high">
-                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Patient Name</th>
-                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">UHID</th>
-                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Last Call</th>
-                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Status</th>
-                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Lead Source</th>
-                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Actions</th>
+                  <th className="px-3 py-3 text-center font-label-caps text-on-surface-variant w-12">
+                    #
+                  </th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">
+                    Lead Code
+                  </th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">
+                    Patient Name
+                  </th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">
+                    Phone
+                  </th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">
+                    Priority
+                  </th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">
+                    Branch
+                  </th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">
+                    Created By
+                  </th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">
+                    Assigned To
+                  </th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="zebra-striping">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-4 py-12 text-center font-body-md text-on-surface-variant">Loading leads...</td></tr>
-                ) : paginatedLeads.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-12 text-center font-body-md text-on-surface-variant">No leads found.</td></tr>
-                ) : paginatedLeads.map((lead) => (
-                  <tr key={lead.id} className="border-t border-outline-variant/50 hover:bg-surface-container/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-body-md font-bold text-xs ${avatarColors[lead.status]}`}>{lead.initials}</div>
-                        <span className="font-body-md text-on-surface font-bold">{lead.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-data-tabular text-on-surface">{lead.uhid || '—'}</td>
-                    <td className="px-4 py-3 font-body-md text-on-surface-variant">
-                      {lead.lastCallDate ? new Date(lead.lastCallDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-3 py-1 rounded-full font-caption font-bold text-xs ${statusColors[lead.status]}`}>{lead.status}</span>
-                    </td>
-                    <td className="px-4 py-3 font-body-md text-on-surface-variant">{lead.leadSource || '—'}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => handleView(lead)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="View"><Eye className="w-4 h-4 text-on-surface-variant" /></button>
-                        <button onClick={() => handleEdit(lead)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Edit"><Edit className="w-4 h-4 text-on-surface-variant" /></button>
-                        <button onClick={() => handleDelete(lead)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Delete"><Trash2 className="w-4 h-4 text-on-surface-variant" /></button>
-                      </div>
+                  <tr>
+                    <td
+                      colSpan={10}
+                      className="px-4 py-12 text-center font-body-md text-on-surface-variant">
+                      Loading leads...
                     </td>
                   </tr>
-                ))}
+                ) : paginatedLeads.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={10}
+                      className="px-4 py-12 text-center font-body-md text-on-surface-variant">
+                      No leads found.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedLeads.map((lead, idx) => (
+                    <tr
+                      key={lead.id}
+                      onClick={() => handleView(lead)}
+                      className="border-t border-outline-variant/50 hover:bg-surface-container/50 transition-colors cursor-pointer">
+                      <td                      className="px-3 py-3 text-center font-data-tabular text-on-surface-variant text-sm">
+                        {(safePage - 1) * pageSize + idx + 1}
+
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-data-tabular text-sm font-bold text-secondary">
+                          {lead.code}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-body-md text-on-surface font-bold">
+                          {lead.name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-data-tabular text-on-surface-variant">
+                        {lead.phone || '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full font-caption font-bold text-xs ${statusColors[lead.status]}`}>
+                          {lead.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={
+                            priorityColors[lead.priority] ||
+                            'font-caption text-on-surface-variant'
+                          }>
+                          {lead.priority || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-body-md text-on-surface-variant">
+                        {lead.branchName || '—'}
+                      </td>
+                      <td className="px-4 py-3 font-body-md text-on-surface-variant">
+                        {lead.createdByName || '—'}
+                      </td>
+                      <td className="px-4 py-3 font-body-md text-on-surface-variant">
+                        {lead.assignedTo || '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div
+                          className="flex items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleEdit(lead)}
+                            className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors"
+                            title="Edit">
+                            <Edit className="w-4 h-4 text-on-surface-variant" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setAssignLead(lead);
+                              setAssignUserId(String(lead.assignedToId || ''));
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors"
+                            title="Assign Agent">
+                            <User className="w-4 h-4 text-on-surface-variant" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
 
-          {/* Pagination */}
-          <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t border-outline-variant gap-3">
-            <span className="font-caption text-on-surface-variant">Showing {startItem}-{endItem} of {filteredLeads.length}</span>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1} className="p-2 rounded-lg hover:bg-surface-container transition-colors disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                <button key={p} onClick={() => setCurrentPage(p)} className={`w-8 h-8 rounded-lg font-body-md transition-all ${safePage === p ? 'bg-secondary text-white' : 'hover:bg-surface-container text-on-surface'}`}>{p}</button>
-              ))}
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="p-2 rounded-lg hover:bg-surface-container transition-colors disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
-            </div>
-          </div>
+          <Pagination
+            currentPage={safePage}
+            totalItems={filteredLeads.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
 
         {/* View Modal */}
         {viewLead && (
           <ViewLeadModal
             lead={viewLead}
-            avatarColors={avatarColors}
+            statusColors={statusColors}
             priorityColors={priorityColors}
             onClose={() => setViewLead(null)}
           />
@@ -280,7 +640,10 @@ const LeadBox = () => {
           <EditPanel
             lead={editLead}
             onClose={() => setEditLead(null)}
-            onSave={() => { setEditLead(null); loadLeads(); }}
+            onSave={() => {
+              setEditLead(null);
+              loadLeads();
+            }}
             onError={(msg) => addToast('error', 'Update Failed', msg)}
             onSuccess={(msg) => addToast('success', 'Lead Updated', msg)}
           />
@@ -289,14 +652,103 @@ const LeadBox = () => {
         {/* Delete Confirmation */}
         {deleteConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setDeleteConfirm(null)} />
+            <div
+              className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
+              onClick={() => setDeleteConfirm(null)}
+            />
             <div className="relative bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md p-6 text-center">
-              <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center mx-auto mb-4"><AlertTriangle className="w-7 h-7 text-error" /></div>
+              <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-7 h-7 text-error" />
+              </div>
               <h3 className="font-h3 text-on-surface mb-2">Delete Lead?</h3>
-              <p className="font-body-md text-on-surface-variant mb-6">Are you sure you want to delete <strong>{deleteConfirm.name}</strong>? This action cannot be undone.</p>
+              <p className="font-body-md text-on-surface-variant mb-6">
+                Are you sure you want to delete{' '}
+                <strong>{deleteConfirm.name}</strong>? This action cannot be
+                undone.
+              </p>
               <div className="flex justify-center gap-3">
-                <button onClick={() => setDeleteConfirm(null)} className="px-5 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all">Cancel</button>
-                <button onClick={confirmDelete} className="px-5 py-2.5 bg-error text-on-error rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all shadow-sm">Delete</button>
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-5 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all">
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="px-5 py-2.5 bg-error text-on-error rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all shadow-sm">
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Assign Agent Popup */}
+        {assignLead && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
+              onClick={() => {
+                setAssignLead(null);
+                setAssignUserId('');
+              }}
+            />
+            <div className="relative bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-h1 text-lg text-on-surface">
+                  Assign Agent
+                </h3>
+                <button
+                  onClick={() => {
+                    setAssignLead(null);
+                    setAssignUserId('');
+                  }}
+                  className="p-2 rounded-full hover:bg-surface-container-high transition-colors">
+                  <X className="w-5 h-5 text-on-surface-variant" />
+                </button>
+              </div>
+              <p className="font-body-md text-on-surface-variant mb-4">
+                Assign <strong>{assignLead.name}</strong> ({assignLead.code}) to
+                an agent:
+              </p>
+              <div className="mb-6">
+                <label className="block font-caption text-on-surface-variant uppercase mb-1.5 inline-flex items-center gap-1 leading-none">
+                  Select Agent{' '}
+                  <span className="text-error text-base font-bold leading-none">
+                    *
+                  </span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={assignUserId}
+                    onChange={(e) => setAssignUserId(e.target.value)}
+                    className="w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all appearance-none pr-10">
+                    <option value="">Select an agent</option>
+                    {users
+                      .filter((u) => u.is_active !== false)
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.role})
+                        </option>
+                      ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setAssignLead(null);
+                    setAssignUserId('');
+                  }}
+                  className="px-5 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAssign}
+                  disabled={!assignUserId}
+                  className="px-5 py-2.5 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                  Assign
+                </button>
               </div>
             </div>
           </div>
@@ -309,7 +761,7 @@ const LeadBox = () => {
 };
 
 // Edit Panel — slide-in from right, same structure as PatientIntakeForm
-const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
+const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
   const [formData, setFormData] = useState({
     uhid: lead.uhid || '',
     name: lead.name || '',
@@ -324,6 +776,7 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
     state: lead.state || '',
     country: lead.country || 'India',
     address: lead.address || '',
+    branchId: lead.branchId || '',
     leadSource: lead.leadSource || '',
     status: lead.status || 'New',
     priority: lead.priority || 'Medium',
@@ -335,24 +788,42 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [leadSources, setLeadSources] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [priorities, setPriorities] = useState(['High', 'Medium', 'Low']);
   const [statuses, setStatuses] = useState(['Appointment Booked']);
   const uhidTimerRef = useRef(null);
   const pincodeTimerRef = useRef(null);
 
   useEffect(() => {
-    api.getLeadSources().then(res => {
-      if (res?.data) {
-        if (res.data.sources) setLeadSources(res.data.sources);
-        if (res.data.priorities) setPriorities(res.data.priorities);
-        if (res.data.statuses) setStatuses(res.data.statuses);
-      }
-    }).catch(() => {});
+    api
+      .getLeadSources()
+      .then((res) => {
+        if (res?.data) {
+          if (res.data.sources) setLeadSources(res.data.sources);
+          if (res.data.priorities) setPriorities(res.data.priorities);
+          if (res.data.statuses) setStatuses(res.data.statuses);
+        }
+      })
+      .catch(() => {});
+    api
+      .getBranches()
+      .then((res) => {
+        if (res?.data?.branches) setBranches(res.data.branches);
+      })
+      .catch(() => {});
     if (formData.dob) calculateAge(formData.dob);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const clearError = (field) => setErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
-  const setField = (field, value) => { setFormData(prev => ({ ...prev, [field]: value })); clearError(field); };
+  const clearError = (field) =>
+    setErrors((prev) => {
+      const next = {...prev};
+      delete next[field];
+      return next;
+    });
+  const setField = (field, value) => {
+    setFormData((prev) => ({...prev, [field]: value}));
+    clearError(field);
+  };
 
   const calculateAge = (dob) => {
     if (!dob || dob.length < 10) return;
@@ -361,20 +832,24 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
-    setFormData(prev => ({ ...prev, age: age > 0 ? `${age} YRS` : '' }));
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    )
+      age--;
+    setFormData((prev) => ({...prev, age: age > 0 ? `${age} YRS` : ''}));
   };
 
   const handleDobChange = (e) => {
     const dob = e.target.value;
-    setFormData(prev => ({ ...prev, dob, age: '' }));
+    setFormData((prev) => ({...prev, dob, age: ''}));
     clearError('dob');
     if (dob.length === 10) calculateAge(dob);
   };
 
   const handleUhidChange = (e) => {
     const uhid = e.target.value;
-    setFormData(prev => ({ ...prev, uhid }));
+    setFormData((prev) => ({...prev, uhid}));
     clearError('uhid');
     if (uhidTimerRef.current) clearTimeout(uhidTimerRef.current);
     if (uhid.length >= 4) {
@@ -384,7 +859,7 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
           const res = await api.getLeadByUhid(uhid);
           if (res?.data?.patient) {
             const p = res.data.patient;
-            setFormData(prev => ({
+            setFormData((prev) => ({
               ...prev,
               name: p.name || prev.name,
               dob: p.dob ? p.dob.split('T')[0] : prev.dob,
@@ -399,14 +874,24 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
             }));
             if (p.dob) calculateAge(p.dob.split('T')[0]);
           }
-        } catch {} finally { setUhidLoading(false); }
+        } catch {
+        } finally {
+          setUhidLoading(false);
+        }
       }, 2000);
     }
   };
 
   const handlePincodeChange = (e) => {
     const pincode = e.target.value.replace(/\D/g, '').slice(0, 6);
-    setFormData(prev => ({ ...prev, pincode, area: '', city: '', state: '', country: 'India' }));
+    setFormData((prev) => ({
+      ...prev,
+      pincode,
+      area: '',
+      city: '',
+      state: '',
+      country: 'India',
+    }));
     setAreas([]);
     clearError('pincode');
     if (pincodeTimerRef.current) clearTimeout(pincodeTimerRef.current);
@@ -414,41 +899,71 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
       pincodeTimerRef.current = setTimeout(async () => {
         setPincodeLoading(true);
         try {
-          const resp = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
-          const data = await resp.json();
-          if (data[0]?.Status === 'Success' && data[0]?.PostOffice?.length > 0) {
-            const postOffices = data[0].PostOffice;
-            const po = postOffices[0];
-            const areaNames = [...new Set(postOffices.map(p => p.Name))];
-            setAreas(areaNames);
-            setFormData(prev => ({
+          const resp = await api.lookupPincode(pincode);
+          const d = resp?.data;
+          if (d?.areas?.length > 0) {
+            setAreas(d.areas);
+            setFormData((prev) => ({
               ...prev,
-              area: areaNames.length === 1 ? areaNames[0] : '',
-              city: po.District || po.Block || po.Name || '',
-              state: po.State || '',
-              country: 'India',
+              area: d.areas.length === 1 ? d.areas[0] : '',
+              city: d.city || '',
+              state: d.state || '',
+              country: d.country || 'India',
             }));
           } else {
-            const local = pincodeData[pincode];
-            if (local) setFormData(prev => ({ ...prev, city: local.city, state: local.state, country: local.country }));
+            applyPincodeFallback(pincode);
           }
         } catch {
-          const local = pincodeData[pincode];
-          if (local) setFormData(prev => ({ ...prev, city: local.city, state: local.state, country: local.country }));
-        } finally { setPincodeLoading(false); }
+          applyPincodeFallback(pincode);
+        } finally {
+          setPincodeLoading(false);
+        }
       }, 500);
+    }
+  };
+
+  const applyPincodeFallback = (pincode) => {
+    const local = pincodeData[pincode];
+    if (local) {
+      const areas = local.areas || [local.city];
+      setAreas(areas);
+      setFormData((prev) => ({
+        ...prev,
+        area: areas.length === 1 ? areas[0] : '',
+        city: local.city || '',
+        state: local.state || '',
+        country: local.country || 'India',
+      }));
     }
   };
 
   const validate = () => {
     const errs = {};
-    // Only name and phone are mandatory
+    // Patient Name: mandatory, min 2 chars, only valid name characters
     if (!formData.name.trim()) errs.name = 'Patient name is required';
-    if (!formData.contactNumber.trim()) errs.contactNumber = 'Phone number is required';
-    else if (!/^\d{10}$/.test(formData.contactNumber.replace(/\s/g, ''))) errs.contactNumber = 'Enter a valid 10-digit phone number';
+    else if (formData.name.trim().length < 2)
+      errs.name = 'Name must be at least 2 characters';
+    else if (!/^[a-zA-Z\s.'-]+$/.test(formData.name.trim()))
+      errs.name = 'Name contains invalid characters';
+    // Phone: mandatory, 10 digits
+    if (!formData.contactNumber.trim())
+      errs.contactNumber = 'Phone number is required';
+    else if (!/^\d{10}$/.test(formData.contactNumber.replace(/\s/g, '')))
+      errs.contactNumber = 'Enter a valid 10-digit phone number';
+    // Branch: mandatory
+    if (!formData.branchId) errs.branchId = 'Branch is required';
+    // Remarks: mandatory, min 2 chars
+    if (!formData.remarks.trim()) errs.remarks = 'Remarks are required';
+    else if (formData.remarks.trim().length < 2)
+      errs.remarks = 'Remarks must be at least 2 characters';
     // Optional fields - validate format only if provided
-    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errs.email = 'Enter a valid email address';
-    if (formData.dob && new Date(formData.dob) > new Date()) errs.dob = 'Date of birth cannot be in the future';
+    if (
+      formData.email.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)
+    )
+      errs.email = 'Enter a valid email address';
+    if (formData.dob && new Date(formData.dob) > new Date())
+      errs.dob = 'Date of birth cannot be in the future';
     return errs;
   };
 
@@ -458,7 +973,7 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
       setErrors(errs);
       const firstKey = Object.keys(errs)[0];
       const el = document.querySelector(`[data-edit-field="${firstKey}"]`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
       return;
     }
     setSubmitting(true);
@@ -471,11 +986,13 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
         email: formData.email,
         dob: formData.dob,
         address: formData.address,
+        area: formData.area || null,
         pincode: formData.pincode,
         city: formData.city,
         state: formData.state,
         country: formData.country,
         lead_source: formData.leadSource,
+        branch_id: formData.branchId || null,
         status: formData.status,
         priority: formData.priority,
         clinical_remarks: formData.remarks,
@@ -484,71 +1001,165 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
       onSave();
     } catch (err) {
       if (onError) onError(err.message || 'Failed to update lead.');
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const fieldClass = (field) =>
     `w-full px-4 py-3 border rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:ring-2 transition-all placeholder:text-on-surface-variant/50 ${
-      errors[field] ? 'border-error focus:border-error focus:ring-error/20' : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
+      errors[field]
+        ? 'border-error focus:border-error focus:ring-error/20'
+        : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
     }`;
   const selectClass = (field) =>
     `w-full px-4 py-3 pr-10 border rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:ring-2 transition-all appearance-none ${
-      errors[field] ? 'border-error focus:border-error focus:ring-error/20' : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
+      errors[field]
+        ? 'border-error focus:border-error focus:ring-error/20'
+        : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
     }`;
-  const readOnlyClass = 'w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container focus:outline-none';
-  const ErrorMsg = ({ field }) => errors[field] ? <p className="font-caption text-error mt-1">{errors[field]}</p> : null;
+  const readOnlyClass =
+    'w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container focus:outline-none';
+  const ErrorMsg = ({field}) =>
+    errors[field] ? (
+      <p className="font-caption text-error mt-1">{errors[field]}</p>
+    ) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
       <div className="relative ml-auto w-full max-w-2xl bg-surface shadow-2xl flex flex-col h-full animate-slide-in">
         <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant">
           <h2 className="font-h2 text-on-surface">Edit Lead</h2>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><X className="w-5 h-5 text-on-surface-variant" /></button>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-surface-container transition-colors">
+            <X className="w-5 h-5 text-on-surface-variant" />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* UHID */}
           <div data-edit-field="uhid">
-            <label className="block font-caption text-on-surface-variant uppercase mb-1.5">UHID (UNIVERSAL ID)</label>
+            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              UHID (UNIVERSAL ID)
+            </label>
             <div className="relative">
-              <input type="text" placeholder="Enter UHID" value={formData.uhid} onChange={handleUhidChange} className={fieldClass('uhid')} />
-              {uhidLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><div className="w-5 h-5 border-2 border-secondary border-t-transparent rounded-full animate-spin" /></div>}
+              <input
+                type="text"
+                placeholder="Enter UHID"
+                value={formData.uhid}
+                onChange={handleUhidChange}
+                className={fieldClass('uhid')}
+              />
+              {uhidLoading && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="w-5 h-5 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
             </div>
             <ErrorMsg field="uhid" />
           </div>
 
           {/* Patient Name */}
           <div data-edit-field="name">
-            <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Patient Name <span className="text-error">*</span></label>
-            <input type="text" placeholder="Enter full name" value={formData.name} onChange={(e) => setField('name', e.target.value)} className={fieldClass('name')} />
+            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              Patient Name{' '}
+              <span className="text-error text-base font-bold leading-none">
+                *
+              </span>
+            </label>
+            <input
+              type="text"
+              placeholder="Enter full name"
+              value={formData.name}
+              onChange={(e) => setField('name', e.target.value)}
+              className={fieldClass('name')}
+            />
             <ErrorMsg field="name" />
+          </div>
+
+          {/* Branch */}
+          <div data-edit-field="branchId">
+            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              Branch{' '}
+              <span className="text-error text-base font-bold leading-none">
+                *
+              </span>
+            </label>
+            <div className="relative">
+              <select
+                value={formData.branchId}
+                onChange={(e) => setField('branchId', e.target.value)}
+                className={selectClass('branchId')}>
+                <option value="">Select Branch</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
+            </div>
+            <ErrorMsg field="branchId" />
           </div>
 
           {/* DOB + Age + Lead Source */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div data-edit-field="dob">
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Date of Birth <span className="text-error">*</span></label>
-              <input type="date" value={formData.dob} onChange={handleDobChange} className={fieldClass('dob')} />
-              {formData.age && <p className="font-caption text-secondary mt-1 font-bold">{formData.age}</p>}
+              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                Date of Birth
+              </label>
+              <input
+                type="date"
+                value={formData.dob}
+                onChange={handleDobChange}
+                className={fieldClass('dob')}
+              />
+              {formData.age && (
+                <p className="font-caption text-secondary mt-1 font-bold">
+                  {formData.age}
+                </p>
+              )}
               <ErrorMsg field="dob" />
             </div>
             <div data-edit-field="leadSource">
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Lead Source <span className="text-error">*</span></label>
+              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                Lead Source
+              </label>
               <div className="relative">
-                <select value={formData.leadSource} onChange={(e) => setField('leadSource', e.target.value)} className={selectClass('leadSource')}>
+                <select
+                  value={formData.leadSource}
+                  onChange={(e) => setField('leadSource', e.target.value)}
+                  className={selectClass('leadSource')}>
                   <option value="">Select lead source</option>
-                  {leadSources.map(s => <option key={s} value={s}>{s}</option>)}
+                  {leadSources.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
               </div>
               <ErrorMsg field="leadSource" />
             </div>
             <div>
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Priority</label>
+              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                Priority
+              </label>
               <div className="relative">
-                <select value={formData.priority} onChange={(e) => setField('priority', e.target.value)} className={selectClass('priority')}>
-                  {priorities.map(p => <option key={p} value={p}>{p}</option>)}
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setField('priority', e.target.value)}
+                  className={selectClass('priority')}>
+                  {priorities.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
               </div>
@@ -557,10 +1168,19 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
 
           {/* Status */}
           <div>
-            <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Status</label>
+            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              Status
+            </label>
             <div className="relative w-full sm:w-1/3">
-              <select value={formData.status} onChange={(e) => setField('status', e.target.value)} className={selectClass('status')}>
-                {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+              <select
+                value={formData.status}
+                onChange={(e) => setField('status', e.target.value)}
+                className={selectClass('status')}>
+                {statuses.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
             </div>
@@ -569,51 +1189,132 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
           {/* Contact */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div data-edit-field="contactNumber">
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Phone Number <span className="text-error">*</span></label>
-              <input type="tel" placeholder="9876543210" maxLength={10} value={formData.contactNumber} onChange={(e) => setField('contactNumber', e.target.value.replace(/\D/g, ''))} className={fieldClass('contactNumber')} />
+              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                Phone Number{' '}
+                <span className="text-error text-base font-bold leading-none">
+                  *
+                </span>
+              </label>
+              <input
+                type="tel"
+                placeholder="9876543210"
+                maxLength={10}
+                value={formData.contactNumber}
+                onChange={(e) =>
+                  setField('contactNumber', e.target.value.replace(/\D/g, ''))
+                }
+                className={fieldClass('contactNumber')}
+              />
               <ErrorMsg field="contactNumber" />
             </div>
             <div>
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Alternate Number</label>
-              <input type="tel" placeholder="9876543210" maxLength={10} value={formData.alternateContact} onChange={(e) => setField('alternateContact', e.target.value.replace(/\D/g, ''))} className={fieldClass('alternateContact')} />
+              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                Alternate Number
+              </label>
+              <input
+                type="tel"
+                placeholder="9876543210"
+                maxLength={10}
+                value={formData.alternateContact}
+                onChange={(e) =>
+                  setField(
+                    'alternateContact',
+                    e.target.value.replace(/\D/g, ''),
+                  )
+                }
+                className={fieldClass('alternateContact')}
+              />
             </div>
           </div>
 
           {/* Email */}
           <div data-edit-field="email">
-            <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Email ID <span className="text-error">*</span></label>
-            <input type="email" placeholder="example@email.com" value={formData.email} onChange={(e) => setField('email', e.target.value)} className={fieldClass('email')} />
+            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              Email ID
+            </label>
+            <input
+              type="email"
+              placeholder="example@email.com"
+              value={formData.email}
+              onChange={(e) => setField('email', e.target.value)}
+              className={fieldClass('email')}
+            />
             <ErrorMsg field="email" />
           </div>
 
           {/* Address */}
           <div className="bg-surface-container rounded-xl p-5 space-y-4">
             <h3 className="font-h3 text-on-surface flex items-center gap-2">
-              <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              <svg
+                className="w-5 h-5 text-secondary"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
               Address Details
             </h3>
             {/* Row 1: Pincode + Area */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div data-edit-field="pincode">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Pincode</label>
+                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                  Pincode
+                </label>
                 <div className="relative">
-                  <input type="text" placeholder="110001" maxLength={6} value={formData.pincode} onChange={handlePincodeChange} className={fieldClass('pincode')} />
-                  {pincodeLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" /></div>}
+                  <input
+                    type="text"
+                    placeholder="110001"
+                    maxLength={6}
+                    value={formData.pincode}
+                    onChange={handlePincodeChange}
+                    className={fieldClass('pincode')}
+                  />
+                  {pincodeLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
                 </div>
                 <ErrorMsg field="pincode" />
               </div>
               <div className="sm:col-span-3">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Area</label>
+                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                  Area
+                </label>
                 {areas.length > 1 ? (
                   <div className="relative">
-                    <select value={formData.area} onChange={(e) => setField('area', e.target.value)} className={`${fieldClass('area')} appearance-none pr-10`}>
+                    <select
+                      value={formData.area}
+                      onChange={(e) => setField('area', e.target.value)}
+                      className={`${fieldClass('area')} appearance-none pr-10`}>
                       <option value="">Select area</option>
-                      {areas.map(a => <option key={a} value={a}>{a}</option>)}
+                      {areas.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
                   </div>
                 ) : (
-                  <input type="text" value={formData.area} readOnly className={readOnlyClass} placeholder="Auto-fills" />
+                  <input
+                    type="text"
+                    value={formData.area}
+                    readOnly
+                    className={readOnlyClass}
+                    placeholder="Auto-fills"
+                  />
                 )}
               </div>
             </div>
@@ -621,39 +1322,90 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
             {/* Row 2: City + State + Country */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div data-edit-field="city">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">City</label>
-                <input type="text" value={formData.city} readOnly className={readOnlyClass} placeholder="Auto-fills" />
+                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                  City
+                </label>
+                <input
+                  type="text"
+                  value={formData.city}
+                  readOnly
+                  className={readOnlyClass}
+                  placeholder="Auto-fills"
+                />
                 <ErrorMsg field="city" />
               </div>
               <div data-edit-field="state">
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">State</label>
-                <input type="text" value={formData.state} readOnly className={readOnlyClass} placeholder="Auto-fills" />
+                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                  State
+                </label>
+                <input
+                  type="text"
+                  value={formData.state}
+                  readOnly
+                  className={readOnlyClass}
+                  placeholder="Auto-fills"
+                />
                 <ErrorMsg field="state" />
               </div>
               <div>
-                <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Country</label>
-                <input type="text" value={formData.country} readOnly className={readOnlyClass} placeholder="Auto-fills" />
+                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                  Country
+                </label>
+                <input
+                  type="text"
+                  value={formData.country}
+                  readOnly
+                  className={readOnlyClass}
+                  placeholder="Auto-fills"
+                />
               </div>
             </div>
 
             {/* Row 3: Residential Address */}
             <div data-edit-field="address">
-              <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Residential Address</label>
-              <input type="text" placeholder="Flat/House No., Building Name, Street" value={formData.address} onChange={(e) => setField('address', e.target.value)} className={fieldClass('address')} />
+              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                Residential Address
+              </label>
+              <input
+                type="text"
+                placeholder="Flat/House No., Building Name, Street"
+                value={formData.address}
+                onChange={(e) => setField('address', e.target.value)}
+                className={fieldClass('address')}
+              />
               <ErrorMsg field="address" />
             </div>
           </div>
 
-          {/* Clinical Remarks */}
-          <div>
-            <label className="block font-caption text-on-surface-variant uppercase mb-1.5">Clinical Remarks</label>
-            <textarea rows={3} placeholder="Add any relevant clinical notes or remarks" value={formData.remarks} onChange={(e) => setField('remarks', e.target.value)} className="w-full px-4 py-3 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all placeholder:text-on-surface-variant/50 resize-none" />
+          {/* Remarks */}
+          <div data-edit-field="remarks">
+            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              Remarks{' '}
+              <span className="text-error text-base font-bold leading-none">
+                *
+              </span>
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Add any relevant clinical notes or remarks"
+              value={formData.remarks}
+              onChange={(e) => setField('remarks', e.target.value)}
+              className={fieldClass('remarks') + ' resize-none'}
+            />
+            <ErrorMsg field="remarks" />
           </div>
         </div>
 
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-outline-variant bg-surface-container-lowest">
-          <button onClick={onClose} className="px-5 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all">Discard Changes</button>
-          <button onClick={handleSubmit} disabled={submitting} className="px-5 py-2.5 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all">
+            Discard Changes
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="px-5 py-2.5 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
             {submitting ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
@@ -662,22 +1414,30 @@ const EditPanel = ({ lead, onClose, onSave, onError, onSuccess }) => {
   );
 };
 
-// View Lead Modal with History
-const ViewLeadModal = ({ lead, avatarColors, priorityColors, onClose }) => {
+// View Lead Slide-Over Panel
+const ViewLeadModal = ({lead, statusColors, priorityColors, onClose}) => {
+  const [activeTab, setActiveTab] = useState('details');
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [callHistory, setCallHistory] = useState([]);
   const [loadingCalls, setLoadingCalls] = useState(true);
 
   useEffect(() => {
-    api.getLeadHistory(lead.id).then(res => {
-      if (res?.data?.history) setHistory(res.data.history);
-    }).catch(() => {}).finally(() => setLoadingHistory(false));
-
+    api
+      .getLeadHistory(lead.id)
+      .then((res) => {
+        if (res?.data?.history) setHistory(res.data.history);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingHistory(false));
     if (lead.phone) {
-      api.getCallHistoryByPhone(lead.phone).then(res => {
-        if (res?.data?.calls) setCallHistory(res.data.calls);
-      }).catch(() => {}).finally(() => setLoadingCalls(false));
+      api
+        .getCallHistoryByPhone(lead.phone)
+        .then((res) => {
+          if (res?.data?.calls) setCallHistory(res.data.calls);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingCalls(false));
     } else {
       setLoadingCalls(false);
     }
@@ -685,6 +1445,7 @@ const ViewLeadModal = ({ lead, avatarColors, priorityColors, onClose }) => {
 
   const actionLabels = {
     created: 'Lead Created',
+    assigned: 'Lead Assigned',
     status_changed: 'Status Changed',
     priority_changed: 'Priority Changed',
     reassigned: 'Reassigned',
@@ -692,125 +1453,347 @@ const ViewLeadModal = ({ lead, avatarColors, priorityColors, onClose }) => {
     auto_assigned: 'Auto-Assigned',
   };
 
+  const Row = ({label, value}) => (
+    <div className="flex items-baseline gap-2 py-1.5">
+      <span className="w-28 flex-shrink-0 font-caption text-on-surface-variant uppercase text-xs tracking-wide">
+        {label}
+      </span>
+      <span className="font-body-md text-on-surface">{value || '—'}</span>
+    </div>
+  );
+
+  const priorityColor =
+    priorityColors[lead.priority] || 'text-on-surface-variant';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-outline-variant">
-          <h3 className="font-h2 text-on-surface">Patient Details</h3>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><X className="w-5 h-5 text-on-surface-variant" /></button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center font-h3 ${avatarColors[lead.status]}`}>{lead.initials}</div>
-            <div>
-              <p className="font-h3 text-on-surface">{lead.name}</p>
-              <p className="font-body-md text-on-surface-variant">{lead.uhid || 'No UHID'}</p>
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div
+        className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-2xl bg-surface shadow-2xl flex flex-col h-full animate-slide-in z-10 overflow-hidden">
+        {/* ─── Header ─── */}
+        <div className="flex items-start justify-between px-8 py-6 border-b border-outline-variant bg-surface-container-lowest">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 mb-1">
+              <span className="font-data-tabular text-xs font-bold px-2 py-0.5 rounded bg-secondary/10 text-secondary">
+                {lead.code}
+              </span>
+              <span
+                className={`inline-block px-2.5 py-0.5 rounded-full font-caption font-bold text-xs ${statusColors[lead.status] || ''}`}>
+                {lead.status}
+              </span>
             </div>
+            <h2 className="font-h1 text-2xl text-on-surface truncate">
+              {lead.name}
+            </h2>
+            <p className="font-body-sm text-on-surface-variant mt-0.5">
+              {lead.branchName || 'No branch'} ·{' '}
+              {lead.createdByName ? `Created by ${lead.createdByName}` : ''}
+            </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { icon: <Phone className="w-4 h-4 text-secondary" />, label: 'Phone', value: lead.phone },
-              { icon: <Phone className="w-4 h-4 text-secondary" />, label: 'Alternate', value: lead.alternateContact || '—' },
-              { icon: <Mail className="w-4 h-4 text-secondary" />, label: 'Email', value: lead.email },
-              { icon: <Calendar className="w-4 h-4 text-secondary" />, label: 'DOB', value: lead.dob ? new Date(lead.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
-              { icon: <MapPin className="w-4 h-4 text-secondary" />, label: 'Address', value: [lead.address, lead.city, lead.state, lead.country].filter(Boolean).join(', ') || '—' },
-              { icon: <User className="w-4 h-4 text-secondary" />, label: 'Assigned To', value: lead.assignedTo || '—' },
-              { icon: <FileText className="w-4 h-4 text-secondary" />, label: 'Lead Source', value: lead.leadSource || '—' },
-              { icon: <AlertTriangle className="w-4 h-4 text-secondary" />, label: 'Priority', value: <span className={priorityColors[lead.priority]}>{lead.priority}</span> },
-              { icon: <Clock className="w-4 h-4 text-secondary" />, label: 'Created', value: lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-start gap-3">
-                {item.icon}
-                <div>
-                  <p className="font-caption text-on-surface-variant uppercase">{item.label}</p>
-                  <p className="font-body-md text-on-surface">{item.value}</p>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-surface-container-high transition-colors flex-shrink-0 ml-4">
+            <X className="w-5 h-5 text-on-surface-variant" />
+          </button>
+        </div>
+
+        {/* ─── Key Info Bar ─── */}
+        <div className="px-8 py-4 bg-surface-container-lowest border-b border-outline-variant">
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-2">
+              <Phone className="w-4 h-4 text-secondary" />
+              <span className="font-data-tabular text-on-surface font-bold">
+                {lead.phone || '—'}
+              </span>
+            </div>
+            {lead.email && (
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-on-surface-variant" />
+                <span className="font-body-md text-on-surface-variant">
+                  {lead.email}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="font-caption text-on-surface-variant uppercase text-xs">
+                Priority
+              </span>
+              <span className={`font-body-md font-bold ${priorityColor}`}>
+                {lead.priority || '—'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-caption text-on-surface-variant uppercase text-xs">
+                Source
+              </span>
+              <span className="font-body-md text-on-surface">
+                {lead.leadSource || '—'}
+              </span>
+            </div>
+            {lead.assignedTo && (
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-on-surface-variant" />
+                <span className="font-body-md text-on-surface-variant">
+                  {lead.assignedTo}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ─── Tabs ─── */}
+        <div className="flex px-8 border-b border-outline-variant gap-6">
+          {[
+            {key: 'details', label: 'Details'},
+            {key: 'activity', label: `Activity (${history.length})`},
+            {key: 'calls', label: `Calls (${callHistory.length})`},
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`py-3 font-body-md font-bold transition-all border-b-2 ${
+                activeTab === tab.key
+                  ? 'border-secondary text-secondary'
+                  : 'border-transparent text-on-surface-variant hover:text-on-surface'
+              }`}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ─── Content ─── */}
+        <div className="flex-1 overflow-y-auto">
+          {activeTab === 'details' && (
+            <div className="px-8 py-6">
+              {/* Two-column layout */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Left Column */}
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-body-md text-on-surface font-bold mb-2 pb-1.5 border-b border-outline-variant">
+                      Contact
+                    </h3>
+                    <Row label="Phone" value={lead.phone} />
+                    <Row label="Alt Phone" value={lead.alternateContact} />
+                    <Row label="Email" value={lead.email} />
+                  </div>
+                  <div>
+                    <h3 className="font-body-md text-on-surface font-bold mb-2 pb-1.5 border-b border-outline-variant">
+                      Patient
+                    </h3>
+                    <Row label="UHID" value={lead.uhid} />
+                    <Row label="Gender" value={lead.gender} />
+                    <Row
+                      label="DOB"
+                      value={
+                        lead.dob
+                          ? new Date(lead.dob).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '—'
+                      }
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-body-md text-on-surface font-bold mb-2 pb-1.5 border-b border-outline-variant">
+                      Address
+                    </h3>
+                    <Row label="Address" value={lead.address} />
+                    <Row label="Area" value={lead.area} />
+                    <Row label="City" value={lead.city} />
+                    <Row label="State" value={lead.state} />
+                    <Row label="Pincode" value={lead.pincode} />
+                    <Row label="Country" value={lead.country} />
+                  </div>
+                </div>
+
+                {/* Right Column */}
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-body-md text-on-surface font-bold mb-2 pb-1.5 border-b border-outline-variant">
+                      Lead
+                    </h3>
+                    <Row label="Status" value={lead.status} />
+                    <Row label="Priority" value={lead.priority} />
+                    <Row label="Source" value={lead.leadSource} />
+                    <Row label="Branch" value={lead.branchName} />
+                  </div>
+                  <div>
+                    <h3 className="font-body-md text-on-surface font-bold mb-2 pb-1.5 border-b border-outline-variant">
+                      Assignment
+                    </h3>
+                    <Row label="Created By" value={lead.createdByName} />
+                    <Row label="Assigned To" value={lead.assignedTo} />
+                    <Row
+                      label="Created"
+                      value={formatRelativeTime(lead.createdAt)}
+                    />
+                    <Row
+                      label="Last Call"
+                      value={formatRelativeTime(lead.lastCallDate)}
+                    />
+                  </div>
+                  {lead.clinicalRemarks && (
+                    <div>
+                      <h3 className="font-body-md text-on-surface font-bold mb-2 pb-1.5 border-b border-outline-variant">
+                        Remarks
+                      </h3>
+                      <p className="font-body-md text-on-surface-variant leading-relaxed bg-surface-container rounded-lg p-3">
+                        {lead.clinicalRemarks}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-          {lead.clinicalRemarks && (
-            <div>
-              <p className="font-caption text-on-surface-variant uppercase mb-1">Clinical Remarks</p>
-              <p className="font-body-md text-on-surface bg-surface-container rounded-lg p-3">{lead.clinicalRemarks}</p>
             </div>
           )}
 
-          {/* Lead History */}
-          <div className="border-t border-outline-variant pt-4">
-            <h4 className="font-h3 text-on-surface mb-3 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-secondary" /> Activity History
-            </h4>
-            {loadingHistory ? (
-              <p className="font-body-sm text-on-surface-variant">Loading history...</p>
-            ) : history.length === 0 ? (
-              <p className="font-body-sm text-on-surface-variant">No activity recorded yet.</p>
-            ) : (
-              <div className="space-y-3 max-h-48 overflow-y-auto">
-                {history.map((h) => (
-                  <div key={h.id} className="flex items-start gap-3 p-3 bg-surface-container rounded-lg">
-                    <div className="w-2 h-2 rounded-full bg-secondary mt-2 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="font-body-md text-on-surface font-bold">{actionLabels[h.action] || h.action}</p>
-                      {h.old_value && h.new_value && (
-                        <p className="font-body-sm text-on-surface-variant mt-0.5">
-                          <span className="line-through">{h.old_value}</span> → <span className="font-bold">{h.new_value}</span>
+          {activeTab === 'activity' && (
+            <div className="px-8 py-6">
+              {loadingHistory ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : history.length === 0 ? (
+                <div className="text-center py-16">
+                  <Clock className="w-10 h-10 text-on-surface-variant/30 mx-auto mb-3" />
+                  <p className="font-body-md text-on-surface-variant">
+                    No activity recorded yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {history.map((h, i) => (
+                    <div key={h.id} className="relative flex gap-4 pb-6">
+                      {i < history.length - 1 && (
+                        <div className="absolute left-[11px] top-6 bottom-0 w-px bg-outline-variant" />
+                      )}
+                      <div className="flex-shrink-0 mt-1">
+                        <div className="w-6 h-6 rounded-full bg-secondary/10 border-2 border-secondary flex items-center justify-center">
+                          <div className="w-2 h-2 rounded-full bg-secondary" />
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0 pt-0.5">
+                        <p className="font-body-md text-on-surface font-bold">
+                          {actionLabels[h.action] || h.action}
                         </p>
-                      )}
-                      {h.new_value && !h.old_value && (
-                        <p className="font-body-sm text-on-surface-variant mt-0.5">{h.new_value}</p>
-                      )}
-                      <p className="font-caption text-on-surface-variant mt-1">
-                        {h.changed_by_name && `by ${h.changed_by_name} • `}
-                        {new Date(h.created_at).toLocaleString('en-IN')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Call History */}
-          <div className="border-t border-outline-variant pt-4">
-            <h4 className="font-h3 text-on-surface mb-3 flex items-center gap-2">
-              <Phone className="w-4 h-4 text-secondary" /> Call History
-            </h4>
-            {loadingCalls ? (
-              <p className="font-body-sm text-on-surface-variant">Loading call history...</p>
-            ) : callHistory.length === 0 ? (
-              <p className="font-body-sm text-on-surface-variant">No calls recorded yet.</p>
-            ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {callHistory.map((ch) => (
-                  <div key={ch.id} className="flex items-center justify-between p-3 bg-surface-container rounded-lg">
-                    <div className="flex items-center gap-3">
-                      {ch.status === 'missed' ? (
-                        <PhoneMissed className="w-4 h-4 text-error" />
-                      ) : ch.direction === 'inbound' ? (
-                        <PhoneIncoming className="w-4 h-4 text-success" />
-                      ) : (
-                        <PhoneOutgoing className="w-4 h-4 text-secondary" />
-                      )}
-                      <div>
-                        <p className="font-body-md text-on-surface">
-                          {ch.direction === 'inbound' ? 'Incoming' : 'Outgoing'}
-                          {ch.status === 'missed' && ' (Missed)'}
-                        </p>
-                        <p className="font-caption text-on-surface-variant">
-                          {ch.duration ? `${ch.duration}s` : 'No duration'}
-                          {ch.notes ? ` · ${ch.notes}` : ''}
+                        {h.old_value && h.new_value && (
+                          <p className="font-body-sm text-on-surface-variant mt-0.5">
+                            <span className="line-through opacity-50">
+                              {h.old_value}
+                            </span>
+                            <span className="mx-1.5 text-on-surface-variant">
+                              →
+                            </span>
+                            <span className="font-bold text-on-surface">
+                              {h.new_value}
+                            </span>
+                          </p>
+                        )}
+                        {h.new_value && !h.old_value && (
+                          <p className="font-body-sm text-on-surface-variant mt-0.5">
+                            {h.new_value}
+                          </p>
+                        )}
+                        <p className="font-caption text-on-surface-variant/50 mt-1">
+                          {h.changed_by_name && `${h.changed_by_name} · `}
+                          {formatRelativeTime(h.created_at)}
                         </p>
                       </div>
                     </div>
-                    <p className="font-caption text-on-surface-variant">
-                      {new Date(ch.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'calls' && (
+            <div className="px-8 py-6">
+              {loadingCalls ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : callHistory.length === 0 ? (
+                <div className="text-center py-16">
+                  <Phone className="w-10 h-10 text-on-surface-variant/30 mx-auto mb-3" />
+                  <p className="font-body-md text-on-surface-variant">
+                    No calls recorded yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {callHistory.map((ch) => {
+                    const isMissed =
+                      ch.status === 'missed' || ch.status === 'no-answer';
+                    const isInbound = ch.direction === 'inbound';
+                    return (
+                      <div
+                        key={ch.id}
+                        className="flex items-start gap-4 p-4 bg-surface-container rounded-lg">
+                        <div
+                          className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            isMissed
+                              ? 'bg-error/10'
+                              : isInbound
+                                ? 'bg-tertiary/10'
+                                : 'bg-secondary/10'
+                          }`}>
+                          {isMissed ? (
+                            <PhoneMissed className="w-4 h-4 text-error" />
+                          ) : isInbound ? (
+                            <PhoneIncoming className="w-4 h-4 text-tertiary" />
+                          ) : (
+                            <PhoneOutgoing className="w-4 h-4 text-secondary" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-body-md text-on-surface font-bold">
+                              {isInbound ? 'Incoming' : 'Outgoing'}
+                              {isMissed && ' (Missed)'}
+                            </p>
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${
+                                isMissed
+                                  ? 'bg-error/10 text-error'
+                                  : 'bg-secondary/10 text-secondary'
+                              }`}>
+                              {ch.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 text-on-surface-variant">
+                            {ch.duration > 0 && (
+                              <span className="font-data-tabular text-xs">
+                                {Math.floor(ch.duration / 60)}:
+                                {String(ch.duration % 60).padStart(2, '0')}
+                              </span>
+                            )}
+                            {ch.user_name && (
+                              <span className="font-body-sm">
+                                Agent: {ch.user_name}
+                              </span>
+                            )}
+                            <span className="font-caption text-on-surface-variant/50 ml-auto">
+                              {formatRelativeTime(ch.created_at)}
+                            </span>
+                          </div>
+                          {ch.notes && (
+                            <p className="font-body-sm text-on-surface-variant mt-2 bg-surface-container-lowest rounded px-3 py-2">
+                              {ch.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

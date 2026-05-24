@@ -21,7 +21,20 @@ function licenseGuard(req, res, next) {
   if (req.path === '/internal/license/unlock' && req.method === 'POST') {
     return next();
   }
+  if (req.path === '/internal/license/update-expiry' && req.method === 'PUT') {
+    return next();
+  }
+  if (req.path === '/api/license/status' && req.method === 'GET') {
+    return next();
+  }
+  if (req.path === '/api/license/verify-key' && req.method === 'POST') {
+    return next();
+  }
   if (req.path === '/api/health') {
+    return next();
+  }
+  // Allow telephony vendor webhook even when license is invalid
+  if (req.path === '/api/calls/inbound' && req.method === 'POST') {
     return next();
   }
 

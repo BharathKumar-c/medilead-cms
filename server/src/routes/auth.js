@@ -4,7 +4,10 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validateLogin, validateRegister, validateChangePassword, validateUserUpdate, validateProfileUpdate, validateSettings, validateId } = require('../middleware/validate');
+const { passwordResetLimiter } = require('../middleware/rateLimiter');
+const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { sendEmail, buildResetEmail } = require('../utils/email');
 const licenseModule = require('../license/licenseModule');
 
 const router = express.Router();
@@ -12,7 +15,13 @@ const router = express.Router();
 // POST /api/auth/register
 router.post('/register', validateRegister, async (req, res) => {
   try {
-    const { name, email, password, specialty, phone } = req.body;
+    const { first_name, last_name, email, password, specialty, phone, department, designation, intercom_number, employee_id, date_of_birth, allowed_departments } = req.body;
+
+    // Build full name from first/last or use provided name
+    const name = req.body.name || `${first_name || ''} ${last_name || ''}`.trim();
+    if (!name) {
+      return res.status(400).json({ status: 'error', message: 'Name is required.', code: 'VALIDATION_ERROR' });
+    }
 
     // Check if user exists
     const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -25,6 +34,14 @@ router.post('/register', validateRegister, async (req, res) => {
       });
     }
 
+    // Check for duplicate employee_id
+    if (employee_id) {
+      const empCheck = await db.query('SELECT id FROM users WHERE employee_id = $1', [employee_id]);
+      if (empCheck.rows.length > 0) {
+        return res.status(409).json({ status: 'error', message: 'Employee ID already exists.', code: 'EMPLOYEE_ID_EXISTS' });
+      }
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
     const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -34,10 +51,10 @@ router.post('/register', validateRegister, async (req, res) => {
     const roleId = defaultRole.rows.length > 0 ? defaultRole.rows[0].id : null;
 
     const result = await db.query(
-      `INSERT INTO users (name, email, password_hash, role, specialty, phone)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, email, role, specialty, phone, created_at`,
-      [name, email, passwordHash, roleName, specialty, phone]
+      `INSERT INTO users (name, first_name, last_name, employee_id, email, password_hash, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       RETURNING id, name, first_name, last_name, employee_id, email, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone, created_at`,
+      [name, first_name || null, last_name || null, employee_id || null, email, passwordHash, roleName, specialty || null, department || null, designation || null, intercom_number || null, date_of_birth || null, allowed_departments || null, phone || null]
     );
 
     const user = result.rows[0];
@@ -167,7 +184,9 @@ router.post('/login', validateLogin, async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT id, name, email, role, avatar_url, specialty, phone, created_at FROM users WHERE id = $1',
+      `SELECT id, name, first_name, last_name, employee_id, email, role, avatar_url, specialty,
+              department, designation, intercom_number, allowed_departments, date_of_birth, phone, created_at
+       FROM users WHERE id = $1`,
       [req.user.id]
     );
 
@@ -299,13 +318,16 @@ router.put('/settings', authenticate, validateSettings, async (req, res) => {
   }
 });
 
-// ==================== USER MANAGEMENT (Super Admin only) ====================
+// ==================== USER MANAGEMENT (Super Admin / Manager) ====================
 
 // GET /api/auth/users — list all users
-router.get('/users', authenticate, authorize('super_admin'), async (req, res) => {
+router.get('/users', authenticate, authorize('super_admin', 'manager'), async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT id, name, email, role, avatar_url, specialty, phone, is_active, created_at FROM users ORDER BY created_at DESC'
+      `SELECT id, name, first_name, last_name, employee_id, email, role, avatar_url, specialty,
+              department, designation, intercom_number, allowed_departments, date_of_birth,
+              phone, is_active, created_at
+       FROM users ORDER BY created_at DESC`
     );
 
     // Fetch roles for all users
@@ -335,14 +357,36 @@ router.get('/users', authenticate, authorize('super_admin'), async (req, res) =>
   }
 });
 
-// POST /api/auth/users — create user (Super Admin)
-router.post('/users', authenticate, authorize('super_admin'), validateRegister, async (req, res) => {
+// POST /api/auth/users — create user (Super Admin / Manager)
+router.post('/users', authenticate, authorize('super_admin', 'manager'), validateRegister, async (req, res) => {
   try {
-    const { name, email, password, role, specialty, phone, role_ids } = req.body;
+    const { first_name, last_name, employee_id, name, email, password, role, specialty, phone, department, designation, intercom_number, date_of_birth, allowed_departments, role_ids } = req.body;
+
+    // Build full name from first/last or use provided name
+    const fullName = name || `${first_name || ''} ${last_name || ''}`.trim();
+    if (!fullName) {
+      return res.status(400).json({ status: 'error', message: 'Name is required.', code: 'VALIDATION_ERROR' });
+    }
 
     const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ status: 'error', message: 'User with this email already exists.', code: 'USER_EXISTS' });
+    }
+
+    // Check for duplicate employee_id
+    if (employee_id) {
+      const empCheck = await db.query('SELECT id FROM users WHERE employee_id = $1', [employee_id]);
+      if (empCheck.rows.length > 0) {
+        return res.status(409).json({ status: 'error', message: 'Employee ID already exists.', code: 'EMPLOYEE_ID_EXISTS' });
+      }
+    }
+
+    // Check for duplicate intercom_number
+    if (intercom_number) {
+      const icCheck = await db.query('SELECT id FROM users WHERE intercom_number = $1', [intercom_number]);
+      if (icCheck.rows.length > 0) {
+        return res.status(409).json({ status: 'error', message: 'Intercom number already assigned to another user.', code: 'INTERCOM_EXISTS' });
+      }
     }
 
     // Determine role name for legacy column
@@ -354,10 +398,10 @@ router.post('/users', authenticate, authorize('super_admin'), validateRegister, 
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await db.query(
-      `INSERT INTO users (name, email, password_hash, role, specialty, phone)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, email, role, specialty, phone, is_active, created_at`,
-      [name, email, passwordHash, roleName, specialty, phone]
+      `INSERT INTO users (name, first_name, last_name, employee_id, email, password_hash, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       RETURNING id, name, first_name, last_name, employee_id, email, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone, is_active, created_at`,
+      [fullName, first_name || null, last_name || null, employee_id || null, email, passwordHash, roleName, specialty || null, department || null, designation || null, intercom_number || null, date_of_birth || null, allowed_departments || null, phone || null]
     );
 
     const user = result.rows[0];
@@ -393,15 +437,17 @@ router.post('/users', authenticate, authorize('super_admin'), validateRegister, 
   }
 });
 
-// PUT /api/auth/users/:id — update user (Super Admin)
-router.put('/users/:id', authenticate, authorize('super_admin'), validateId, validateUserUpdate, async (req, res) => {
+// PUT /api/auth/users/:id — update user (Super Admin / Manager)
+router.put('/users/:id', authenticate, authorize('super_admin', 'manager'), validateId, validateUserUpdate, async (req, res) => {
   try {
+    const targetId = parseInt(req.params.id);
+
     // Protect last super admin from role change or deactivation
     const changingRole = req.body.role !== undefined || req.body.role_ids !== undefined;
     const deactivating = req.body.is_active === false || req.body.is_active === 'false';
 
     if (changingRole || deactivating) {
-      const targetUser = await db.query('SELECT role, is_active FROM users WHERE id = $1', [req.params.id]);
+      const targetUser = await db.query('SELECT role, is_active FROM users WHERE id = $1', [targetId]);
       if (targetUser.rows.length > 0 && targetUser.rows[0].role === 'super_admin' && targetUser.rows[0].is_active) {
         const superAdminCount = await db.query("SELECT COUNT(*) FROM users WHERE role = 'super_admin' AND is_active = true");
         if (parseInt(superAdminCount.rows[0].count) <= 1) {
@@ -415,8 +461,46 @@ router.put('/users/:id', authenticate, authorize('super_admin'), validateId, val
       }
     }
 
+    // Check for duplicate employee_id (if changing)
+    if (req.body.employee_id) {
+      const empCheck = await db.query(
+        'SELECT id FROM users WHERE employee_id = $1 AND id != $2',
+        [req.body.employee_id, targetId]
+      );
+      if (empCheck.rows.length > 0) {
+        return res.status(409).json({ status: 'error', message: 'Employee ID already assigned to another user.', code: 'EMPLOYEE_ID_EXISTS' });
+      }
+    }
+
+    // Check for duplicate intercom_number (if changing)
+    if (req.body.intercom_number) {
+      const icCheck = await db.query(
+        'SELECT id FROM users WHERE intercom_number = $1 AND id != $2',
+        [req.body.intercom_number, targetId]
+      );
+      if (icCheck.rows.length > 0) {
+        return res.status(409).json({ status: 'error', message: 'Intercom number already assigned to another user.', code: 'INTERCOM_EXISTS' });
+      }
+    }
+
+    // Check for duplicate email (if changing)
+    if (req.body.email) {
+      const emailCheck = await db.query(
+        'SELECT id FROM users WHERE email = $1 AND id != $2',
+        [req.body.email, targetId]
+      );
+      if (emailCheck.rows.length > 0) {
+        return res.status(409).json({ status: 'error', message: 'Email already in use by another user.', code: 'EMAIL_EXISTS' });
+      }
+    }
+
     // Build dynamic UPDATE based on provided fields
-    const allowedFields = { name: null, email: null, role: null, specialty: null, phone: null, is_active: null };
+    const allowedFields = {
+      name: null, first_name: null, last_name: null, employee_id: null,
+      email: null, role: null, specialty: null, department: null,
+      designation: null, intercom_number: null, date_of_birth: null,
+      allowed_departments: null, phone: null, is_active: null,
+    };
     const setClauses = [];
     const params = [];
     let paramIndex = 1;
@@ -450,7 +534,7 @@ router.put('/users/:id', authenticate, authorize('super_admin'), validateId, val
     let user;
     if (setClauses.length > 0) {
       setClauses.push('updated_at = CURRENT_TIMESTAMP');
-      params.push(req.params.id);
+      params.push(targetId);
 
       const result = await db.query(
         `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
@@ -463,7 +547,7 @@ router.put('/users/:id', authenticate, authorize('super_admin'), validateId, val
       const { password_hash, ...userData } = result.rows[0];
       user = userData;
     } else {
-      const result = await db.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
+      const result = await db.query('SELECT * FROM users WHERE id = $1', [targetId]);
       if (result.rows.length === 0) {
         return res.status(404).json({ status: 'error', message: 'User not found.', code: 'USER_NOT_FOUND' });
       }
@@ -473,10 +557,10 @@ router.put('/users/:id', authenticate, authorize('super_admin'), validateId, val
 
     // Update user_roles if role_ids provided
     if (role_ids !== undefined) {
-      await db.query('DELETE FROM user_roles WHERE user_id = $1', [req.params.id]);
+      await db.query('DELETE FROM user_roles WHERE user_id = $1', [targetId]);
       const idsToAssign = role_ids.slice(0, 2);
       for (const roleId of idsToAssign) {
-        await db.query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)', [req.params.id, roleId]);
+        await db.query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)', [targetId, roleId]);
       }
     }
 
@@ -484,11 +568,11 @@ router.put('/users/:id', authenticate, authorize('super_admin'), validateId, val
     const rolesResult = await db.query(
       `SELECT r.name, r.display_name FROM roles r
        INNER JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = $1`,
-      [req.params.id]
+      [targetId]
     );
     user.roles = rolesResult.rows;
 
-    logger.info('User updated by admin', { adminId: req.user.id, updatedUserId: req.params.id });
+    logger.info('User updated by admin', { adminId: req.user.id, updatedUserId: targetId });
 
     res.json({ status: 'success', data: { user } });
   } catch (err) {
@@ -497,8 +581,8 @@ router.put('/users/:id', authenticate, authorize('super_admin'), validateId, val
   }
 });
 
-// PUT /api/auth/users/:id/password — reset user password (Super Admin)
-router.put('/users/:id/password', authenticate, authorize('super_admin'), validateId, async (req, res) => {
+// PUT /api/auth/users/:id/password — reset user password (Super Admin / Manager)
+router.put('/users/:id/password', authenticate, authorize('super_admin', 'manager'), validateId, async (req, res) => {
   try {
     const { newPassword } = req.body;
 
@@ -525,8 +609,8 @@ router.put('/users/:id/password', authenticate, authorize('super_admin'), valida
   }
 });
 
-// DELETE /api/auth/users/:id — deactivate user (Super Admin, soft delete)
-router.delete('/users/:id', authenticate, authorize('super_admin'), validateId, async (req, res) => {
+// DELETE /api/auth/users/:id — deactivate user (Super Admin / Manager, soft delete)
+router.delete('/users/:id', authenticate, authorize('super_admin', 'manager'), validateId, async (req, res) => {
   try {
     // Protect last super admin from deactivation
     const targetUser = await db.query('SELECT role, is_active FROM users WHERE id = $1', [req.params.id]);
@@ -556,6 +640,137 @@ router.delete('/users/:id', authenticate, authorize('super_admin'), validateId, 
   } catch (err) {
     logger.error('Deactivate user error', { error: err.message, adminId: req.user.id, targetUserId: req.params.id });
     res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'USER_DEACTIVATE_ERROR' });
+  }
+});
+
+// ==================== FORGOT / RESET PASSWORD ====================
+
+// POST /api/auth/forgot-password — send reset link via email
+router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide a valid email address.',
+        code: 'INVALID_EMAIL',
+      });
+    }
+
+    // Check if user with this email exists
+    const userResult = await db.query(
+      'SELECT id, name, email FROM users WHERE email = $1 AND is_active = true',
+      [email]
+    );
+
+    // Always return success to avoid revealing whether an email exists
+    if (userResult.rows.length === 0) {
+      logger.info('Password reset requested for non-existent email', { email });
+      return res.json({
+        status: 'success',
+        message: 'If an account with that email exists, a password reset link has been sent.',
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Generate a secure random token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour expiry
+
+    // Store token in database
+    await db.query(
+      'INSERT INTO password_reset_tokens (email, token, expires_at) VALUES ($1, $2, $3)',
+      [email, token, expiresAt]
+    );
+
+    // Build reset link
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
+
+    // Send email
+    const mail = buildResetEmail({ to: email, link: resetUrl, expiresInMinutes: 60 });
+    await sendEmail(mail);
+
+    logger.info('Password reset link sent', { userId: user.id, email });
+
+    res.json({
+      status: 'success',
+      message: 'If an account with that email exists, a password reset link has been sent.',
+    });
+  } catch (err) {
+    logger.error('Forgot password error', { error: err.message, stack: err.stack });
+    res.status(500).json({ status: 'error', message: 'Failed to process request.', code: 'FORGOT_PASSWORD_ERROR' });
+  }
+});
+
+// POST /api/auth/reset-password — reset password using token
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Reset token is required.',
+        code: 'INVALID_TOKEN',
+      });
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Password must be at least 6 characters.',
+        code: 'INVALID_PASSWORD',
+      });
+    }
+
+    // Find valid token
+    const tokenResult = await db.query(
+      `SELECT * FROM password_reset_tokens
+       WHERE token = $1 AND used = false AND expires_at > NOW()`,
+      [token]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid or expired reset token. Please request a new password reset.',
+        code: 'INVALID_OR_EXPIRED_TOKEN',
+      });
+    }
+
+    const resetRecord = tokenResult.rows[0];
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    // Update user password
+    const updateResult = await db.query(
+      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE email = $2 AND is_active = true RETURNING id',
+      [passwordHash, resetRecord.email]
+    );
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User account not found or inactive.',
+        code: 'USER_NOT_FOUND',
+      });
+    }
+
+    // Mark token as used
+    await db.query('UPDATE password_reset_tokens SET used = true WHERE id = $1', [resetRecord.id]);
+
+    logger.info('Password reset successful', { userId: updateResult.rows[0].id, email: resetRecord.email });
+
+    res.json({
+      status: 'success',
+      message: 'Password reset successfully. You can now sign in with your new password.',
+    });
+  } catch (err) {
+    logger.error('Reset password error', { error: err.message, stack: err.stack });
+    res.status(500).json({ status: 'error', message: 'Failed to reset password.', code: 'RESET_PASSWORD_ERROR' });
   }
 });
 

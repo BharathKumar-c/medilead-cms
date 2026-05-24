@@ -83,7 +83,7 @@ export const searchableContent = [
     title: 'First Login',
     keywords: 'login credentials default user first login password change',
     content:
-      'Default login email: bharath@medway.health. Check your seed output or admin for the password. Change password after first login.',
+      'Default login email: barath@gmail.com. Check your seed output or admin for the password. Change password after first login.',
   },
 
   // Roles
@@ -273,7 +273,8 @@ export const apiEndpoints = {
       method: 'POST',
       path: '/api/auth/register',
       auth: 'Public',
-      description: 'Register a new user account (role is server-assigned to "staff")',
+      description:
+        'Register a new user account (role is server-assigned to "staff")',
       body: {
         name: 'string',
         email: 'string',
@@ -545,7 +546,8 @@ export const apiEndpoints = {
       method: 'GET',
       path: '/api/appointments/slots',
       auth: 'Required',
-      description: 'Get available time slots for a doctor on a date (30-min intervals)',
+      description:
+        'Get available time slots for a doctor on a date (30-min intervals)',
       params: 'doctor_id, date',
     },
   ],
@@ -790,7 +792,8 @@ export const apiEndpoints = {
       method: 'DELETE',
       path: '/api/roles/:id',
       auth: 'Super Admin',
-      description: 'Delete a custom role (blocks system roles and roles with users)',
+      description:
+        'Delete a custom role (blocks system roles and roles with users)',
     },
     {
       method: 'PUT',
@@ -1014,7 +1017,14 @@ export const databaseTables = [
   {
     name: 'roles',
     description: 'RBAC roles (system and custom)',
-    fields: ['id', 'name', 'display_name', 'description', 'is_system', 'is_active'],
+    fields: [
+      'id',
+      'name',
+      'display_name',
+      'description',
+      'is_system',
+      'is_active',
+    ],
   },
   {
     name: 'permissions',
@@ -1034,7 +1044,16 @@ export const databaseTables = [
   {
     name: 'master_branches',
     description: 'Hospital branch locations',
-    fields: ['id', 'name', 'address', 'city', 'state', 'phone', 'email', 'is_active'],
+    fields: [
+      'id',
+      'name',
+      'address',
+      'city',
+      'state',
+      'phone',
+      'email',
+      'is_active',
+    ],
   },
   {
     name: 'branch_departments',
@@ -1044,7 +1063,16 @@ export const databaseTables = [
   {
     name: 'master_doctors',
     description: 'Doctor directory with specialties',
-    fields: ['id', 'name', 'department', 'specialty', 'qualification', 'phone', 'email', 'is_active'],
+    fields: [
+      'id',
+      'name',
+      'department',
+      'specialty',
+      'qualification',
+      'phone',
+      'email',
+      'is_active',
+    ],
   },
   {
     name: 'lead_uhids',

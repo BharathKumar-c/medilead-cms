@@ -5,8 +5,13 @@ require('dotenv').config();
 
 const seed = async () => {
   // Refuse to run in production unless explicitly allowed
-  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
-    console.error('Seeding is disabled in production. Set ALLOW_SEED=true to override.');
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.ALLOW_SEED !== 'true'
+  ) {
+    console.error(
+      'Seeding is disabled in production. Set ALLOW_SEED=true to override.',
+    );
     return;
   }
 
@@ -67,17 +72,112 @@ const seed = async () => {
       ('In-Clinic Inquiry');
     `);
 
-    // Seed Departments
+    // Seed Departments — full master list
     await client.query(`
       INSERT INTO master_department (name) VALUES
+      ('OCCUPATIONAL THERAPIST'),
+      ('SPEECH THERAPIST'),
+      ('CONSULTATION ROOM'),
+      ('Stores'),
+      ('Pulmonology'),
+      ('Psychology'),
+      ('Projects'),
+      ('Orthopaedics'),
+      ('Operations'),
+      ('Nutrition & Dietetics'),
+      ('Nusing'),
+      ('Nursing'),
+      ('Nephrology'),
+      ('Multi-Organ Transplant'),
+      ('Medical Services'),
+      ('Intensive Care Unit'),
+      ('Information Technology'),
+      ('Human Resources'),
+      ('Finance & Accounts'),
+      ('Emergency Medicine'),
+      ('CTVS'),
+      ('Critical Care Unit'),
+      ('Casualty'),
       ('Cardiology'),
-      ('General Consultation'),
-      ('Lab Results Review'),
-      ('Orthopedics'),
-      ('Neurology'),
-      ('Pediatrics'),
-      ('Emergency'),
-      ('Dermatology');
+      ('Cardiac - Ananesthesia'),
+      ('Aarogya Sri'),
+      ('Anesthesia'),
+      ('EMR'),
+      ('GENERAL'),
+      ('PHYSIOTHERAPY'),
+      ('Admin Department'),
+      ('ORAL MAXILLOFACIAL SURGEON'),
+      ('CLOUD PHYSICIAN'),
+      ('INTERNATIONAL PATIENT SERVICES'),
+      ('HEPATOLOGISTS'),
+      ('OPD'),
+      ('PSYCHOLOGICAL TEST'),
+      ('AYURVEDIC'),
+      ('CLINICAL HAEMATOLOGY'),
+      ('AYURVEDA'),
+      ('CALL CENTRE'),
+      ('PERFUSIONIST'),
+      ('BLOOD BANK'),
+      ('GENERAL PHYSICIAN'),
+      ('CENTRE HEAD'),
+      ('ENDOSCOPY SCAN'),
+      ('PSYCHIATRIST'),
+      ('PURCHASE'),
+      ('ECG'),
+      ('ECHO'),
+      ('ICN'),
+      ('CMT SECRETARY'),
+      ('DISCHARGE SUMMARY'),
+      ('MRD'),
+      ('STORES DEPARTMENT'),
+      ('IT ADMIN'),
+      ('INTERNAL AUDIT'),
+      ('IVF'),
+      ('LABORATORY'),
+      ('DIETICIAN'),
+      ('OPERATION THEATRE'),
+      ('CATH LAB'),
+      ('NURSE'),
+      ('NEUROLOGY'),
+      ('CARDIO'),
+      ('PROCESS LAB'),
+      ('SICU'),
+      ('NICU'),
+      ('WARD'),
+      ('TRANSPORT'),
+      ('TRANSPLANT CMT'),
+      ('SECURITY'),
+      ('RADIOLOGY'),
+      ('QUALITY'),
+      ('PHYSIOTHERAPHY'),
+      ('PHARMACY'),
+      ('OT'),
+      ('OP LAB'),
+      ('MARKETING'),
+      ('MAINTENANCE'),
+      ('SUPPORT'),
+      ('INSURANCE'),
+      ('INFECTION CONTROL'),
+      ('ICU'),
+      ('HUMAN RESOURCE'),
+      ('HOUSEKEEPING'),
+      ('FRONT OFFICE'),
+      ('ENDOSCOPY'),
+      ('ACCOUNTS'),
+      ('LIVE BIOTECH'),
+      ('CALL CENTER'),
+      ('CHAIRMAN OFFICE'),
+      ('CEO OFFICE'),
+      ('STORE'),
+      ('ADMIN INV'),
+      ('EMERGENCY'),
+      ('DIALYSIS'),
+      ('BIOMEDICAL'),
+      ('CSSD'),
+      ('BILLING'),
+      ('ADMIN'),
+      ('Support'),
+      ('Front Desk');
     `);
 
     // Seed Doctors
@@ -123,7 +223,7 @@ const seed = async () => {
     await client.query(
       `
       INSERT INTO users (name, email, password_hash, role, avatar_url, specialty, department, phone) VALUES
-      ('Dr. Bharath', 'bharath@medway.health', $1, 'super_admin', 'https://lh3.googleusercontent.com/aida-public/AB6AXuCOJVgByGPGQAOvoTcNGQV_NX_OMcIg3eU1cLQ2-Mj8k8dIjUoTX4t8hAn1ZLFAP-3YgTba0ky7z0LQ9BvsxS7EmBSACsHotr4mDK82M9UUAKdUJd6Ekf43be78zUYxNv8cH8NyZV7MvHbi4dBAVPh2uioqGLFT6av3FaqeybGP8hmIW_3R24NOv5UkC6vijgNoMzXXTKwXlqs2jKUgTHokMdOxv4CTLigSbZLChZ24Q61c0iQMy5VEiu4-MzYjoVjeEEFmCeZcQiE', 'Chief Surgeon', 'Cardiology', '9876543210'),
+      ('Dr. Bharath', 'barath@gmail.com', $1, 'super_admin', 'https://lh3.googleusercontent.com/aida-public/AB6AXuCOJVgByGPGQAOvoTcNGQV_NX_OMcIg3eU1cLQ2-Mj8k8dIjUoTX4t8hAn1ZLFAP-3YgTba0ky7z0LQ9BvsxS7EmBSACsHotr4mDK82M9UUAKdUJd6Ekf43be78zUYxNv8cH8NyZV7MvHbi4dBAVPh2uioqGLFT6av3FaqeybGP8hmIW_3R24NOv5UkC6vijgNoMzXXTKwXlqs2jKUgTHokMdOxv4CTLigSbZLChZ24Q61c0iQMy5VEiu4-MzYjoVjeEEFmCeZcQiE', 'Chief Surgeon', 'Cardiology', '9876543210'),
       ('Dr. Alan Turing', 'alan.turing@medway.health', $1, 'manager', NULL, 'Neurologist', 'Neurology', '9876543211'),
       ('Priya Sharma', 'priya.sharma@medway.health', $1, 'telecaller', NULL, NULL, 'General Consultation', '9876543212');
     `,
@@ -215,7 +315,9 @@ const seed = async () => {
   } catch (err) {
     console.error('Seeding failed:', err);
     if (client) {
-      try { await client.query('ROLLBACK'); } catch (_) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
       client.release();
     }
     throw err;

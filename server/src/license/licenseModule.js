@@ -79,9 +79,6 @@ const licenseModule = (() => {
       return;
     }
 
-    // Store the HMAC for future verification
-    storedHmac = rawHmac;
-
     // Parse the date and XOR-encode it
     const expiryDate = new Date(rawExpiry + 'T23:59:59.999Z');
     if (isNaN(expiryDate.getTime())) {
@@ -92,6 +89,9 @@ const licenseModule = (() => {
 
     const dateStr = expiryDate.toISOString();
     encodedExpiryBuf = xorEncode(Buffer.from(dateStr, 'utf8'), xorSessionKey);
+
+    // Store HMAC of the ISO format (what verifyIntegrity() will check against)
+    storedHmac = hmacSign(dateStr, hmacSecret);
 
     // Check expiry
     const now = Date.now();
@@ -304,6 +304,37 @@ const licenseModule = (() => {
     start(isValid, verifyIntegrity, () => { isLicenseValid = false; });
   }
 
+  /**
+   * Update the license expiry date in-memory.
+   * @param {string} newExpiryDateStr - New expiry date in "YYYY-MM-DD" format
+   * @returns {{ success: boolean, newExpiry: string|null, error: string|null }}
+   */
+  function updateExpiry(newExpiryDateStr) {
+    try {
+      const newDate = new Date(newExpiryDateStr + 'T23:59:59.999Z');
+      if (isNaN(newDate.getTime())) {
+        return { success: false, newExpiry: null, error: 'Invalid date format' };
+      }
+
+      const newDateStr = newDate.toISOString();
+      encodedExpiryBuf = xorEncode(Buffer.from(newDateStr, 'utf8'), xorSessionKey);
+      storedHmac = hmacSign(newDateStr, hmacSecret);
+      isLicenseValid = true;
+
+      return { success: true, newExpiry: newDateStr, error: null };
+    } catch (err) {
+      return { success: false, newExpiry: null, error: err.message };
+    }
+  }
+
+  /**
+   * Get the current expiry date from the XOR-encoded buffer.
+   * @returns {Date|null}
+   */
+  function getExpiryDatePublic() {
+    return getExpiryDate();
+  }
+
   // ─── Initialize on load ───
   init();
 
@@ -313,6 +344,8 @@ const licenseModule = (() => {
     daysRemaining,
     checkLogin,
     unlock,
+    updateExpiry,
+    getExpiryDate: getExpiryDatePublic,
     startWatcher,
   });
 })();

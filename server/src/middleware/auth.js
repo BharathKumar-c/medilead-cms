@@ -18,24 +18,36 @@ const authenticate = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     req.user = decoded;
 
-    // Fetch fresh roles and permissions from DB
+    // Fetch fresh roles, permissions, and intercom_number from DB
     try {
-      const rolesResult = await db.query(
-        `SELECT r.name FROM roles r
-         INNER JOIN user_roles ur ON r.id = ur.role_id
-         WHERE ur.user_id = $1`,
-        [req.user.id]
-      );
-      req.user.roles = rolesResult.rows.map(r => r.name);
+      const [rolesResult, permsResult, userResult] = await Promise.all([
+        db.query(
+          `SELECT r.name FROM roles r
+           INNER JOIN user_roles ur ON r.id = ur.role_id
+           WHERE ur.user_id = $1`,
+          [req.user.id]
+        ),
+        db.query(
+          `SELECT DISTINCT p.name FROM permissions p
+           INNER JOIN role_permissions rp ON p.id = rp.permission_id
+           INNER JOIN user_roles ur ON rp.role_id = ur.role_id
+           WHERE ur.user_id = $1`,
+          [req.user.id]
+        ),
+        db.query(
+          `SELECT intercom_number, department, is_active FROM users WHERE id = $1`,
+          [req.user.id]
+        ),
+      ]);
 
-      const permsResult = await db.query(
-        `SELECT DISTINCT p.name FROM permissions p
-         INNER JOIN role_permissions rp ON p.id = rp.permission_id
-         INNER JOIN user_roles ur ON rp.role_id = ur.role_id
-         WHERE ur.user_id = $1`,
-        [req.user.id]
-      );
+      req.user.roles = rolesResult.rows.map(r => r.name);
       req.user.permissions = permsResult.rows.map(r => r.name);
+
+      if (userResult.rows.length > 0) {
+        req.user.intercom_number = userResult.rows[0].intercom_number;
+        req.user.department = userResult.rows[0].department;
+        req.user.is_active = userResult.rows[0].is_active;
+      }
     } catch (dbErr) {
       // Fall back to JWT data if DB query fails
       if (!req.user.roles) req.user.roles = [req.user.role];

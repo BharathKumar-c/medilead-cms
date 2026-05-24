@@ -12,16 +12,15 @@ const { startFollowUpReminders } = require('./cron/reminders');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
 const licenseGuard = require('./middleware/licenseGuard');
 const licenseModule = require('./license/licenseModule');
+const { initTransporter } = require('./utils/email');
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Trust proxy (Render uses a reverse proxy)
-if (isProduction) {
-  app.set('trust proxy', 1);
-}
+// Trust proxy — required for correct IP resolution behind reverse proxies (Vite dev proxy, Nginx, Render)
+app.set('trust proxy', 1);
 
 // Security headers with helmet
 app.use(helmet({
@@ -98,7 +97,10 @@ app.use(cors({
 // Handle preflight requests explicitly
 app.options('*', cors());
 
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({
+  limit: '10kb',
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Serve call recordings
@@ -172,6 +174,7 @@ app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/calls', require('./routes/telephonyCalls'));
 app.use('/api/calls', require('./routes/calls'));
 app.use('/api/branches', require('./routes/branches'));
 app.use('/api/roles', require('./routes/roles'));
@@ -179,6 +182,10 @@ app.use('/api/masters', require('./routes/masters'));
 
 // License unlock endpoint (IP-whitelisted, rate-limited)
 app.use('/internal/license/unlock', require('./routes/licenseUnlock'));
+
+// License management (status + update expiry)
+app.use('/api/license', require('./routes/licenseManage'));
+app.use('/internal/license', require('./routes/licenseManage'));
 
 // Serve static frontend files in production
 if (isProduction) {
@@ -286,6 +293,9 @@ server.listen(PORT, () => {
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`Health check: http://localhost:${PORT}/api/health`);
   logger.info('Socket.IO ready');
+
+  // Init email transporter for password reset etc.
+  initTransporter();
 
   // Start license watcher (jittered ~60 min interval)
   licenseModule.startWatcher();

@@ -5,6 +5,7 @@ import {
   Clock, User, Phone, Mail, FileText, AlertTriangle, Check, Ban, MoreHorizontal,
 } from 'lucide-react';
 import Layout from '../components/Layout';
+import Pagination from '../components/Pagination';
 import AppointmentFormSlideOver from '../components/AppointmentFormSlideOver';
 import Toast from '../components/Toast';
 import api from '../services/api';
@@ -29,6 +30,9 @@ const Appointments = () => {
   const [actionMenuPos, setActionMenuPos] = useState({ top: 0, right: 0 });
   const [toasts, setToasts] = useState([]);
 
+  const [aptPage, setAptPage] = useState(1);
+  const [aptPageSize, setAptPageSize] = useState(10);
+
   const [rescheduleForm, setRescheduleForm] = useState({ date: '', time: '' });
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -47,6 +51,10 @@ const Appointments = () => {
   useEffect(() => {
     loadCalendar();
   }, [currentMonth, currentYear]);
+
+  useEffect(() => {
+    setAptPage(1);
+  }, [appointments.length]);
 
   const loadData = async () => {
     setLoading(true);
@@ -263,7 +271,7 @@ const Appointments = () => {
                 <div className="p-6 text-center font-body-md text-on-surface-variant">Loading...</div>
               ) : appointments.length === 0 ? (
                 <div className="p-6 text-center font-body-md text-on-surface-variant">No appointments found.</div>
-              ) : appointments.slice(0, 10).map(apt => (
+              ) : appointments.slice((aptPage - 1) * aptPageSize, aptPage * aptPageSize).map(apt => (
                 <div key={apt.id} className="px-5 py-3 border-b border-outline-variant/50 hover:bg-surface-container/50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -293,6 +301,13 @@ const Appointments = () => {
                 </div>
               ))}
             </div>
+            <Pagination
+              currentPage={aptPage}
+              totalItems={appointments.length}
+              pageSize={aptPageSize}
+              onPageChange={setAptPage}
+              onPageSizeChange={setAptPageSize}
+            />
           </div>
         </div>
 

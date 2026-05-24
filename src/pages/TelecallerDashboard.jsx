@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Phone, PhoneMissed, Clock,
-  ChevronLeft, ChevronRight, PhoneIncoming, PhoneOutgoing, UserPlus,
-  Headphones,
+  PhoneIncoming, PhoneOutgoing, UserPlus,
+  Headphones, Search,
 } from 'lucide-react';
 import Layout from '../components/Layout';
+import Pagination from '../components/Pagination';
 import PatientIntakeForm from '../components/PatientIntakeForm';
 import AudioPlayerModal from '../components/AudioPlayerModal';
 import Toast from '../components/Toast';
@@ -19,7 +20,29 @@ const resolveRecordingUrl = (url) => {
 };
 
 let toastId = 0;
-const ITEMS_PER_PAGE = 10;
+const DEFAULT_PAGE_SIZE = 10;
+
+const formatCallTime = (dateStr) => {
+  if (!dateStr) return { display: '—', tooltip: '' };
+  const now = new Date();
+  const then = new Date(dateStr);
+  const diffMs = now - then;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHrs = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHrs / 24);
+
+  const exact = then.toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+
+  if (diffSec < 60) return { display: 'Just now', tooltip: exact };
+  if (diffMin < 60) return { display: `${diffMin} min${diffMin > 1 ? 's' : ''} ago`, tooltip: exact };
+  if (diffHrs < 24) return { display: `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`, tooltip: exact };
+  if (diffDays < 2) return { display: `${diffDays} day${diffDays > 1 ? 's' : ''} ago`, tooltip: exact };
+  // After 2 days: show exact date and time
+  return { display: exact, tooltip: diffDays <= 7 ? exact : '' };
+};
 
 const TelecallerDashboard = () => {
   const [calls, setCalls] = useState([]);
@@ -27,6 +50,7 @@ const TelecallerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [prefilledPhone, setPrefilledPhone] = useState('');
   const [toasts, setToasts] = useState([]);
@@ -85,10 +109,8 @@ const TelecallerDashboard = () => {
     return true;
   });
 
-  const totalPages = Math.ceil(filteredCalls.length / ITEMS_PER_PAGE);
-  const paginatedCalls = filteredCalls.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const startItem = filteredCalls.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const endItem = Math.min(currentPage * ITEMS_PER_PAGE, filteredCalls.length);
+  const paginatedCalls = filteredCalls.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.ceil(filteredCalls.length / pageSize);
 
   const formatDuration = (seconds) => {
     if (!seconds) return '0:00';
@@ -211,8 +233,18 @@ const TelecallerDashboard = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3 font-data-tabular text-on-surface-variant">{formatDuration(call.duration)}</td>
-                    <td className="px-4 py-3 font-body-md text-on-surface-variant">
-                      {new Date(call.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const t = formatCallTime(call.created_at);
+                        return (
+                          <span
+                            className="font-body-md text-on-surface-variant"
+                            title={t.tooltip || undefined}
+                            style={t.tooltip ? { cursor: 'default', borderBottom: '1px dotted' } : undefined}>
+                            {t.display}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -249,29 +281,13 @@ const TelecallerDashboard = () => {
               </tbody>
             </table>
           </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-outline-variant/50">
-              <span className="font-caption text-on-surface-variant">
-                Showing {startItem}–{endItem} of {filteredCalls.length}
-              </span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                  className="p-2 rounded-lg hover:bg-surface-container transition-colors disabled:opacity-30">
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <button key={p} onClick={() => setCurrentPage(p)}
-                    className={`w-8 h-8 rounded-lg font-body-md transition-all ${currentPage === p ? 'bg-secondary text-white' : 'hover:bg-surface-container text-on-surface'}`}>
-                    {p}
-                  </button>
-                ))}
-                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                  className="p-2 rounded-lg hover:bg-surface-container transition-colors disabled:opacity-30">
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredCalls.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       </div>
 

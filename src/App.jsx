@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LicenseProvider, useLicense } from './context/LicenseContext';
 import { ThemeProvider } from './context/ThemeContext';
 import Dashboard from './pages/Dashboard';
 import LeadBox from './pages/LeadBox';
@@ -9,7 +10,10 @@ import AppointmentForm from './pages/AppointmentForm';
 import HelpSupport from './pages/HelpSupport';
 import LegalPolicy from './pages/LegalPolicy';
 import NotFound from './pages/NotFound';
+import LicenseExpired from './pages/LicenseExpired';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import ProfileSettings from './pages/ProfileSettings';
 import AccountSettings from './pages/AccountSettings';
 import Appearance from './pages/Appearance';
@@ -19,6 +23,8 @@ import PermissionAssignment from './pages/PermissionAssignment';
 import MasterData from './pages/MasterData';
 import TelecallerDashboard from './pages/TelecallerDashboard';
 import SIPTestPanel from './pages/SIPTestPanel';
+import LicenseManagement from './pages/LicenseManagement';
+import CallLogsTable from './components/CallLogsTable';
 import DocsLanding from './pages/docs/DocsLanding';
 import DocsRouter from './pages/docs/DocsRouter';
 
@@ -87,6 +93,8 @@ function AppRoutes() {
     <Routes>
       {/* Public routes — no auth required */}
       <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/docs" element={<DocsLanding />} />
       <Route path="/docs/*" element={<DocsRouter />} />
 
@@ -106,20 +114,32 @@ function AppRoutes() {
       <Route path="/role-management/:id/permissions" element={<AdminRoute><PermissionAssignment /></AdminRoute>} />
       <Route path="/master-data" element={<AdminRoute><MasterData /></AdminRoute>} />
       <Route path="/calls" element={<ProtectedRoute><TelecallerDashboard /></ProtectedRoute>} />
+      <Route path="/vendor-call-logs" element={<ProtectedRoute><CallLogsTable /></ProtectedRoute>} />
       <Route path="/sip-test" element={<AdminRoute><SIPTestPanel /></AdminRoute>} />
+      <Route path="/license-management" element={<ProtectedRoute><LicenseManagement /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
 
+function AppContent() {
+  const { licenseExpired } = useLicense();
+  if (licenseExpired) {
+    return <LicenseExpired />;
+  }
+  return <AppRoutes />;
+}
+
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <ThemeProvider>
-          <AppRoutes />
-        </ThemeProvider>
-      </AuthProvider>
+      <LicenseProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            <AppContent />
+          </ThemeProvider>
+        </AuthProvider>
+      </LicenseProvider>
     </Router>
   );
 }

@@ -32,6 +32,15 @@ router.get('/', validatePagination, async (req, res) => {
       params.push(status);
     }
 
+    // Intercom-based filtering: non-admin/manager users only see their own calls
+    const userRoles = req.user.roles || [req.user.role];
+    const isAdmin = userRoles.includes('super_admin') || userRoles.includes('manager');
+    if (!isAdmin && req.user.intercom_number) {
+      // For call_logs table, filter by user_id since intercom not in this table
+      where.push(`cl.user_id = $${paramIndex++}`);
+      params.push(req.user.id);
+    }
+
     const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
 
     const result = await db.query(

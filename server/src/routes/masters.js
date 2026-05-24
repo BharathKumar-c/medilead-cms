@@ -534,4 +534,121 @@ router.delete('/doctors/:id', async (req, res) => {
   }
 });
 
+// ─── PINCODES ────────────────────────────────────────────
+
+router.get('/pincodes', async (req, res) => {
+  try {
+    const { search, page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    let where = '';
+    const params = [];
+
+    if (search) {
+      params.push(`%${search}%`);
+      where = `WHERE pincode ILIKE $1 OR area ILIKE $1 OR city ILIKE $1 OR state ILIKE $1`;
+    }
+
+    params.push(parseInt(limit));
+    params.push(offset);
+    const countParams = search ? [`%${search}%`] : [];
+
+    const [result, countResult] = await Promise.all([
+      db.query(
+        `SELECT * FROM master_pincodes ${where} ORDER BY pincode, area LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params
+      ),
+      db.query(
+        `SELECT COUNT(*) FROM master_pincodes ${where}`,
+        countParams
+      ),
+    ]);
+
+    res.json({
+      status: 'success',
+      data: {
+        items: result.rows,
+        total: parseInt(countResult.rows[0].count),
+        page: parseInt(page),
+        pageSize: parseInt(limit),
+      },
+    });
+  } catch (err) {
+    logger.error('List pincodes error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred: ' + err.message });
+  }
+});
+
+router.post('/pincodes', async (req, res) => {
+  try {
+    const { pincode, area, city, state } = req.body;
+    if (!pincode?.trim() || !area?.trim()) {
+      return res.status(400).json({ status: 'error', message: 'Pincode and Area are required.' });
+    }
+    const dup = await db.query(
+      'SELECT id FROM master_pincodes WHERE pincode = $1 AND LOWER(area) = LOWER($2)',
+      [pincode.trim(), area.trim()]
+    );
+    if (dup.rows.length > 0) {
+      return res.status(409).json({ status: 'error', message: `"${area.trim()}" already exists for pincode ${pincode.trim()}.`, code: 'DUPLICATE' });
+    }
+    const result = await db.query(
+      'INSERT INTO master_pincodes (pincode, area, city, state, country) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [pincode.trim(), area.trim(), city?.trim() || '', state?.trim() || '', 'India']
+    );
+    logger.info('Pincode created', { pincode: pincode.trim(), area: area.trim() });
+    res.status(201).json({ status: 'success', data: { item: result.rows[0] } });
+  } catch (err) {
+    logger.error('Create pincode error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred: ' + err.message });
+  }
+});
+
+router.put('/pincodes/:id', async (req, res) => {
+  try {
+    const { pincode, area, city, state } = req.body;
+    const fields = [];
+    const values = [];
+    let idx = 1;
+
+    if (pincode !== undefined) { fields.push(`pincode = $${idx++}`); values.push(pincode.trim()); }
+    if (area !== undefined) { fields.push(`area = $${idx++}`); values.push(area.trim()); }
+    if (city !== undefined) { fields.push(`city = $${idx++}`); values.push(city.trim()); }
+    if (state !== undefined) { fields.push(`state = $${idx++}`); values.push(state.trim()); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'No fields to update.' });
+    }
+    values.push(req.params.id);
+    const result = await db.query(
+      `UPDATE master_pincodes SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Pincode record not found.' });
+    }
+    logger.info('Pincode updated', { id: req.params.id });
+    res.json({ status: 'success', data: { item: result.rows[0] } });
+  } catch (err) {
+    logger.error('Update pincode error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred: ' + err.message });
+  }
+});
+
+router.delete('/pincodes/:id', async (req, res) => {
+  try {
+    const result = await db.query(
+      'DELETE FROM master_pincodes WHERE id = $1 RETURNING *',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Pincode record not found.' });
+    }
+    logger.info('Pincode deleted', { id: req.params.id });
+    res.json({ status: 'success', data: { item: result.rows[0] } });
+  } catch (err) {
+    logger.error('Delete pincode error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred: ' + err.message });
+  }
+});
+
 module.exports = router;

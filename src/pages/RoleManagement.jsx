@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Plus, Edit2, Trash2, Users, Lock, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
+import Pagination from '../components/Pagination';
 import Toast from '../components/Toast';
 import api from '../services/api';
 
@@ -11,6 +12,8 @@ const RoleManagement = () => {
   const navigate = useNavigate();
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showForm, setShowForm] = useState(false);
   const [editRole, setEditRole] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -126,78 +129,90 @@ const RoleManagement = () => {
                   <tr><td colSpan="6" className="text-center py-12 text-on-surface-variant">Loading roles...</td></tr>
                 ) : roles.length === 0 ? (
                   <tr><td colSpan="6" className="text-center py-12 text-on-surface-variant">No roles found.</td></tr>
-                ) : roles.map(role => (
-                  <tr key={role.id} className="border-t border-outline-variant/50 hover:bg-primary/5 transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-secondary/10 flex items-center justify-center">
-                          <Shield size={18} className="text-secondary" />
+                ) : (() => {
+                  const startIdx = (currentPage - 1) * pageSize;
+                  const paginatedRoles = roles.slice(startIdx, startIdx + pageSize);
+                  return paginatedRoles.map(role => (
+                    <tr key={role.id} className="border-t border-outline-variant/50 hover:bg-primary/5 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-secondary/10 flex items-center justify-center">
+                            <Shield size={18} className="text-secondary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-on-surface">{role.display_name}</p>
+                            <p className="text-xs text-on-surface-variant font-mono">{role.name}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-on-surface">{role.display_name}</p>
-                          <p className="text-xs text-on-surface-variant font-mono">{role.name}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-on-surface-variant text-sm max-w-[200px] truncate">
-                      {role.description || '—'}
-                    </td>
-                    <td className="px-5 py-4">
-                      {role.is_system ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
-                          <Lock size={12} /> System
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-tertiary/10 text-on-tertiary-container border border-on-tertiary-container/20">
-                          Custom
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
-                      <button
-                        onClick={() => navigate(`/role-management/${role.id}/permissions`)}
-                        className="inline-flex items-center gap-1 text-sm text-secondary hover:text-primary transition-colors"
-                      >
-                        {role.permission_count} permissions <ChevronRight size={14} />
-                      </button>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex items-center gap-1 text-sm text-on-surface-variant">
-                        <Users size={14} /> {role.user_count}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      </td>
+                      <td className="px-5 py-4 text-on-surface-variant text-sm max-w-[200px] truncate">
+                        {role.description || '—'}
+                      </td>
+                      <td className="px-5 py-4">
+                        {role.is_system ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                            <Lock size={12} /> System
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-tertiary/10 text-on-tertiary-container border border-on-tertiary-container/20">
+                            Custom
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
                         <button
                           onClick={() => navigate(`/role-management/${role.id}/permissions`)}
-                          className="p-2 rounded-lg hover:bg-secondary/10 text-secondary transition-colors"
-                          title="Manage Permissions"
+                          className="inline-flex items-center gap-1 text-sm text-secondary hover:text-primary transition-colors"
                         >
-                          <Shield size={16} />
+                          {role.permission_count} permissions <ChevronRight size={14} />
                         </button>
-                        <button
-                          onClick={() => handleEdit(role)}
-                          className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-colors"
-                          title="Edit Role"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        {!role.is_system && (
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center gap-1 text-sm text-on-surface-variant">
+                          <Users size={14} /> {role.user_count}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => setDeleteConfirm(role)}
-                            className="p-2 rounded-lg hover:bg-error/10 text-error transition-colors"
-                            title="Delete Role"
+                            onClick={() => navigate(`/role-management/${role.id}/permissions`)}
+                            className="p-2 rounded-lg hover:bg-secondary/10 text-secondary transition-colors"
+                            title="Manage Permissions"
                           >
-                            <Trash2 size={16} />
+                            <Shield size={16} />
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          <button
+                            onClick={() => handleEdit(role)}
+                            className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-colors"
+                            title="Edit Role"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          {!role.is_system && (
+                            <button
+                              onClick={() => setDeleteConfirm(role)}
+                              className="p-2 rounded-lg hover:bg-error/10 text-error transition-colors"
+                              title="Delete Role"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ));
+                })()}
               </tbody>
             </table>
           </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={roles.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       </div>
 

@@ -246,7 +246,7 @@ router.get('/:id', validateId, async (req, res) => {
 // POST /api/appointments — create appointment
 router.post('/', validateAppointment, async (req, res) => {
   try {
-    const { patient_name, phone, email, department, provider_id, provider_name, appointment_date, appointment_time, notes } = req.body;
+    const { patient_name, phone, email, department, provider_id, provider_name, appointment_date, appointment_time, notes, visit_type, consultation_mode, lead_id } = req.body;
 
     let providerIdInt = provider_id ? parseInt(provider_id) : null;
     const createdByInt = req.user?.id ? parseInt(req.user.id) : null;
@@ -277,9 +277,9 @@ router.post('/', validateAppointment, async (req, res) => {
     }
 
     const result = await db.query(
-      `INSERT INTO appointments (patient_name, initials, phone, department, provider_id, provider_name, appointment_date, appointment_time, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [patient_name, initials, phone, department, providerIdInt, provider_name, appointment_date, appointment_time, notes]
+      `INSERT INTO appointments (patient_name, initials, phone, department, provider_id, provider_name, appointment_date, appointment_time, notes, visit_type, consultation_mode, lead_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+      [patient_name, initials, phone, department, providerIdInt, provider_name, appointment_date, appointment_time, notes, visit_type || null, consultation_mode || null, lead_id || null, createdByInt]
     );
 
     const appointment = result.rows[0];

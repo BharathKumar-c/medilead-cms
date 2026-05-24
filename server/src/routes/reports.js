@@ -362,18 +362,20 @@ router.get('/export', async (req, res) => {
 
     if (type === 'leads') {
       const result = await db.query(`
-        SELECT l.name, l.phone, l.email, l.status, l.priority, l.lead_source,
-               l.created_at, u.name as assigned_to
+        SELECT l.code, l.name, l.phone, l.email, l.status, l.priority, l.lead_source,
+               mb.name as branch, creator.name as created_by, u.name as assigned_to, l.created_at
         FROM leads l
         LEFT JOIN users u ON l.assigned_to = u.id
+        LEFT JOIN users creator ON l.created_by = creator.id
+        LEFT JOIN master_branches mb ON l.branch_id = mb.id
         ORDER BY l.created_at DESC
       `);
       data = result.rows;
       filename = 'leads_report.csv';
     } else if (type === 'calls') {
       const result = await db.query(`
-        SELECT cl.caller_number, cl.callee_number, cl.direction, cl.status,
-               cl.duration, cl.created_at, u.name as user_name
+        SELECT cl.code, cl.caller_number, cl.callee_number, cl.direction, cl.status,
+               cl.duration, u.name as agent, cl.created_at
         FROM call_logs cl
         LEFT JOIN users u ON cl.user_id = u.id
         ORDER BY cl.created_at DESC
@@ -382,10 +384,11 @@ router.get('/export', async (req, res) => {
       filename = 'calls_report.csv';
     } else if (type === 'appointments') {
       const result = await db.query(`
-        SELECT patient_name, phone, department, provider_name,
-               appointment_date, appointment_time, status, created_at
-        FROM appointments
-        ORDER BY appointment_date DESC
+        SELECT a.code, a.patient_name, a.phone, a.department, a.provider_name,
+               a.appointment_date, a.appointment_time, a.status, a.visit_type,
+               a.consultation_mode, a.created_at
+        FROM appointments a
+        ORDER BY a.appointment_date DESC
       `);
       data = result.rows;
       filename = 'appointments_report.csv';
@@ -403,7 +406,6 @@ router.get('/export', async (req, res) => {
       headers.join(','),
       ...data.map(row => headers.map(h => {
         const val = row[h];
-        // Escape commas and quotes
         if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
           return `"${val.replace(/"/g, '""')}"`;
         }
@@ -419,6 +421,345 @@ router.get('/export', async (req, res) => {
   } catch (err) {
     logger.error('Export error', { error: err.message, type: req.query.type });
     res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'EXPORT_ERROR' });
+  }
+});
+
+// ─── EXPORT SYSTEM ────────────────────────────────────────
+
+const fs = require('fs');
+const path = require('path');
+
+const EXPORTS_DIR = path.join(__dirname, '..', '..', 'exports');
+if (!fs.existsSync(EXPORTS_DIR)) fs.mkdirSync(EXPORTS_DIR, { recursive: true });
+
+const escapeCsv = (val) => {
+  if (val === null || val === undefined) return '';
+  const s = String(val);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+};
+
+const buildCsv = (headers, rows) => {
+  return [headers.join(','), ...rows.map(r => headers.map(h => escapeCsv(r[h])).join(','))].join('\n');
+};
+
+// Date range query builders
+const dateFilter = (col, alias) => `${alias ? alias + '.' : ''}${col} >= $1 AND ${alias ? alias + '.' : ''}${col} <= ($2::date + INTERVAL '1 day')`;
+
+const QUERIES = {
+  calls: {
+    summary: `
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'missed') as missed,
+        COUNT(*) FILTER (WHERE status = 'answered') as answered,
+        COUNT(*) FILTER (WHERE direction = 'inbound') as inbound,
+        COUNT(*) FILTER (WHERE direction = 'outbound') as outbound
+      FROM call_logs WHERE ${dateFilter('created_at')}
+    `,
+    data: (from, to) => ({
+      text: `
+        SELECT cl.code, cl.caller_number, cl.callee_number, cl.direction, cl.status,
+               cl.duration, u.name as agent, cl.created_at
+        FROM call_logs cl LEFT JOIN users u ON cl.user_id = u.id
+        WHERE cl.created_at >= $1 AND cl.created_at <= ($2::date + INTERVAL '1 day')
+        ORDER BY cl.created_at DESC
+      `,
+      values: [from, to],
+    }),
+    headers: ['Code', 'Caller', 'Callee', 'Direction', 'Status', 'Duration', 'Agent', 'Created At'],
+    filePrefix: 'calls',
+  },
+  leads: {
+    summary: `
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'Follow-up') as followup,
+        COUNT(*) FILTER (WHERE status IN ('Appointment Booked', 'Closed')) as completed,
+        COUNT(*) FILTER (WHERE status = 'New') as new_leads
+      FROM leads WHERE ${dateFilter('created_at')}
+    `,
+    data: (from, to) => ({
+      text: `
+        SELECT l.code, l.name, l.phone, l.email, l.status, l.priority, l.lead_source,
+               mb.name as branch, creator.name as created_by, u.name as assigned_to, l.created_at
+        FROM leads l
+        LEFT JOIN users u ON l.assigned_to = u.id
+        LEFT JOIN users creator ON l.created_by = creator.id
+        LEFT JOIN master_branches mb ON l.branch_id = mb.id
+        WHERE l.created_at >= $1 AND l.created_at <= ($2::date + INTERVAL '1 day')
+        ORDER BY l.created_at DESC
+      `,
+      values: [from, to],
+    }),
+    headers: ['Code', 'Name', 'Phone', 'Email', 'Status', 'Priority', 'Source', 'Branch', 'Created By', 'Assigned To', 'Created At'],
+    filePrefix: 'leads',
+  },
+  appointments: {
+    summary: `
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'Completed') as completed,
+        COUNT(*) FILTER (WHERE status = 'Cancelled') as cancelled,
+        COUNT(*) FILTER (WHERE status = 'No Show') as no_show
+      FROM appointments WHERE ${dateFilter('created_at')}
+    `,
+    data: (from, to) => ({
+      text: `
+        SELECT a.code, a.patient_name, a.phone, a.department, a.provider_name,
+               a.appointment_date, a.appointment_time, a.status, a.visit_type,
+               a.consultation_mode, a.created_at
+        FROM appointments a
+        WHERE a.created_at >= $1 AND a.created_at <= ($2::date + INTERVAL '1 day')
+        ORDER BY a.created_at DESC
+      `,
+      values: [from, to],
+    }),
+    headers: ['Code', 'Patient Name', 'Phone', 'Department', 'Provider', 'Date', 'Time', 'Status', 'Visit Type', 'Mode', 'Created At'],
+    filePrefix: 'appointments',
+  },
+};
+
+// GET /api/reports/export/summary — preview metrics for type + date range
+router.get('/export/summary', async (req, res) => {
+  try {
+    const { type, from, to } = req.query;
+    if (!type || !QUERIES[type]) return res.status(400).json({ status: 'error', message: 'Invalid type' });
+    if (!from || !to) return res.status(400).json({ status: 'error', message: 'from and to dates required' });
+
+    const result = await db.query(QUERIES[type].summary, [from, to]);
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) {
+    logger.error('Export summary error', { error: err.message });
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// Generate CSV for a job (used by both sync and async paths)
+const generateExportCsv = async (jobId, reportType, dateFrom, dateTo) => {
+  const q = QUERIES[reportType];
+  const CHUNK_SIZE = 1000;
+  let offset = 0;
+  let totalRows = 0;
+  let headersWritten = false;
+  const filePath = path.join(EXPORTS_DIR, `export_${jobId}_${Date.now()}.csv`);
+  const writeStream = fs.createWriteStream(filePath);
+
+  try {
+    await db.query('UPDATE report_exports SET status = $1 WHERE id = $2', ['processing', jobId]);
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const baseQuery = q.data(dateFrom, dateTo);
+      const chunkQuery = `${baseQuery.text} LIMIT ${CHUNK_SIZE} OFFSET ${offset}`;
+      const result = await db.query(chunkQuery, baseQuery.values);
+
+      if (result.rows.length === 0) break;
+
+      if (!headersWritten) {
+        writeStream.write(q.headers.join(',') + '\n');
+        headersWritten = true;
+      }
+
+      for (const row of result.rows) {
+        writeStream.write(q.headers.map(h => {
+          const key = h.replace(/ /g, '_').toLowerCase();
+          // Map header labels to row keys
+          const keyMap = {
+            'code': 'code', 'caller': 'caller_number', 'callee': 'callee_number',
+            'direction': 'direction', 'status': 'status', 'duration': 'duration',
+            'agent': 'agent', 'created_at': 'created_at', 'name': 'name',
+            'phone': 'phone', 'email': 'email', 'priority': 'priority',
+            'source': 'lead_source', 'branch': 'branch', 'created_by': 'created_by',
+            'assigned_to': 'assigned_to', 'patient_name': 'patient_name',
+            'department': 'department', 'provider': 'provider_name',
+            'date': 'appointment_date', 'time': 'appointment_time',
+            'visit_type': 'visit_type', 'mode': 'consultation_mode',
+          };
+          const rowKey = keyMap[key] || key;
+          return escapeCsv(row[rowKey]);
+        }).join(',') + '\n');
+      }
+
+      totalRows += result.rows.length;
+      if (result.rows.length < CHUNK_SIZE) break;
+      offset += CHUNK_SIZE;
+    }
+
+    writeStream.end();
+    await new Promise((resolve, reject) => {
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
+
+    await db.query(
+      'UPDATE report_exports SET status = $1, file_path = $2, row_count = $3, completed_at = NOW() WHERE id = $4',
+      ['completed', filePath, totalRows, jobId]
+    );
+    logger.info('Export completed', { jobId, reportType, totalRows });
+  } catch (err) {
+    writeStream.destroy();
+    await db.query('UPDATE report_exports SET status = $1 WHERE id = $2', ['failed', jobId]);
+    logger.error('Export failed', { jobId, error: err.message });
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+};
+
+// POST /api/reports/export — create export job
+router.post('/export', async (req, res) => {
+  try {
+    const { report_type, date_from, date_to, description } = req.body;
+    if (!report_type || !QUERIES[report_type]) {
+      return res.status(400).json({ status: 'error', message: 'Invalid report type' });
+    }
+    if (!date_from || !date_to) {
+      return res.status(400).json({ status: 'error', message: 'Date range required' });
+    }
+
+    const from = new Date(date_from);
+    const to = new Date(date_to);
+    const diffDays = Math.ceil((to - from) / (1000 * 60 * 60 * 24));
+    const isImmediate = diffDays <= 31;
+
+    const result = await db.query(
+      `INSERT INTO report_exports (user_id, report_type, date_from, date_to, description, status)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [req.user.id, report_type, date_from, date_to, description || '', isImmediate ? 'processing' : 'pending']
+    );
+    const job = result.rows[0];
+
+    if (isImmediate) {
+      // Generate CSV synchronously
+      await generateExportCsv(job.id, report_type, date_from, date_to);
+      const updated = await db.query('SELECT * FROM report_exports WHERE id = $1', [job.id]);
+      const completedJob = updated.rows[0];
+      return res.json({
+        status: 'success',
+        data: { job: { id: completedJob.id, status: completedJob.status, row_count: completedJob.row_count, isImmediate: true } },
+      });
+    }
+
+    // Background job — start processing, return immediately
+    setImmediate(() => generateExportCsv(job.id, report_type, date_from, date_to));
+
+    res.json({
+      status: 'success',
+      data: { job: { id: job.id, status: 'pending', isImmediate: false } },
+    });
+  } catch (err) {
+    logger.error('Create export error', { error: err.message });
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// GET /api/reports/export/jobs — list user's export jobs
+router.get('/export/jobs', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT id, report_type, date_from, date_to, description, status, row_count, created_at, completed_at
+       FROM report_exports WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`,
+      [req.user.id]
+    );
+    res.json({ status: 'success', data: { jobs: result.rows } });
+  } catch (err) {
+    logger.error('List export jobs error', { error: err.message });
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// GET /api/reports/export/check/:id — poll job status
+router.get('/export/check/:id', async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT id, status, row_count, created_at, completed_at FROM report_exports WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Job not found' });
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) {
+    logger.error('Check export status error', { error: err.message });
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// GET /api/reports/export/download/:id — download completed CSV
+router.get('/export/download/:id', async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT * FROM report_exports WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Job not found' });
+    const job = result.rows[0];
+    if (job.status !== 'completed' || !job.file_path) {
+      return res.status(400).json({ status: 'error', message: 'Export not ready for download' });
+    }
+    if (!fs.existsSync(job.file_path)) {
+      return res.status(404).json({ status: 'error', message: 'Export file has expired or was deleted' });
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${QUERIES[job.report_type]?.filePrefix || 'report'}_${job.date_from}_${job.date_to}.csv`);
+    res.sendFile(job.file_path);
+  } catch (err) {
+    logger.error('Download export error', { error: err.message });
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// Auto-cleanup: delete completed exports older than 7 days
+const cleanupOldExports = async () => {
+  try {
+    const result = await db.query(
+      "SELECT id, file_path FROM report_exports WHERE status = 'completed' AND completed_at < NOW() - INTERVAL '7 days'"
+    );
+    for (const job of result.rows) {
+      if (job.file_path && fs.existsSync(job.file_path)) {
+        try { fs.unlinkSync(job.file_path); } catch (_) { /* ignore */ }
+      }
+    }
+    await db.query("DELETE FROM report_exports WHERE status = 'completed' AND completed_at < NOW() - INTERVAL '7 days'");
+    if (result.rows.length > 0) logger.info('Cleaned up old exports', { count: result.rows.length });
+  } catch (err) {
+    logger.warn('Export cleanup failed', { error: err.message });
+  }
+};
+// Run cleanup on startup
+cleanupOldExports();
+
+// GET /api/reports/branch-leads — lead counts grouped by branch
+router.get('/branch-leads', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        COALESCE(mb.name, 'Unassigned') as branch,
+        COUNT(*) as total_leads,
+        COUNT(*) FILTER (WHERE l.status IN ('Appointment Booked', 'Closed')) as closed_leads,
+        COUNT(*) FILTER (WHERE l.status NOT IN ('Closed', 'Rejected')) as active_leads,
+        COUNT(*) FILTER (WHERE l.status = 'Rejected') as rejected_leads
+      FROM leads l
+      LEFT JOIN master_branches mb ON l.branch_id = mb.id
+      GROUP BY mb.name
+      ORDER BY total_leads DESC
+    `);
+
+    const branches = result.rows.map(r => {
+      const total = parseInt(r.total_leads) || 0;
+      const closed = parseInt(r.closed_leads) || 0;
+      return {
+        branch: r.branch,
+        totalLeads: total,
+        closedLeads: closed,
+        activeLeads: parseInt(r.active_leads) || 0,
+        rejectedLeads: parseInt(r.rejected_leads) || 0,
+        conversionRate: total > 0 ? Math.round((closed / total) * 100) : 0,
+      };
+    });
+
+    res.json({ status: 'success', data: { branches } });
+  } catch (err) {
+    logger.error('Branch leads report error', { error: err.message, userId: req.user.id });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'BRANCH_LEADS_ERROR' });
   }
 });
 

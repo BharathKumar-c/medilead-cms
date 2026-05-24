@@ -87,7 +87,7 @@ Access the application at `http://localhost:5173`
 
 ### Default Login
 
-- **Email**: bharath@medway.health
+- **Email**: barath@gmail.com
 - **Password**: password123
 
 ## Project Structure
@@ -117,11 +117,11 @@ medilead-cms/
 
 ## User Roles
 
-| Role            | Permissions                                           |
-| --------------- | ----------------------------------------------------- |
+| Role            | Permissions                                                |
+| --------------- | ---------------------------------------------------------- |
 | **Super Admin** | Full access, user management, role management, all reports |
-| **Manager**     | View all leads/appointments, reports, team management |
-| **Telecaller**  | Own leads/appointments only, call logs                |
+| **Manager**     | View all leads/appointments, reports, team management      |
+| **Telecaller**  | Own leads/appointments only, call logs                     |
 
 > Custom roles can be created with granular permissions (30+ permissions across modules).
 

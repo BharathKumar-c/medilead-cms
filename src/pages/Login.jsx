@@ -1,14 +1,34 @@
-import {useState} from 'react';
-import {useAuth} from '../context/AuthContext';
-import {Stethoscope, Mail, Lock, Eye, EyeOff} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { Stethoscope, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+
+const STORAGE_KEY = 'remembered_credentials';
 
 const Login = () => {
-  const {login} = useAuth();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const raw = decodeURIComponent(escape(atob(saved)));
+        const decoded = JSON.parse(raw);
+        if (decoded.email) setEmail(decoded.email);
+        if (decoded.password) setPassword(decoded.password);
+        setRememberMe(true);
+      }
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,6 +37,16 @@ const Login = () => {
 
     try {
       await login(email, password);
+
+      // Save or clear credentials based on Remember Me
+      if (rememberMe) {
+        const encoded = btoa(unescape(encodeURIComponent(
+          JSON.stringify({ email, password })
+        )));
+        localStorage.setItem(STORAGE_KEY, encoded);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
     } catch (err) {
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
@@ -88,7 +118,8 @@ const Login = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors">
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
+                >
                   {showPassword ? (
                     <EyeOff className="w-5 h-5" />
                   ) : (
@@ -98,10 +129,39 @@ const Login = () => {
               </div>
             </div>
 
+            {/* Remember Me */}
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <div
+                  onClick={() => setRememberMe(!rememberMe)}
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                    rememberMe
+                      ? 'bg-secondary border-secondary'
+                      : 'border-outline-variant group-hover:border-secondary'
+                  }`}
+                >
+                  {rememberMe && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <span className="font-body-md text-on-surface select-none">Remember Me</span>
+              </label>
+
+              <Link
+                to="/forgot-password"
+                className="font-body-md text-secondary hover:underline font-bold"
+              >
+                Forgot Password?
+              </Link>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+              className="w-full py-3 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

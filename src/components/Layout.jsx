@@ -22,7 +22,7 @@ import {useAuth} from '../context/AuthContext';
 import {
   useSocket,
   playNotificationSound,
-  playRingSound,
+  playRingtoneLoop,
 } from '../hooks/useSocket';
 
 let toastId = 0;
@@ -35,7 +35,7 @@ const Layout = ({children, title = 'Medway CMS'}) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [prefillPhoneFromCall, setPrefillPhoneFromCall] = useState('');
-  const ringSoundRef = useRef(null);
+  const ringtoneStopRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -61,7 +61,9 @@ const Layout = ({children, title = 'Medway CMS'}) => {
     onIncomingCall: (data) => {
       // Show incoming call popup
       setIncomingCall(data);
-      playRingSound();
+      // Start looping ringtone
+      if (ringtoneStopRef.current) ringtoneStopRef.current();
+      ringtoneStopRef.current = playRingtoneLoop();
       // If no lead matched, store phone for potential lead creation
       if (!data.leadInfo) {
         setPrefillPhoneFromCall(data.call?.caller_number || '');
@@ -69,12 +71,22 @@ const Layout = ({children, title = 'Medway CMS'}) => {
       // Auto-dismiss after 30 seconds if not answered
       setTimeout(() => {
         setIncomingCall((prev) => {
-          if (prev && prev.call?.id === data.call?.id) return null;
+          if (prev && prev.call?.id === data.call?.id) {
+            if (ringtoneStopRef.current) ringtoneStopRef.current();
+            return null;
+          }
           return prev;
         });
       }, 30000);
     },
     onCallEvent: (data) => {
+      // Stop ringtone on answer/end/miss
+      if (data.event === 'answered' || data.event === 'ended' || data.event === 'missed') {
+        if (ringtoneStopRef.current) {
+          ringtoneStopRef.current();
+          ringtoneStopRef.current = null;
+        }
+      }
       // Show toast for call status changes
       if (data.event === 'missed') {
         addToast('warning', 'Missed Call', `Missed call from ${data.caller}`);
@@ -122,7 +134,7 @@ const Layout = ({children, title = 'Medway CMS'}) => {
   const navItems = [
     {to: '/', icon: LayoutDashboard, label: 'Dashboard'},
     {to: '/lead-box', icon: Inbox, label: 'Lead Box'},
-    {to: '/calls', icon: Phone, label: 'Calls'},
+    {to: '/vendor-call-logs', icon: Phone, label: 'Calls'},
     {to: '/appointments', icon: Calendar, label: 'Appointments'},
     {to: '/reports', icon: BarChart3, label: 'Reports'},
     ...(isSuperAdmin
@@ -353,10 +365,15 @@ const Layout = ({children, title = 'Medway CMS'}) => {
       {/* Incoming Call Popup */}
       {incomingCall && (
         <CallPopup
+          key={incomingCall.call?.id || Date.now()}
           call={incomingCall.call}
           callState="ringing"
           leadInfo={incomingCall.leadInfo}
           onAnswer={() => {
+            if (ringtoneStopRef.current) {
+              ringtoneStopRef.current();
+              ringtoneStopRef.current = null;
+            }
             addToast(
               'success',
               'Call Answered',
@@ -365,6 +382,10 @@ const Layout = ({children, title = 'Medway CMS'}) => {
             setIncomingCall(null);
           }}
           onHangUp={() => {
+            if (ringtoneStopRef.current) {
+              ringtoneStopRef.current();
+              ringtoneStopRef.current = null;
+            }
             addToast(
               'info',
               'Call Rejected',
@@ -372,8 +393,18 @@ const Layout = ({children, title = 'Medway CMS'}) => {
             );
             setIncomingCall(null);
           }}
-          onClose={() => setIncomingCall(null)}
+          onClose={() => {
+            if (ringtoneStopRef.current) {
+              ringtoneStopRef.current();
+              ringtoneStopRef.current = null;
+            }
+            setIncomingCall(null);
+          }}
           onCreateLead={(phone) => {
+            if (ringtoneStopRef.current) {
+              ringtoneStopRef.current();
+              ringtoneStopRef.current = null;
+            }
             setPrefillPhoneFromCall(phone);
             setIsFormOpen(true);
             setIncomingCall(null);
