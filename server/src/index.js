@@ -183,6 +183,9 @@ app.use('/api/masters', require('./routes/masters'));
 // License unlock endpoint (IP-whitelisted, rate-limited)
 app.use('/internal/license/unlock', require('./routes/licenseUnlock'));
 
+// Settings (maintenance mode, etc.)
+app.use('/api/settings', require('./routes/settings'));
+
 // License management (status + update expiry)
 app.use('/api/license', require('./routes/licenseManage'));
 app.use('/internal/license', require('./routes/licenseManage'));

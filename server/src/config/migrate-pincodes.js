@@ -29,6 +29,11 @@ const createPincodesTable = async () => {
       CREATE INDEX IF NOT EXISTS idx_master_pincodes_state ON master_pincodes(state);
     `);
 
+    // Safely add is_active column if the table was created without it (e.g., from a prior run)
+    await db.query(`
+      ALTER TABLE master_pincodes ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+    `);
+
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_master_pincodes_active ON master_pincodes(is_active);
     `);

@@ -20,7 +20,7 @@ router.get('/', validateLeadQuery, async (req, res) => {
     let paramIndex = 1;
 
     if (search) {
-      where.push(`(l.name ILIKE $${paramIndex} OR l.uhid ILIKE $${paramIndex} OR l.email ILIKE $${paramIndex} OR l.phone ILIKE $${paramIndex})`);
+      where.push(`(l.name ILIKE $${paramIndex} OR l.code ILIKE $${paramIndex} OR l.uhid ILIKE $${paramIndex} OR l.email ILIKE $${paramIndex} OR l.phone ILIKE $${paramIndex} OR l.city ILIKE $${paramIndex} OR l.state ILIKE $${paramIndex})`);
       params.push(`%${search}%`);
       paramIndex++;
     }
@@ -88,33 +88,111 @@ router.get('/', validateLeadQuery, async (req, res) => {
   }
 });
 
+// ── Status category constants ──
+// Terminal statuses: leads that require no further action
+const TERMINAL_STATUSES = ['Closed', 'Rejected', 'Appointment Booked'];
+// Conversion indicators: successful outcomes
+const CONVERSION_STATUSES = ['Appointment Booked', 'Closed'];
+
 // GET /api/leads/metrics — summary metrics for lead box
+//
+// Query params:
+//   range: 'today' | 'month' | 'all' (default: 'all')
+//     today — only leads created today
+//     month — only leads created this month
+//     all   — all leads (no date filter)
+//
+// Status categories:
+//   Terminal (no action needed): 'Closed', 'Rejected', 'Appointment Booked'
+//   Conversion indicators:       'Appointment Booked', 'Closed'
+//   Active (needs action):       'New', 'Contacted', 'Interested', 'Follow-up' + legacy enquiry types
+//
+// Overdue thresholds (using lead_status_history table + automated timestamp fallbacks):
+//   - 'New' leads: entered 'New' status 2+ days ago without any status change
+//   - Other active leads: current status unchanged for 3+ days
+//   - Falls back to created_at / last_call_date for legacy leads without history entries
 router.get('/metrics', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
+    const { range = 'all' } = req.query;
 
-    const [newToday, pending, closed, overdue] = await Promise.all([
-      db.query("SELECT COUNT(*) FROM leads WHERE status = 'New' AND DATE(created_at) = $1", [today]),
-      db.query("SELECT COUNT(*) FROM leads WHERE status IN ('New', 'Follow-up', 'Contacted')"),
-      db.query("SELECT COUNT(*) FROM leads WHERE status = 'Closed'"),
-      db.query("SELECT COUNT(*) FROM leads WHERE status = 'Follow-up' AND last_call_date < NOW() - INTERVAL '3 days'"),
+    // Build date condition based on range
+    let dateCondition = '';
+    let dateParams = [];
+    if (range === 'today') {
+      dateCondition = 'AND DATE(l.created_at) = $1';
+      dateParams = [today];
+    } else if (range === 'month') {
+      dateCondition = 'AND l.created_at >= $1';
+      dateParams = [new Date().toISOString().slice(0, 7) + '-01']; // first day of current month
+    }
+    // range === 'all': no date filter
+
+    // For queries on leads table directly (not aliased as l)
+    let simpleDateCondition = '';
+    let simpleDateParams = [];
+    if (range === 'today') {
+      simpleDateCondition = 'WHERE DATE(created_at) = $1';
+      simpleDateParams = [today];
+    } else if (range === 'month') {
+      simpleDateCondition = 'WHERE created_at >= $1';
+      simpleDateParams = [new Date().toISOString().slice(0, 7) + '-01'];
+    }
+
+    const [newToday, followUp, converted, overdue, total] = await Promise.all([
+      // (1) New Leads Today — all leads created today (always today, regardless of range)
+      db.query(`SELECT COUNT(*) FROM leads WHERE DATE(created_at) = $1`, [today]),
+
+      // (2) Follow-up Leads — active leads needing action, filtered by date range
+      db.query(`SELECT COUNT(*) FROM leads l WHERE l.status NOT IN ('Closed', 'Rejected', 'Appointment Booked') ${range !== 'all' ? dateCondition.replace('l.created_at', 'l.created_at') : ''}`, dateParams),
+
+      // (3) Conversion Rate — successful outcomes, filtered by date range
+      db.query(`SELECT COUNT(*) FROM leads WHERE status IN ('Appointment Booked', 'Closed')${simpleDateCondition ? ' ' + simpleDateCondition : ''}`, simpleDateParams),
+
+      // (4) Overdue Responses — stale active leads, filtered by date range
+      db.query(`
+        SELECT COUNT(*) FROM leads l
+        WHERE l.status NOT IN ('Closed', 'Rejected', 'Appointment Booked')
+        ${range !== 'all' ? dateCondition.replace('l.created_at', 'l.created_at') : ''}
+        AND (
+          -- 'New' leads: status unchanged for 2+ days
+          (l.status = 'New'
+           AND COALESCE(
+             (SELECT MAX(lsh.changed_at) FROM lead_status_history lsh WHERE lsh.lead_id = l.id),
+             l.created_at
+           ) < NOW() - INTERVAL '2 days')
+          OR
+          -- Other active leads: status unchanged for 3+ days
+          (l.status != 'New'
+           AND COALESCE(
+             (SELECT MAX(lsh.changed_at) FROM lead_status_history lsh WHERE lsh.lead_id = l.id),
+             l.last_call_date,
+             l.created_at
+           ) < NOW() - INTERVAL '3 days')
+        )
+      `, dateParams),
+
+      // Total leads for conversion rate calculation, filtered by date range
+      db.query(`SELECT COUNT(*) FROM leads${simpleDateCondition ? ' ' + simpleDateCondition : ''}`, simpleDateParams),
     ]);
 
-    const total = parseInt(pending.rows[0].count) + parseInt(closed.rows[0].count);
-    const conversionRate = total > 0 ? Math.round((parseInt(closed.rows[0].count) / total) * 100) : 0;
+    const totalLeads = parseInt(total.rows[0].count) || 1;
+    const convertedCount = parseInt(converted.rows[0].count);
+    const conversionRate = Math.round((convertedCount / totalLeads) * 100);
 
     res.json({
       status: 'success',
       data: {
-        newLeadsToday: { count: parseInt(newToday.rows[0].count), trend: '+12%' },
-        pendingFollowups: parseInt(pending.rows[0].count),
+        newLeadsToday: parseInt(newToday.rows[0].count),
+        totalLeads: totalLeads,
+        alreadyLeads: parseInt(followUp.rows[0].count),
         conversionRate: `${conversionRate}%`,
         overdueResponses: parseInt(overdue.rows[0].count),
       },
     });
   } catch (err) {
     logger.error('Lead metrics error', { error: err.message });
-    res.status(500).json({ status: 'error', message: 'Failed to fetch lead metrics.', code: 'METRICS_ERROR' });
+    res.status(500).json({ status: 'error', message: `Failed to fetch lead metrics: ${err.message}`, code: 'METRICS_ERROR' });
   }
 });
 
@@ -271,6 +349,17 @@ router.post('/', validateLead, async (req, res) => {
 
     const lead = result.rows[0];
 
+    // Log initial status to lead_status_history (safe — won't fail the request)
+    try {
+      await db.query(
+        `INSERT INTO lead_status_history (lead_id, previous_status, new_status, changed_by, changed_at)
+         VALUES ($1, NULL, $2, $3, CURRENT_TIMESTAMP)`,
+        [lead.id, lead.status, req.user.id]
+      );
+    } catch (historyErr) {
+      logger.warn('Failed to log initial lead_status_history', { leadId: lead.id, error: historyErr.message });
+    }
+
     // Log to lead history
     await db.query(
       `INSERT INTO lead_history (lead_id, action, new_value, changed_by)
@@ -367,6 +456,17 @@ router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
     const changes = [];
     if (status && status !== oldLead.status) {
       changes.push({ field: 'status', oldValue: oldLead.status, newValue: status });
+
+      // Log status transition to lead_status_history (safe — won't fail the request)
+      try {
+        await db.query(
+          `INSERT INTO lead_status_history (lead_id, previous_status, new_status, changed_by, changed_at)
+           VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+          [lead.id, oldLead.status, status, req.user.id]
+        );
+      } catch (historyErr) {
+        logger.warn('Failed to log lead_status_history', { leadId: lead.id, oldStatus: oldLead.status, newStatus: status, error: historyErr.message });
+      }
     }
     if (priority && priority !== oldLead.priority) {
       changes.push({ field: 'priority', oldValue: oldLead.priority, newValue: priority });
@@ -420,6 +520,13 @@ router.delete('/:id', validateId, async (req, res) => {
       }
     }
 
+    // Capture old status BEFORE the update
+    const oldLeadForDelete = await db.query('SELECT status FROM leads WHERE id = $1', [req.params.id]);
+    if (oldLeadForDelete.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Lead not found.', code: 'LEAD_NOT_FOUND' });
+    }
+    const previousStatus = oldLeadForDelete.rows[0].status;
+
     const result = await db.query(
       `UPDATE leads SET status = 'Rejected', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, name`,
       [req.params.id]
@@ -429,7 +536,18 @@ router.delete('/:id', validateId, async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Lead not found.', code: 'LEAD_NOT_FOUND' });
     }
 
-    // Log to history
+    // Log status transition to lead_status_history (safe — won't fail the request)
+    try {
+      await db.query(
+        `INSERT INTO lead_status_history (lead_id, previous_status, new_status, changed_by, changed_at)
+         VALUES ($1, $2, 'Rejected', $3, CURRENT_TIMESTAMP)`,
+        [req.params.id, previousStatus, req.user.id]
+      );
+    } catch (historyErr) {
+      logger.warn('Failed to log lead_status_history on delete', { leadId: req.params.id, error: historyErr.message });
+    }
+
+    // Log to lead_history
     await db.query(
       `INSERT INTO lead_history (lead_id, action, new_value, changed_by)
        VALUES ($1, 'status', 'Rejected', $2)`,

@@ -7,7 +7,10 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "seed": "node src/seeds/seed.js",
-    "migrate": "node src/config/migrate.js"
+    "migrate": "node src/config/migrate.js",
+    "migrate:full": "node src/config/migrate-full.js",
+    "migrate:status-history": "node src/config/migrate-lead-status-history.js",
+    "generate-codes": "node src/config/generate-codes.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

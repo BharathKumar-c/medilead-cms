@@ -25,6 +25,7 @@ import TelecallerDashboard from './pages/TelecallerDashboard';
 import SIPTestPanel from './pages/SIPTestPanel';
 import LicenseManagement from './pages/LicenseManagement';
 import CallLogsTable from './components/CallLogsTable';
+import MaintenanceBanner from './components/MaintenanceBanner';
 import DocsLanding from './pages/docs/DocsLanding';
 import DocsRouter from './pages/docs/DocsRouter';
 
@@ -136,6 +137,7 @@ function App() {
       <LicenseProvider>
         <AuthProvider>
           <ThemeProvider>
+            <MaintenanceBanner />
             <AppContent />
           </ThemeProvider>
         </AuthProvider>

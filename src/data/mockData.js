@@ -348,6 +348,7 @@ export const leadData = [
 
 export const leadBoxMetrics = {
   newLeadsToday: 0,
+  totalLeads: 0,
   alreadyLeads: 0,
   conversionRate: '0%',
   overdueResponses: 0,

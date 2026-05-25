@@ -73,6 +73,8 @@ const SearchableSelect = ({
     setIsOpen(false);
     setSearchTerm('');
     setActiveIndex(-1);
+    // Return focus to the trigger so Tab continues to the next field
+    containerRef.current?.querySelector('[role="combobox"]')?.focus();
   };
 
   const handleClear = (e) => {
@@ -81,6 +83,8 @@ const SearchableSelect = ({
     setSearchTerm('');
     setActiveIndex(-1);
     if (onClear) onClear();
+    // After clearing, keep focus on the trigger
+    containerRef.current?.querySelector('[role="combobox"]')?.focus();
   };
 
   const handleToggle = () => {
@@ -89,6 +93,26 @@ const SearchableSelect = ({
     setIsOpen(opening);
     if (opening) setTimeout(() => inputRef.current?.focus(), 50);
   };
+
+  /* ── keyboard handler for the trigger (closed state) ────────────── */
+  const handleTriggerKeyDown = useCallback((e) => {
+    if (disabled) return;
+    switch (e.key) {
+      case 'Enter':
+      case ' ': {
+        e.preventDefault();
+        handleToggle();
+        break;
+      }
+      case 'ArrowDown': {
+        e.preventDefault();
+        if (!isOpen) handleToggle();
+        break;
+      }
+      default:
+        break;
+    }
+  }, [disabled, isOpen]);
 
   /* ── keyboard handler (attached to the search input) ────────────── */
   const handleKeyDown = useCallback(
@@ -121,16 +145,33 @@ const SearchableSelect = ({
           }
           break;
         }
+        case 'Tab': {
+          // Select highlighted item (if any) then close dropdown.
+          // Don't preventDefault — let the browser's native Tab
+          // move focus to the next interactive element naturally.
+          if (activeIndex >= 0 && filtered[activeIndex]) {
+            onChange(
+              typeof filtered[activeIndex] === 'string'
+                ? filtered[activeIndex]
+                : filtered[activeIndex].value,
+            );
+          }
+          setIsOpen(false);
+          setSearchTerm('');
+          setActiveIndex(-1);
+          break;
+        }
         case 'Escape': {
           e.preventDefault();
           setIsOpen(false);
+          containerRef.current?.querySelector('[role="combobox"]')?.focus();
           break;
         }
         default:
           break;
       }
     },
-    [isOpen, activeIndex, filtered],
+    [isOpen, activeIndex, filtered, onChange, handleSelect],
   );
 
   /* ── layout helpers ──────────────────────────────────────────────── */
@@ -153,18 +194,24 @@ const SearchableSelect = ({
       {/* ── Trigger row ───────────────────────────────────────────────── */}
       <div
         onClick={handleToggle}
+        onKeyDown={!isOpen ? handleTriggerKeyDown : undefined}
+        role="combobox"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={label || placeholder}
+        tabIndex={disabled ? -1 : 0}
         className={`
           relative w-full flex items-center
           px-4 py-3 ${rightPadding}
           border rounded-lg
           font-body-md text-on-surface bg-surface-container-lowest
           cursor-pointer transition-all
-          focus-within:outline-none focus-within:ring-2
+          focus:outline-none focus:ring-2
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
           ${
             error
-              ? 'border-error focus-within:border-error focus-within:ring-error/20'
-              : 'border-outline-variant focus-within:border-secondary focus-within:ring-secondary/20'
+              ? 'border-error focus:border-error focus:ring-error/20'
+              : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
           }
         `}>
         {isOpen ? (
@@ -177,6 +224,7 @@ const SearchableSelect = ({
             placeholder="Search..."
             className="flex-1 min-w-0 bg-transparent outline-none font-body-md text-on-surface placeholder:text-on-surface-variant/50"
             onClick={(e) => e.stopPropagation()}
+            autoFocus
           />
         ) : (
           <span
@@ -191,6 +239,7 @@ const SearchableSelect = ({
         <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
           {hasClear && (
             <button
+              tabIndex={-1}
               onClick={handleClear}
               className="flex items-center justify-center w-5 h-5 rounded-full hover:bg-surface-container-high transition-colors"
               title="Clear">
@@ -228,9 +277,9 @@ const SearchableSelect = ({
                   ref={(el) => (itemRefs.current[i] = el)}
                   role="option"
                   aria-selected={isSelected}
+                  tabIndex={-1}
                   onMouseEnter={() => setActiveIndex(i)}
                   onMouseLeave={() => setActiveIndex(-1)}
-                  onKeyDown={handleKeyDown}
                   onClick={() => handleSelect(opt)}
                   className={`w-full text-left px-4 py-2.5 font-body-md transition-colors focus:outline-none
                     ${

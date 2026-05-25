@@ -112,29 +112,17 @@ const seedDepartments = async (parentClient) => {
   const shouldOwnTx = !parentClient;
 
   try {
-    if (shouldOwnTx) {
-      await client.query('BEGIN');
-
-      // Clear branch_departments first (FK dependency)
-      await client.query('DELETE FROM branch_departments');
-      console.log('Cleared branch_departments');
-
-      // Clear existing departments
-      await client.query('DELETE FROM master_department');
-      console.log('Cleared master_department');
-
-      // Reset sequence
-      await client.query('ALTER SEQUENCE master_department_id_seq RESTART WITH 1');
-    }
-
-    // Insert new departments (deduplicated — UNIQUE constraint on name)
+    // Deduplicate, trim, and filter empty names
     const values = departments
-      .filter((dept, idx, arr) => arr.indexOf(dept) === idx) // remove exact duplicates
+      .filter((dept, idx, arr) => arr.indexOf(dept) === idx)
       .map((dept) => dept.trim())
       .filter((dept) => dept.length > 0);
 
-    // Bulk INSERT with parameterized values (single statement, much faster than loop)
-    // Each value needs its own parentheses: ($1), ($2), ($3), ...
+    if (shouldOwnTx) {
+      await client.query('BEGIN');
+    }
+
+    // Bulk INSERT with ON CONFLICT — only adds new departments, never deletes existing ones
     const placeholders = values.map((_, i) => `($${i + 1})`).join(', ');
     await client.query(
       `INSERT INTO master_department (name) VALUES ${placeholders} ON CONFLICT (name) DO NOTHING`,
@@ -144,7 +132,7 @@ const seedDepartments = async (parentClient) => {
     if (shouldOwnTx) {
       await client.query('COMMIT');
     }
-    console.log(`✓ Department Master seeded: ${values.length} departments inserted`);
+    console.log(`✓ Department Master seeded: ${values.length} departments ensured (ON CONFLICT DO NOTHING)`);
   } catch (err) {
     if (shouldOwnTx) {
       await client.query('ROLLBACK');

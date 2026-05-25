@@ -139,25 +139,27 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Action Required */}
+          {/* Action to be Taken */}
           <div className="sm:col-span-2 lg:col-span-4 bg-primary-container border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-secondary relative">
             <div className="flex justify-between items-start mb-4">
               <div className="p-2 bg-secondary rounded-lg text-white"><Zap className="w-5 h-5" /></div>
-              <span className="px-2 py-1 bg-on-tertiary-container/20 text-on-tertiary-container rounded-full text-caption font-bold">{m.actionRequired?.label}</span>
+              <span className="px-2 py-1 bg-on-tertiary-container/20 text-on-tertiary-container rounded-full text-caption font-bold">{rangeLabel}</span>
             </div>
             <h3 className="font-label-caps text-on-primary-container mb-1 uppercase tracking-widest">Action to be Taken</h3>
-            <p className="font-h1 text-surface-bright">{m.actionRequired?.count}</p>
-            <p className="font-body-md text-on-primary-container">Unique Leads needing attention</p>
+            <div className="flex items-end gap-4">
+              <div><p className="font-h1 text-surface-bright">{m.actionRequired?.totalCalls?.toLocaleString()}</p><p className="font-caption text-on-primary-container">Total Calls</p></div>
+              <div className="border-l border-white/20 pl-4"><p className="font-h3 text-surface-bright">{m.actionRequired?.leadsFromCalls?.toLocaleString()}</p><p className="font-caption text-on-primary-container">Leads Generated</p></div>
+            </div>
             <Link to="/lead-box" className="mt-4 flex items-center justify-center gap-2 w-full py-2 bg-surface-container-lowest text-secondary font-bold rounded-lg hover:bg-surface-container-high transition-all">
               View Lead Box <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
 
-          {/* Answered Efficiency */}
+          {/* Answered Calls */}
           <div onClick={() => navigate('/reports')} className="sm:col-span-2 lg:col-span-6 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-on-tertiary-container cursor-pointer hover:shadow-md transition-all group">
             <div className="flex items-center gap-4 mb-4">
               <div className="p-3 bg-surface-container-low rounded-xl text-on-tertiary-container"><PhoneIncoming className="w-5 h-5" /></div>
-              <div><h3 className="font-label-caps text-outline uppercase tracking-widest">Answered Efficiency</h3><p className="font-body-md text-on-surface-variant">Clinical response rate within 15s</p></div>
+              <div><h3 className="font-label-caps text-outline uppercase tracking-widest">Answered Calls</h3><p className="font-body-md text-on-surface-variant">Total and unique answered calls</p></div>
             </div>
             <div className="grid grid-cols-2 gap-8">
               <div className="bg-surface p-4 rounded-lg border border-outline-variant/30"><p className="font-h1 text-on-surface">{m.answered?.total?.toLocaleString()}</p><p className="font-body-md font-bold text-on-tertiary-container flex items-center"><CircleCheck className="mr-1 w-4 h-4" />Total Answered</p></div>
@@ -165,11 +167,11 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Unanswered Tracker */}
+          {/* Unanswered Calls */}
           <div onClick={() => navigate('/reports')} className="sm:col-span-2 lg:col-span-6 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-outline cursor-pointer hover:shadow-md transition-all group">
             <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-surface-container-low rounded-xl text-on-surface-variant"><PhoneIncoming className="w-5 h-5" style={{ transform: 'rotate(180deg)' }} /></div>
-              <div><h3 className="font-label-caps text-outline uppercase tracking-widest">Unanswered Tracker</h3><p className="font-body-md text-on-surface-variant">Calls with zero pickup</p></div>
+              <div className="p-3 bg-surface-container-low rounded-xl text-on-surface-variant"><PhoneOff className="w-5 h-5" /></div>
+              <div><h3 className="font-label-caps text-outline uppercase tracking-widest">Unanswered Calls</h3><p className="font-body-md text-on-surface-variant">Outbound calls with no pickup</p></div>
             </div>
             <div className="flex items-center justify-between">
               <div>
@@ -182,30 +184,11 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Overall Leads */}
-          <div onClick={() => navigate('/lead-box')} className="sm:col-span-2 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-primary cursor-pointer hover:shadow-md transition-all group">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-primary/10 rounded-lg text-primary"><Users className="w-5 h-5" /></div>
-            </div>
-            <h3 className="font-label-caps text-outline mb-1 uppercase tracking-widest">Overall Leads</h3>
-            <p className="font-h1 text-on-surface">{m.overallLeads?.total?.toLocaleString()}</p>
-            <p className="font-body-md text-on-surface-variant">{rangeLabel === 'All Time' ? 'All leads in the system' : `Leads ${rangeLabel.toLowerCase()}`}</p>
-          </div>
-
-          {/* New Leads Today */}
-          <div onClick={() => navigate('/lead-box')} className="sm:col-span-2 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-tertiary cursor-pointer hover:shadow-md transition-all group">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-tertiary/10 rounded-lg text-tertiary"><UserPlus className="w-5 h-5" /></div>
-            </div>
-            <h3 className="font-label-caps text-outline mb-1 uppercase tracking-widest">New Leads Today</h3>
-            <p className="font-h1 text-on-surface">{m.newLeadsToday?.total}</p>
-            <p className="font-body-md text-on-surface-variant">Leads created today</p>
-          </div>
-
           {/* Total Leads */}
           <div onClick={() => navigate('/lead-box')} className="sm:col-span-2 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-secondary cursor-pointer hover:shadow-md transition-all group">
             <div className="flex justify-between items-start mb-4">
               <div className="p-2 bg-secondary/10 rounded-lg text-secondary"><Target className="w-5 h-5" /></div>
+              <span className="text-caption text-on-surface-variant font-bold">{rangeLabel}</span>
             </div>
             <h3 className="font-label-caps text-outline mb-1 uppercase tracking-widest">Total Leads</h3>
             <div className="flex items-end gap-4">
@@ -218,6 +201,26 @@ const Dashboard = () => {
                 <p className="font-caption text-on-surface-variant">High Priority</p>
               </div>
             </div>
+          </div>
+
+          {/* New Leads Today */}
+          <div onClick={() => navigate('/lead-box')} className="sm:col-span-2 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-tertiary cursor-pointer hover:shadow-md transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-2 bg-tertiary/10 rounded-lg text-tertiary"><UserPlus className="w-5 h-5" /></div>
+            </div>
+            <h3 className="font-label-caps text-outline mb-1 uppercase tracking-widest">New Leads Today</h3>
+            <p className="font-h1 text-on-surface">{m.newLeadsToday?.total}</p>
+            <p className="font-body-md text-on-surface-variant">Leads created today</p>
+          </div>
+
+          {/* Total Follow-Ups */}
+          <div onClick={() => navigate('/lead-box')} className="sm:col-span-2 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-4 sm:p-6 shadow-sm metric-card-accent border-t-primary cursor-pointer hover:shadow-md transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-2 bg-primary/10 rounded-lg text-primary"><Users className="w-5 h-5" /></div>
+            </div>
+            <h3 className="font-label-caps text-outline mb-1 uppercase tracking-widest">Total Follow-Ups</h3>
+            <p className="font-h1 text-on-surface">{m.followUps?.total}</p>
+            <p className="font-body-md text-on-surface-variant">Leads in follow-up status</p>
           </div>
 
           {/* Activity Log */}

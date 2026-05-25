@@ -9,7 +9,7 @@ const addRecordingUrl = async () => {
     console.log('recording_url column added to call_logs table');
   } catch (err) {
     console.error('Migration failed:', err);
-    process.exit(1);
+    throw err;
   }
 };
 

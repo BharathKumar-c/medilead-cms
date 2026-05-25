@@ -30,7 +30,8 @@ router.get('/metrics', async (req, res) => {
         COUNT(*) FILTER (WHERE call_status = 'missed')::int as missed_calls,
         COUNT(DISTINCT caller_phone_number) FILTER (WHERE call_status = 'missed')::int as unique_missed,
         COUNT(*) FILTER (WHERE call_status IN ('in-progress', 'completed'))::int as answered_calls,
-        COUNT(DISTINCT caller_phone_number) FILTER (WHERE call_status IN ('in-progress', 'completed'))::int as unique_answered
+        COUNT(DISTINCT caller_phone_number) FILTER (WHERE call_status IN ('in-progress', 'completed'))::int as unique_answered,
+        COUNT(*) FILTER (WHERE direction = 'outbound' AND call_status IN ('missed', 'failed'))::int as unanswered_outbound
       FROM telephony_call_logs
       WHERE 1=1 ${callWhere}
     `);
@@ -39,12 +40,18 @@ router.get('/metrics', async (req, res) => {
     const totalCalls = parseInt(m.total_calls) || 0;
     const missedCalls = parseInt(m.missed_calls) || 0;
     const answeredCalls = parseInt(m.answered_calls) || 0;
-    const unanswered = totalCalls - answeredCalls;
+    const unansweredOutbound = parseInt(m.unanswered_outbound) || 0;
 
-    // Action required = leads with status New in the range
-    const actionResult = await db.query(
-      `SELECT COUNT(*) FROM leads l WHERE l.status = 'New' ${leadWhere}`
-    );
+    // Action to be taken: total calls + leads generated from calls
+    // Join telephony_call_logs with leads on phone/alternate_contact to count distinct leads
+    const actionResult = await db.query(`
+      SELECT
+        COUNT(*)::int as total_calls,
+        COUNT(DISTINCT l.id)::int as leads_from_calls
+      FROM telephony_call_logs t
+      LEFT JOIN leads l ON (t.caller_phone_number = l.phone OR t.caller_phone_number = l.alternate_contact)
+      WHERE 1=1 ${callWhere}
+    `);
 
     // Lead metrics
     const leadMetrics = await db.query(`
@@ -52,7 +59,8 @@ router.get('/metrics', async (req, res) => {
         COUNT(*) as total_leads,
         COUNT(*) FILTER (WHERE DATE(l.created_at) = CURRENT_DATE) as leads_today,
         COUNT(*) FILTER (WHERE l.status = 'New') as new_leads,
-        COUNT(*) FILTER (WHERE l.priority = 'High') as high_priority
+        COUNT(*) FILTER (WHERE l.priority = 'High') as high_priority,
+        COUNT(*) FILTER (WHERE l.status = 'Follow-up') as follow_ups
       FROM leads l
       WHERE 1=1 ${leadWhere}
     `);
@@ -71,19 +79,16 @@ router.get('/metrics', async (req, res) => {
           status: missedCalls > 0 ? 'High Volume' : 'Normal',
         },
         actionRequired: {
-          count: parseInt(actionResult.rows[0].count),
-          label: 'Urgent',
+          totalCalls: parseInt(actionResult.rows[0].total_calls) || 0,
+          leadsFromCalls: parseInt(actionResult.rows[0].leads_from_calls) || 0,
         },
         answered: {
           total: answeredCalls,
           unique: parseInt(m.unique_answered) || 0,
         },
         unanswered: {
-          count: unanswered,
-          percentage: totalCalls > 0 ? Math.round((unanswered / totalCalls) * 100) : 0,
-        },
-        overallLeads: {
-          total: parseInt(lm.total_leads) || 0,
+          count: unansweredOutbound,
+          percentage: totalCalls > 0 ? Math.round((unansweredOutbound / totalCalls) * 100) : 0,
         },
         newLeadsToday: {
           total: parseInt(lm.leads_today) || 0,
@@ -91,7 +96,9 @@ router.get('/metrics', async (req, res) => {
         totalLeads: {
           total: parseInt(lm.total_leads) || 0,
           highPriority: parseInt(lm.high_priority) || 0,
-          newStatus: parseInt(lm.new_leads) || 0,
+        },
+        followUps: {
+          total: parseInt(lm.follow_ups) || 0,
         },
       },
     });

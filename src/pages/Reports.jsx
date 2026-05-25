@@ -91,6 +91,7 @@ const Reports = () => {
       if (res[7]?.data?.telecallers) {
         // Map API response to expected format
         const mapped = res[7].data.telecallers.map(t => ({
+          id: t.id,
           name: t.name,
           specialty: t.specialty || 'Telecaller',
           total_leads: t.leads,

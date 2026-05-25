@@ -20,9 +20,14 @@ export const useSocket = ({ onNotification, onIncomingCall, onCallEvent } = {}) 
     const token = api.getToken();
     if (!token) return;
 
+    // Use autoConnect: false to avoid StrictMode race condition where
+    // the first mount's WebSocket handshake is aborted by cleanup.
+    // We manually connect after a short delay so the first cleanup
+    // cycle (in dev) can safely dispose before the connection starts.
     const socket = io(SOCKET_URL, {
       auth: { token },
       transports: ['websocket', 'polling'],
+      autoConnect: false,
     });
 
     socketRef.current = socket;
@@ -50,13 +55,14 @@ export const useSocket = ({ onNotification, onIncomingCall, onCallEvent } = {}) 
       if (onCallEventRef.current) onCallEventRef.current(data);
     });
 
+    // Delay connection to avoid StrictMode abort-on-first-mount issue
+    const connectTimer = setTimeout(() => {
+      socket.connect();
+    }, 100);
+
     return () => {
-      try {
-        socket.disconnect();
-      } catch (e) {
-        // Ignore — can happen in React StrictMode (dev) when WebSocket
-        // handshake hasn't completed before the cleanup fires.
-      }
+      clearTimeout(connectTimer);
+      socket.disconnect();
       socketRef.current = null;
     };
   }, []);

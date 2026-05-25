@@ -43,6 +43,12 @@ server/uploads/recordings/*
 *.sln
 *.sw?
 
+# Local IDE settings
+.openclaude/
+
+# Database backups
+server/src/db_backup/
+
 # Build artifacts
 production.zip
 production/

@@ -276,8 +276,9 @@ class ApiService {
     return this.request(`/leads?${query}`);
   }
 
-  async getLeadMetrics() {
-    return this.request('/leads/metrics');
+  async getLeadMetrics(params = {}) {
+    const query = Object.keys(params).length > 0 ? '?' + new URLSearchParams(params).toString() : '';
+    return this.request(`/leads/metrics${query}`);
   }
 
   async getLead(id) {
@@ -668,6 +669,18 @@ class ApiService {
     return this.request('/auth/reset-password', {
       method: 'POST',
       body: { token, newPassword },
+    });
+  }
+
+  // Maintenance Mode
+  async getMaintenanceMode() {
+    return this.request('/settings/maintenance');
+  }
+
+  async setMaintenanceMode(enabled, message) {
+    return this.request('/settings/maintenance', {
+      method: 'PUT',
+      body: { enabled, message },
     });
   }
 

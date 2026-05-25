@@ -117,6 +117,7 @@ const Login = () => {
                 />
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
                 >
@@ -133,8 +134,12 @@ const Login = () => {
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer group">
                 <div
+                  role="checkbox"
+                  aria-checked={rememberMe}
+                  tabIndex={0}
                   onClick={() => setRememberMe(!rememberMe)}
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setRememberMe(!rememberMe); } }}
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-secondary/20 ${
                     rememberMe
                       ? 'bg-secondary border-secondary'
                       : 'border-outline-variant group-hover:border-secondary'

@@ -117,6 +117,7 @@ const ResetPassword = () => {
                     />
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
                     >
@@ -142,6 +143,7 @@ const ResetPassword = () => {
                     />
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => setShowConfirm(!showConfirm)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
                     >

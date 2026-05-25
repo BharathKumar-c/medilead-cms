@@ -17,6 +17,7 @@ const createTables = async () => {
       DROP TABLE IF EXISTS activity_log CASCADE;
       DROP TABLE IF EXISTS notifications CASCADE;
       DROP TABLE IF EXISTS call_logs CASCADE;
+      DROP TABLE IF EXISTS lead_status_history CASCADE;
       DROP TABLE IF EXISTS lead_history CASCADE;
       DROP TABLE IF EXISTS lead_uhids CASCADE;
       DROP TABLE IF EXISTS appointments CASCADE;
@@ -33,6 +34,7 @@ const createTables = async () => {
       DROP TABLE IF EXISTS permissions CASCADE;
       DROP TABLE IF EXISTS roles CASCADE;
       DROP TABLE IF EXISTS report_exports CASCADE;
+      DROP TABLE IF EXISTS system_settings CASCADE;
       DROP TABLE IF EXISTS password_reset_tokens CASCADE;
       DROP TABLE IF EXISTS master_pincodes CASCADE;
       DROP TABLE IF EXISTS users CASCADE;
@@ -221,7 +223,7 @@ const createTables = async () => {
         city VARCHAR(100),
         state VARCHAR(100),
         country VARCHAR(100) DEFAULT 'India',
-        status VARCHAR(50) DEFAULT 'Appointment Booked' CHECK (status IN ('Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS and Ex-Service Scheme', 'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship', 'Appointment Booked')),
+        status VARCHAR(50) DEFAULT 'New' CHECK (status IN ('New', 'Contacted', 'Interested', 'Follow-up', 'Closed', 'Rejected', 'Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS and Ex-Service Scheme', 'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship', 'Appointment Booked')),
         lead_source VARCHAR(100),
         priority VARCHAR(20) DEFAULT 'Medium' CHECK (priority IN ('High', 'Medium', 'Low')),
         assigned_to INTEGER REFERENCES users(id),
@@ -245,6 +247,18 @@ const createTables = async () => {
         is_primary BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(lead_id, uhid)
+      );
+    `);
+
+    // Lead Status History table (tracks status transitions for metrics)
+    await client.query(`
+      CREATE TABLE lead_status_history (
+        id SERIAL PRIMARY KEY,
+        lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+        previous_status VARCHAR(50),
+        new_status VARCHAR(50) NOT NULL,
+        changed_by INTEGER REFERENCES users(id),
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -405,6 +419,9 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_leads_alternate_contact ON leads(alternate_contact);
       CREATE INDEX IF NOT EXISTS idx_call_logs_caller_number ON call_logs(caller_number);
       CREATE INDEX IF NOT EXISTS idx_call_logs_lead_id ON call_logs(lead_id);
+      CREATE INDEX IF NOT EXISTS idx_lead_status_history_lead_id ON lead_status_history(lead_id);
+      CREATE INDEX IF NOT EXISTS idx_lead_status_history_changed_at ON lead_status_history(changed_at);
+      CREATE INDEX IF NOT EXISTS idx_lead_status_history_new_status ON lead_status_history(new_status);
       CREATE INDEX IF NOT EXISTS idx_lead_uhids_uhid ON lead_uhids(uhid);
       CREATE INDEX IF NOT EXISTS idx_lead_uhids_lead_id ON lead_uhids(lead_id);
       CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
@@ -426,6 +443,25 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_telephony_call_logs_timestamp ON telephony_call_logs(timestamp);
       CREATE INDEX IF NOT EXISTS idx_telephony_call_logs_vendor_call_id ON telephony_call_logs(vendor_call_id);
       CREATE INDEX IF NOT EXISTS idx_telephony_call_logs_created ON telephony_call_logs(created_at);
+    `);
+
+    // System settings table (key-value store for app-wide settings like maintenance mode)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Insert default system settings if not present
+    await client.query(`
+      INSERT INTO system_settings (key, value)
+      SELECT * FROM (VALUES
+        ('maintenance_mode', 'false'),
+        ('maintenance_message', 'The application is currently undergoing maintenance. Please check back shortly.')
+      ) AS v(key, value)
+      WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = v.key);
     `);
 
     // Report exports table

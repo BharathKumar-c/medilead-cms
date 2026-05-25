@@ -178,6 +178,191 @@ New  -->  Contacted  -->  Interested  -->  Follow-up  -->  Appointment Booked  -
         </div>
       </section>
 
+      {/* Lead Box Metrics */}
+      <section className="mb-10">
+        <h2 className="text-xl font-semibold text-gray-900 mb-3">Lead Box Metrics</h2>
+        <p className="text-gray-700 leading-relaxed mb-4">
+          The metrics bar at the top of the Lead Box shows four summary cards that give you an instant
+          snapshot of your lead pipeline. Each card is calculated in real-time based on lead data and
+          status history. Understanding these metrics helps you prioritize your daily workflow and
+          identify bottlenecks.
+        </p>
+
+        {/* New Leads Today */}
+        <h3 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
+          <span className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-700">1</span>
+          New Leads Today
+        </h3>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <p className="text-sm text-blue-900 font-medium mb-2">What it counts</p>
+          <p className="text-sm text-blue-800 leading-relaxed mb-3">
+            Every lead created today, regardless of its current status or who it's assigned to.
+            This is a raw count of all new entries into the system within the current calendar day.
+          </p>
+          <p className="text-sm text-blue-900 font-medium mb-2">Calculation</p>
+          <div className="bg-gray-900 rounded-lg p-3 mb-3">
+            <pre className="text-xs text-gray-300"><code>{`SELECT COUNT(*) FROM leads WHERE DATE(created_at) = CURRENT_DATE`}</code></pre>
+          </div>
+          <p className="text-sm text-blue-900 font-medium mb-2">How to interpret</p>
+          <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+            <li><strong>High numbers</strong> indicate heavy inbound activity — website enquiries, walk-ins, or referral spikes</li>
+            <li><strong>Low numbers</strong> are normal for slower days; compare week-over-week rather than day-to-day</li>
+            <li>This is your <strong>incoming workload</strong> — all of these leads need initial contact</li>
+          </ul>
+        </div>
+
+        {/* Follow-up Leads */}
+        <h3 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
+          <span className="w-5 h-5 rounded bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700">2</span>
+          Follow-up Leads
+        </h3>
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
+          <p className="text-sm text-indigo-900 font-medium mb-2">What it counts</p>
+          <p className="text-sm text-indigo-800 leading-relaxed mb-3">
+            All <strong>active</strong> leads that still need attention — i.e., any lead whose status
+            is NOT one of the three terminal outcomes: <code className="bg-indigo-100 px-1 rounded text-xs">Closed</code>,
+            <code className="bg-indigo-100 px-1 rounded text-xs">Rejected</code>, or
+            <code className="bg-indigo-100 px-1 rounded text-xs">Appointment Booked</code>.
+          </p>
+          <p className="text-sm text-indigo-900 font-medium mb-2">Which statuses are counted</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+            <div className="bg-white rounded-lg p-3 border border-indigo-100">
+              <p className="text-xs font-semibold text-indigo-700 mb-1.5 uppercase tracking-wide">Counted (needs action)</p>
+              <div className="flex flex-wrap gap-1">
+                {['New', 'Contacted', 'Interested', 'Follow-up', 'Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS / Ex-Service Scheme', 'CM Scheme / PM Scheme', 'Admission & Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship'].map(s => (
+                  <span key={s} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{s}</span>
+                ))}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-red-100">
+              <p className="text-xs font-semibold text-red-700 mb-1.5 uppercase tracking-wide">Excluded (terminal)</p>
+              <div className="flex flex-wrap gap-1">
+                {['Appointment Booked', 'Closed', 'Rejected'].map(s => (
+                  <span key={s} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{s}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="text-sm text-indigo-900 font-medium mb-2">Calculation</p>
+          <div className="bg-gray-900 rounded-lg p-3 mb-3">
+            <pre className="text-xs text-gray-300"><code>{`SELECT COUNT(*) FROM leads WHERE status NOT IN ('Closed', 'Rejected', 'Appointment Booked')`}</code></pre>
+          </div>
+          <p className="text-sm text-indigo-900 font-medium mb-2">How to interpret</p>
+          <ul className="text-sm text-indigo-700 space-y-1 list-disc list-inside">
+            <li><strong>High numbers</strong> mean many leads are still in progress — telecallers are handling active conversations, enquiries, and follow-ups</li>
+            <li><strong>Low numbers</strong> suggest the team is closing leads efficiently, or there's low inbound volume</li>
+            <li>This is your <strong>total workload</strong> — every lead in this count requires at least some action</li>
+            <li>Compare with <strong>Overdue Responses</strong> to see how many of these are past their deadline</li>
+          </ul>
+        </div>
+
+        {/* Conversion Rate */}
+        <h3 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
+          <span className="w-5 h-5 rounded bg-green-100 flex items-center justify-center text-xs font-bold text-green-700">3</span>
+          Conversion Rate
+        </h3>
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+          <p className="text-sm text-green-900 font-medium mb-2">What it measures</p>
+          <p className="text-sm text-green-800 leading-relaxed mb-3">
+            The percentage of total leads that have reached a successful outcome. A lead is considered
+            &ldquo;converted&rdquo; when its status is either <code className="bg-green-100 px-1 rounded text-xs">Appointment Booked</code>
+            (the patient has scheduled a visit) or <code className="bg-green-100 px-1 rounded text-xs">Closed</code>
+            (the enquiry was resolved and the patient received service).
+          </p>
+          <p className="text-sm text-green-900 font-medium mb-2">Calculation</p>
+          <div className="bg-gray-900 rounded-lg p-3 mb-3">
+            <pre className="text-xs text-gray-300"><code>{`(Leads with status 'Appointment Booked' OR 'Closed')  ×  100
+──────────────────────────────────────────────────────
+                 Total leads in system`}</code></pre>
+          </div>
+          <p className="text-sm text-green-900 font-medium mb-2">How to interpret</p>
+          <ul className="text-sm text-green-700 space-y-1 list-disc list-inside">
+            <li><strong>Higher percentage</strong> indicates the team is successfully moving leads through the pipeline to resolution</li>
+            <li><strong>Lower percentage</strong> could mean many leads are stuck in intermediate statuses or have been recently created (not yet processed)</li>
+            <li>This is a <strong>lagging indicator</strong> — it reflects the cumulative performance of the entire lead pipeline, not just today</li>
+            <li>Compare against team benchmarks or historical averages (e.g., in Reports) to gauge performance trends</li>
+          </ul>
+        </div>
+
+        {/* Overdue Responses */}
+        <h3 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
+          <span className="w-5 h-5 rounded bg-orange-100 flex items-center justify-center text-xs font-bold text-orange-700">4</span>
+          Overdue Responses
+        </h3>
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+          <p className="text-sm text-orange-900 font-medium mb-2">What it counts</p>
+          <p className="text-sm text-orange-800 leading-relaxed mb-3">
+            A <strong>subset</strong> of Follow-up Leads that have been sitting idle for too long without
+            any action. The system uses automated timestamps from the
+            <code className="bg-orange-100 px-1 rounded text-xs">lead_status_history</code> table to determine
+            how long each lead has been in its current status. No manual date entry is needed.
+          </p>
+          <p className="text-sm text-orange-900 font-medium mb-2">Time-based thresholds</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div className="bg-white rounded-lg p-3 border border-orange-100">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">New</span>
+                <span className="text-sm font-semibold text-gray-800">2 days</span>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Leads with status <strong>New</strong> that haven't been touched for <strong>2+ days</strong>.
+                New leads get a shorter grace period because first contact is the highest priority.
+              </p>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-orange-100">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">Active</span>
+                <span className="text-sm font-semibold text-gray-800">3 days</span>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Leads in any other active status (e.g., <strong>Contacted</strong>, <strong>Interested</strong>,
+                <strong>Complaint Enquiry</strong>, etc.) that haven't seen action for <strong>3+ days</strong>.
+              </p>
+            </div>
+          </div>
+          <p className="text-sm text-orange-900 font-medium mb-2">How staleness is measured</p>
+          <p className="text-sm text-orange-800 leading-relaxed mb-3">
+            The system checks the most recent entry in <code className="bg-orange-100 px-1 rounded text-xs">lead_status_history</code>
+            to find when the lead entered its current status. If no history entry exists (e.g., legacy leads
+            from before the history table was added), it falls back to:
+          </p>
+          <ol className="text-sm text-orange-700 space-y-1 list-decimal list-inside mb-3">
+            <li><strong>lead_status_history.changed_at</strong> &mdash; the timestamp of the last status change (most accurate)</li>
+            <li><strong>last_call_date</strong> &mdash; when the lead was last contacted via phone</li>
+            <li><strong>created_at</strong> &mdash; when the lead was originally created</li>
+          </ol>
+          <p className="text-sm text-orange-900 font-medium mb-2">Calculation</p>
+          <div className="bg-gray-900 rounded-lg p-3 mb-3">
+            <pre className="text-xs text-gray-300"><code>{`-- 'New' leads: last status change (or creation) 2+ days ago
+-- Other active leads: last status change (or call/creation) 3+ days ago
+
+SELECT COUNT(*) FROM leads l
+WHERE l.status NOT IN ('Closed', 'Rejected', 'Appointment Booked')
+AND (
+  (l.status = 'New'
+   AND COALESCE(
+     (SELECT MAX(lsh.changed_at) FROM lead_status_history lsh WHERE lsh.lead_id = l.id),
+     l.created_at
+   ) < NOW() - INTERVAL '2 days')
+  OR
+  (l.status != 'New'
+   AND COALESCE(
+     (SELECT MAX(lsh.changed_at) FROM lead_status_history lsh WHERE lsh.lead_id = l.id),
+     l.last_call_date,
+     l.created_at
+   ) < NOW() - INTERVAL '3 days')
+)`}</code></pre>
+          </div>
+          <p className="text-sm text-orange-900 font-medium mb-2">How to interpret</p>
+          <ul className="text-sm text-orange-700 space-y-1 list-disc list-inside">
+            <li><strong>High numbers</strong> indicate leads are falling through the cracks — urgent attention needed to re-engage stale leads</li>
+            <li><strong>Zero or low numbers</strong> mean the team is staying on top of their workload</li>
+            <li>This is your <strong>priority action list</strong> — address these leads first before they go cold</li>
+            <li>The <strong>Follow-up Leads</strong> count minus <strong>Overdue Responses</strong> gives you the number of leads that are still within their service window</li>
+          </ul>
+        </div>
+      </section>
+
       {/* Lead History */}
       <section className="mb-10">
         <h2 className="text-xl font-semibold text-gray-900 mb-3">Lead History</h2>

@@ -101,7 +101,7 @@ const AccountSettings = () => {
                     placeholder="Enter password"
                     className="w-full px-4 py-3 pr-12 border border-outline-variant rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all placeholder:text-on-surface-variant/50"
                   />
-                  <button type="button" onClick={() => togglePasswordVisibility(f.key)}
+                  <button type="button" tabIndex={-1} onClick={() => togglePasswordVisibility(f.key)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-on-surface-variant hover:text-on-surface transition-colors">
                     {showPasswords[f.key] ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                   </button>

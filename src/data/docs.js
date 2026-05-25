@@ -121,9 +121,9 @@ export const searchableContent = [
     section: 'Features',
     title: 'Lead Management',
     keywords:
-      'lead create edit delete search filter status priority assignment duplicate uhid',
+      'lead create edit delete search filter status priority assignment duplicate uhid metrics new today follow-up conversion rate overdue responses',
     content:
-      'Create and manage patient leads. Track statuses: New, Contacted, Interested, Follow-up, Appointment Booked, Closed, Rejected. Auto-assign to telecallers.',
+      'Create and manage patient leads. Track statuses: New, Contacted, Interested, Follow-up, Appointment Booked, Closed, Rejected. Auto-assign to telecallers. Lead Box metrics: New Leads Today (created today), Follow-up Leads (all non-terminal statuses), Conversion Rate (Appointment Booked + Closed as percentage of total), Overdue Responses (stale active leads past 2-day or 3-day threshold using lead_status_history).',
   },
   {
     id: 'appointments',

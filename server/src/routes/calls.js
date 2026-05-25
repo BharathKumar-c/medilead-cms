@@ -153,6 +153,13 @@ router.post('/', validateCallLog, async (req, res) => {
 
     const call = result.rows[0];
 
+    // Generate call code if not already set
+    if (!call.code) {
+      const code = `C${call.id}`;
+      await db.query('UPDATE call_logs SET code = $1 WHERE id = $2', [code, call.id]);
+      call.code = code;
+    }
+
     // Update lead's last_call_date if linked
     if (resolvedLeadId) {
       await db.query(
@@ -309,6 +316,13 @@ router.post('/sip-event', validateSipEvent, async (req, res) => {
         [caller || 'unknown', callee || 'unknown', direction, callStatus, leadId, call_id || `sip-${Date.now()}`, duration || 0, recordingUrl]
       );
       callLog = result.rows[0];
+
+      // Generate call code if not already set
+      if (!callLog.code) {
+        const code = `C${callLog.id}`;
+        await db.query('UPDATE call_logs SET code = $1 WHERE id = $2', [code, callLog.id]);
+        callLog.code = code;
+      }
     }
 
     // Handle incoming call popup

@@ -284,6 +284,13 @@ router.post('/', validateAppointment, async (req, res) => {
 
     const appointment = result.rows[0];
 
+    // Generate appointment code if not already set
+    if (!appointment.code) {
+      const code = `A${appointment.id}`;
+      await db.query('UPDATE appointments SET code = $1 WHERE id = $2', [code, appointment.id]);
+      appointment.code = code;
+    }
+
     // Notify provider
     if (providerIdInt && providerIdInt !== createdByInt) {
       const io = req.app.get('io');
@@ -448,6 +455,55 @@ router.put('/:id/reschedule', validateId, validateReschedule, async (req, res) =
   } catch (err) {
     logger.error('Reschedule appointment error', { error: err.message, appointmentId: req.params.id });
     res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'RESCHEDULE_ERROR' });
+  }
+});
+
+// PUT /api/appointments/:id/no-show — mark as no show
+router.put('/:id/no-show', validateId, async (req, res) => {
+  try {
+    const existing = await db.query('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Appointment not found.', code: 'APPOINTMENT_NOT_FOUND' });
+    }
+
+    if (existing.rows[0].status === 'Cancelled') {
+      return res.status(400).json({ status: 'error', message: 'Cannot mark a cancelled appointment as no show.', code: 'ALREADY_CANCELLED' });
+    }
+
+    if (existing.rows[0].status === 'No Show') {
+      return res.status(400).json({ status: 'error', message: 'Appointment is already marked as No Show.', code: 'ALREADY_NO_SHOW' });
+    }
+
+    const result = await db.query(
+      `UPDATE appointments SET
+        status = 'No Show',
+        notes = COALESCE(notes, '') || E'\n[Marked as No Show]',
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+
+    // Notify provider
+    if (existing.rows[0].provider_id) {
+      const io = req.app.get('io');
+      await notify(io, {
+        user_id: existing.rows[0].provider_id,
+        type: 'warning',
+        title: `Patient did not show: ${existing.rows[0].patient_name}`,
+        link: '/appointments',
+      });
+    }
+
+    logger.info('Appointment marked no show', {
+      appointmentId: req.params.id,
+      patientName: existing.rows[0].patient_name,
+      updatedBy: req.user.id,
+    });
+
+    res.json({ status: 'success', data: { appointment: result.rows[0] } });
+  } catch (err) {
+    logger.error('No show error', { error: err.message, appointmentId: req.params.id });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'NO_SHOW_ERROR' });
   }
 });
 

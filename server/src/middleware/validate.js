@@ -1,6 +1,20 @@
 const { body, param, query, validationResult } = require('express-validator');
 const logger = require('../utils/logger');
 
+// All allowed lead statuses (modern pipeline + legacy enquiry types)
+const ALL_LEAD_STATUSES = [
+  'New', 'Contacted', 'Interested', 'Follow-up', 'Closed', 'Rejected',
+  'Complaint Enquiry', 'Location Enquiry', 'Medical Certificate',
+  'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry',
+  'Biomedical', 'IT', 'CGHS and Ex-Service Scheme',
+  'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry',
+  'Purchase', 'Lab & Diagnostic', 'Accounts',
+  'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing',
+  'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance',
+  'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry',
+  'Scan & X-Ray', 'Internship', 'Appointment Booked',
+];
+
 // Helper to handle validation errors
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
@@ -143,7 +157,7 @@ const validateLead = [
     .withMessage('Patient name is required')
     .isLength({ min: 2, max: 255 })
     .withMessage('Name must be between 2 and 255 characters')
-    .matches(/^[a-zA-Z\s.'-]+$/)
+    .matches(/^[a-zA-Z0-9\s.'-]+$/)
     .withMessage('Name contains invalid characters'),
   body('phone')
     .trim()
@@ -202,7 +216,7 @@ const validateLead = [
     .withMessage('Country must be less than 100 characters'),
   body('status')
     .optional()
-    .isIn(['Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS and Ex-Service Scheme', 'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship', 'Appointment Booked'])
+    .isIn(ALL_LEAD_STATUSES)
     .withMessage('Invalid status'),
   body('priority')
     .optional()
@@ -294,7 +308,7 @@ const validateLeadUpdate = [
     .withMessage('Country must be less than 100 characters'),
   body('status')
     .optional()
-    .isIn(['Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS and Ex-Service Scheme', 'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship', 'Appointment Booked'])
+    .isIn(ALL_LEAD_STATUSES)
     .withMessage('Invalid status'),
   body('priority')
     .optional()
@@ -687,7 +701,7 @@ const validateLeadQuery = [
     .withMessage('Search term must be less than 100 characters'),
   query('status')
     .optional()
-    .isIn(['All', 'Complaint Enquiry', 'Location Enquiry', 'Medical Certificate', 'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry', 'Biomedical', 'IT', 'CGHS and Ex-Service Scheme', 'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry', 'Purchase', 'Lab & Diagnostic', 'Accounts', 'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing', 'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance', 'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry', 'Scan & X-Ray', 'Internship', 'Appointment Booked'])
+    .isIn(['All', ...ALL_LEAD_STATUSES])
     .withMessage('Invalid status filter'),
   query('priority')
     .optional()

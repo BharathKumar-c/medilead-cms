@@ -44,7 +44,8 @@ const seed = async () => {
       ('roles:update', 'Update Roles', 'Edit role permissions', 'roles'),
       ('roles:delete', 'Delete Roles', 'Delete custom roles', 'roles'),
       ('dashboard:view', 'View Dashboard', 'Access the main dashboard', 'dashboard'),
-      ('notifications:manage', 'Manage Notifications', 'Receive and manage notifications', 'notifications')
+      ('notifications:manage', 'Manage Notifications', 'Receive and manage notifications', 'notifications'),
+      ('settings:manage', 'Manage Settings', 'Toggle maintenance mode and manage app settings', 'settings')
       ON CONFLICT DO NOTHING
     `);
 

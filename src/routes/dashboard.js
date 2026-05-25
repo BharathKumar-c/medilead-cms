@@ -17,7 +17,8 @@ router.get('/metrics', async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'missed') as missed_calls,
         COUNT(DISTINCT caller_number) FILTER (WHERE status = 'missed') as unique_missed,
         COUNT(*) FILTER (WHERE status IN ('connected', 'disconnected')) as answered_calls,
-        COUNT(DISTINCT caller_number) FILTER (WHERE status IN ('connected', 'disconnected')) as unique_answered
+        COUNT(DISTINCT caller_number) FILTER (WHERE status IN ('connected', 'disconnected')) as unique_answered,
+        COUNT(*) FILTER (WHERE direction = 'outbound' AND status IN ('missed', 'failed')) as unanswered_outbound
       FROM call_logs
     `);
 
@@ -25,10 +26,27 @@ router.get('/metrics', async (req, res) => {
     const totalCalls = parseInt(m.total_calls) || 0;
     const missedCalls = parseInt(m.missed_calls) || 0;
     const answeredCalls = parseInt(m.answered_calls) || 0;
-    const unanswered = totalCalls - answeredCalls;
+    const unansweredOutbound = parseInt(m.unanswered_outbound) || 0;
 
-    // Action required = leads with status New
-    const actionResult = await db.query(`SELECT COUNT(*) FROM leads WHERE status = 'New'`);
+    // Action to be taken: total calls + leads generated from calls
+    const actionResult = await db.query(`
+      SELECT
+        COUNT(*) as total_calls,
+        COUNT(DISTINCT l.id) as leads_from_calls
+      FROM call_logs cl
+      LEFT JOIN leads l ON (cl.caller_number = l.phone OR cl.caller_number = l.alternate_contact)
+    `);
+
+    // Lead metrics
+    const leadMetrics = await db.query(`
+      SELECT
+        COUNT(*) as total_leads,
+        COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE) as leads_today,
+        COUNT(*) FILTER (WHERE priority = 'High') as high_priority,
+        COUNT(*) FILTER (WHERE status = 'Follow-up') as follow_ups
+      FROM leads
+    `);
+    const lm = leadMetrics.rows[0];
 
     res.json({
       status: 'success',
@@ -44,16 +62,26 @@ router.get('/metrics', async (req, res) => {
           status: missedCalls > 0 ? 'High Volume' : 'Normal',
         },
         actionRequired: {
-          count: parseInt(actionResult.rows[0].count),
-          label: 'Urgent',
+          totalCalls: parseInt(actionResult.rows[0].total_calls) || 0,
+          leadsFromCalls: parseInt(actionResult.rows[0].leads_from_calls) || 0,
         },
         answered: {
           total: answeredCalls,
           unique: parseInt(m.unique_answered) || 0,
         },
         unanswered: {
-          count: unanswered,
-          percentage: totalCalls > 0 ? Math.round((unanswered / totalCalls) * 100) : 0,
+          count: unansweredOutbound,
+          percentage: totalCalls > 0 ? Math.round((unansweredOutbound / totalCalls) * 100) : 0,
+        },
+        newLeadsToday: {
+          total: parseInt(lm.leads_today) || 0,
+        },
+        totalLeads: {
+          total: parseInt(lm.total_leads) || 0,
+          highPriority: parseInt(lm.high_priority) || 0,
+        },
+        followUps: {
+          total: parseInt(lm.follow_ups) || 0,
         },
       },
     });

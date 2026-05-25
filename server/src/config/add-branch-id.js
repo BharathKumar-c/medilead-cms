@@ -24,10 +24,14 @@ const addBranchIdColumn = async () => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Migration failed:', err.message);
-    process.exit(1);
+    throw err;
   } finally {
     client.release();
   }
 };
 
-addBranchIdColumn().then(() => process.exit(0));
+if (require.main === module) {
+  addBranchIdColumn().then(() => process.exit(0)).catch(() => process.exit(1));
+}
+
+module.exports = addBranchIdColumn;

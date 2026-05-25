@@ -48,8 +48,8 @@ router.get('/call-volume', async (req, res) => {
         TO_CHAR(created_at, 'Mon') as month,
         COUNT(*) as calls
       FROM call_logs
-      GROUP BY TO_CHAR(created_at, 'Mon'), MIN(created_at)
-      ORDER BY MIN(created_at)
+      GROUP BY TO_CHAR(created_at, 'Mon'), DATE_TRUNC('month', created_at)
+      ORDER BY DATE_TRUNC('month', created_at)
     `);
 
     res.json({ status: 'success', data: { callVolume: result.rows } });

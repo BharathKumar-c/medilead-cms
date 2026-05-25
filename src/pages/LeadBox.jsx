@@ -1,10 +1,7 @@
-import {useState, useMemo, useEffect, useRef} from 'react';
+import {useState, useMemo, useEffect, useRef, useCallback} from 'react';
 import {
   Filter,
-  Download,
-  Eye,
   Edit,
-  Trash2,
   X,
   UserPlus,
   Phone,
@@ -29,8 +26,10 @@ import {
   UserCircle,
   List,
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import Pagination from '../components/Pagination';
+import SearchableSelect from '../components/SearchableSelect';
 import {leadBoxMetrics as defaultMetrics, pincodeData} from '../data/mockData';
 import api from '../services/api';
 import Toast from '../components/Toast';
@@ -77,6 +76,8 @@ const mapLead = (l) => ({
   status: l.status,
   leadSource: l.lead_source,
   phone: l.phone || '',
+  gender: l.gender || '',
+  area: l.area || '',
   alternateContact: l.alternate_contact || '',
   email: l.email || '',
   dob: l.dob,
@@ -101,14 +102,17 @@ const mapLead = (l) => ({
 let toastId = 0;
 
 const LeadBox = () => {
+  const { user } = useAuth();
   const [leads, setLeads] = useState([]);
   const [metrics, setMetrics] = useState(defaultMetrics);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [statuses, setStatuses] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [totalItems, setTotalItems] = useState(0);
   const [viewMode, setViewMode] = useState('all'); // 'today' | 'my' | 'all'
   const [viewLead, setViewLead] = useState(null);
   const [editLead, setEditLead] = useState(null);
@@ -116,6 +120,7 @@ const LeadBox = () => {
   const [assignLead, setAssignLead] = useState(null);
   const [assignUserId, setAssignUserId] = useState('');
   const [users, setUsers] = useState([]);
+  const [dateRange, setDateRange] = useState('all'); // 'today' | 'month' | 'all'
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState('');
   const filterRef = useRef(null);
@@ -128,44 +133,81 @@ const LeadBox = () => {
   const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
 
+  // Debounce search term: only trigger API calls 300ms after user stops typing
   useEffect(() => {
-    loadLeads();
-    api
-      .getLeadStatuses()
-      .then((res) => {
-        if (res?.data?.statuses) setStatuses(res.data.statuses);
-      })
-      .catch(() => {});
-    api
-      .getUsers()
-      .then((res) => {
-        if (res?.data?.users) setUsers(res.data.users);
-      })
-      .catch(() => {});
-  }, [viewMode]);
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-  useEffect(() => {
-    const handler = () => loadLeads();
-    window.addEventListener('leadCreated', handler);
-    return () => window.removeEventListener('leadCreated', handler);
-  }, []);
-
-  const loadLeads = async (view) => {
+  const loadLeads = useCallback(async () => {
     setLoading(true);
     try {
-      const viewParam = view || viewMode;
+      const page = currentPage;
+      const limit = pageSize;
+      const params = {page, limit, view: viewMode};
+      if (debouncedSearchTerm) {
+        params.search = debouncedSearchTerm;
+      }
+      if (statusFilter !== 'All') {
+        params.status = statusFilter;
+      }
+
       const [leadsRes, metricsRes] = await Promise.all([
-        api.getLeads({limit: 100, view: viewParam}),
-        api.getLeadMetrics(),
+        api.getLeads(params),
+        api.getLeadMetrics({range: dateRange}),
       ]);
-      setLeads(leadsRes.data.leads.map(mapLead));
+      if (leadsRes.data) {
+        setLeads(leadsRes.data.leads.map(mapLead));
+        setTotalItems(leadsRes.data.pagination?.total ?? leadsRes.data.leads.length);
+      }
       if (metricsRes?.data) setMetrics(metricsRes.data);
     } catch (err) {
       console.error('Failed to load leads:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [viewMode, debouncedSearchTerm, statusFilter, currentPage, pageSize, dateRange]);
+
+  // Fetch leads when any filter/page/view/search changes
+  useEffect(() => {
+    loadLeads();
+  }, [loadLeads]);
+
+  // Also fetch master data on mount
+  useEffect(() => {
+    api
+      .getLeadStatuses()
+      .then((res) => {
+        if (res?.data?.statuses) setStatuses(res.data.statuses);
+      })
+      .catch(() => {});
+    const isAdmin =
+      user?.roles?.includes('super_admin') ||
+      user?.role === 'super_admin' ||
+      user?.roles?.includes('manager') ||
+      user?.role === 'manager';
+    if (isAdmin) {
+      api
+        .getUsers()
+        .then((res) => {
+          if (res?.data?.users) setUsers(res.data.users);
+        })
+        .catch(() => {});
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stable ref for loadLeads to avoid re-registering the event listener
+  const loadLeadsRef = useRef(loadLeads);
+  loadLeadsRef.current = loadLeads;
+
+  // Listen for leadCreated events to refresh the list
+  useEffect(() => {
+    const handler = () => loadLeadsRef.current();
+    window.addEventListener('leadCreated', handler);
+    return () => window.removeEventListener('leadCreated', handler);
+  }, []);
 
   // Close filter dropdown on outside click
   useEffect(() => {
@@ -179,25 +221,10 @@ const LeadBox = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      const matchesSearch =
-        lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (lead.uhid || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lead.phone.includes(searchTerm);
-      const matchesStatus =
-        statusFilter === 'All' || lead.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [leads, searchTerm, statusFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
+  // Pagination calculations — all filtering is now server-side
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const paginatedLeads = filteredLeads.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
+  const displayLeads = leads;
 
   const handleView = (lead) => setViewLead(lead);
   const handleEdit = (lead) => setEditLead(lead);
@@ -212,7 +239,7 @@ const LeadBox = () => {
         'Lead Deleted',
         `${deleteConfirm.name} has been removed.`,
       );
-      if (paginatedLeads.length === 1 && currentPage > 1)
+      if (displayLeads.length === 1 && currentPage > 1)
         setCurrentPage((p) => p - 1);
       loadLeads();
     } catch (err) {
@@ -245,50 +272,6 @@ const LeadBox = () => {
         err.message || 'Could not assign lead.',
       );
     }
-  };
-
-  const handleExport = () => {
-    const headers = [
-      'Lead Code',
-      'Patient Name',
-      'Phone',
-      'Status',
-      'Priority',
-      'Created By',
-      'Assigned To',
-      'Branch',
-      'Email',
-    ];
-    const rows = filteredLeads.map((l) => [
-      l.code,
-      l.name,
-      l.phone,
-      l.status,
-      l.priority,
-      l.createdByName,
-      l.assignedTo,
-      l.branchName,
-      l.email,
-    ]);
-    const csv = [
-      headers.join(','),
-      ...rows.map((r) =>
-        r
-          .map((c) => {
-            const s = String(c ?? '');
-            const safe = /^[=+\-@\t]/.test(s) ? `\t${s}` : s;
-            return `"${safe.replaceAll('"', '""')}"`;
-          })
-          .join(','),
-      ),
-    ].join('\n');
-    const blob = new Blob([csv], {type: 'text/csv'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'leads-export.csv';
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const statusColors = {
@@ -328,13 +311,26 @@ const LeadBox = () => {
           <h1 className="font-h1 text-[24px] sm:text-[28px] lg:text-[32px] text-on-background">
             Lead Box
           </h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all text-sm">
-              <Download className="w-4 h-4" />{' '}
-              <span className="hidden sm:inline">Export</span>
-            </button>
+          <div className="flex items-center bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+            {[
+              {key: 'today', label: 'Today'},
+              {key: 'month', label: 'This Month'},
+              {key: 'all', label: 'All'},
+            ].map((btn, i) => (
+              <button
+                key={btn.key}
+                onClick={() => {
+                  setDateRange(btn.key);
+                  setCurrentPage(1);
+                }}
+                className={`px-4 py-2 font-body-md font-bold transition-all ${
+                  dateRange === btn.key
+                    ? 'bg-secondary text-on-secondary'
+                    : 'text-on-surface-variant hover:bg-surface-container'
+                } ${i > 0 ? 'border-l border-outline-variant' : ''}`}>
+                {btn.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -342,30 +338,50 @@ const LeadBox = () => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           {[
             {
-              label: 'New Leads Today',
+              label:
+                dateRange === 'today'
+                  ? 'New Leads Today'
+                  : dateRange === 'month'
+                    ? 'New Leads (This Month)'
+                    : 'New Leads Today',
               value: metrics.newLeadsToday ?? 0,
               border: 'border-t-secondary',
               icon: <UserPlus className="w-5 h-5 text-secondary" />,
             },
             {
-              label: 'Follow-up Leads',
+              label:
+                dateRange === 'today'
+                  ? 'Overall (Today)'
+                  : dateRange === 'month'
+                    ? 'Overall (This Month)'
+                    : 'Overall Leads',
+              value: metrics.totalLeads ?? 0,
+              border: 'border-t-primary',
+              icon: <List className="w-5 h-5 text-primary" />,
+            },
+            {
+              label:
+                dateRange === 'today'
+                  ? 'Follow-ups (Today)'
+                  : dateRange === 'month'
+                    ? 'Follow-ups (This Month)'
+                    : 'Follow-up Leads',
               value: metrics.alreadyLeads ?? 0,
               border: 'border-t-on-tertiary-container',
               icon: <Phone className="w-5 h-5 text-on-tertiary-container" />,
             },
             {
-              label: 'Conversion Rate',
+              label:
+                dateRange === 'today'
+                  ? "Today's Conversion"
+                  : dateRange === 'month'
+                    ? "Month's Conversion"
+                    : 'Conversion Rate',
               value: metrics.conversionRate ?? '0%',
               border: 'border-t-secondary-fixed',
               icon: (
                 <CircleCheck className="w-5 h-5 text-secondary-fixed-dim" />
               ),
-            },
-            {
-              label: 'Overdue Responses',
-              value: metrics.overdueResponses ?? 0,
-              border: 'border-t-error',
-              icon: <AlertTriangle className="w-5 h-5 text-error" />,
             },
           ].map((card, i) => (
             <div
@@ -419,7 +435,7 @@ const LeadBox = () => {
               </button>
             ))}
             <span className="font-caption text-on-surface-variant ml-1">
-              {filteredLeads.length} lead{filteredLeads.length !== 1 ? 's' : ''}
+              {totalItems} lead{totalItems !== 1 ? 's' : ''}
             </span>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -427,7 +443,7 @@ const LeadBox = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
               <input
                 type="text"
-                placeholder="Search by name, UHID, email, or phone..."
+                placeholder="Search by name, UHID, code, email, phone, city, or state..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -533,7 +549,7 @@ const LeadBox = () => {
                       Loading leads...
                     </td>
                   </tr>
-                ) : paginatedLeads.length === 0 ? (
+                ) : displayLeads.length === 0 ? (
                   <tr>
                     <td
                       colSpan={10}
@@ -542,12 +558,13 @@ const LeadBox = () => {
                     </td>
                   </tr>
                 ) : (
-                  paginatedLeads.map((lead, idx) => (
+                  displayLeads.map((lead, idx) => (
                     <tr
                       key={lead.id}
                       onClick={() => handleView(lead)}
                       className="border-t border-outline-variant/50 hover:bg-surface-container/50 transition-colors cursor-pointer">
-                      <td                      className="px-3 py-3 text-center font-data-tabular text-on-surface-variant text-sm">
+                      <td
+                      className="px-3 py-3 text-center font-data-tabular text-on-surface-variant text-sm">
                         {(safePage - 1) * pageSize + idx + 1}
 
                       </td>
@@ -593,7 +610,7 @@ const LeadBox = () => {
                           className="flex items-center gap-1"
                           onClick={(e) => e.stopPropagation()}>
                           <button
-                            onClick={() => handleEdit(lead)}
+                            onClick={(e) => { e.stopPropagation(); handleEdit(lead); }}
                             className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors"
                             title="Edit">
                             <Edit className="w-4 h-4 text-on-surface-variant" />
@@ -618,10 +635,13 @@ const LeadBox = () => {
 
           <Pagination
             currentPage={safePage}
-            totalItems={filteredLeads.length}
+            totalItems={totalItems}
             pageSize={pageSize}
             onPageChange={setCurrentPage}
-            onPageSizeChange={setPageSize}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
           />
         </div>
 
@@ -767,6 +787,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
     name: lead.name || '',
     dob: lead.dob ? lead.dob.split('T')[0] : '',
     age: '',
+    gender: lead.gender || '',
     contactNumber: lead.phone || '',
     alternateContact: lead.alternateContact || '',
     email: lead.email || '',
@@ -811,7 +832,12 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
         if (res?.data?.branches) setBranches(res.data.branches);
       })
       .catch(() => {});
-    if (formData.dob) calculateAge(formData.dob);
+    if (formData.dob) {
+      const age = calculateAge(formData.dob);
+      if (age) {
+        setFormData((prev) => ({...prev, age: String(age)}));
+      }
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearError = (field) =>
@@ -837,14 +863,27 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
       (monthDiff === 0 && today.getDate() < birthDate.getDate())
     )
       age--;
-    setFormData((prev) => ({...prev, age: age > 0 ? `${age} YRS` : ''}));
+    return age > 0 ? age : '';
   };
 
   const handleDobChange = (e) => {
     const dob = e.target.value;
-    setFormData((prev) => ({...prev, dob, age: ''}));
     clearError('dob');
-    if (dob.length === 10) calculateAge(dob);
+    const age = calculateAge(dob);
+    setFormData((prev) => ({...prev, dob, age: age ? String(age) : ''}));
+  };
+
+  const handleAgeChange = (e) => {
+    const ageStr = e.target.value.replace(/\D/g, '').slice(0, 3);
+    clearError('age');
+    if (ageStr) {
+      const ageNum = parseInt(ageStr, 10);
+      const birthYear = new Date().getFullYear() - ageNum;
+      const dobFromAge = `${birthYear}-01-01`;
+      setFormData((prev) => ({...prev, age: ageStr, dob: dobFromAge}));
+    } else {
+      setFormData((prev) => ({...prev, age: '', dob: ''}));
+    }
   };
 
   const handleUhidChange = (e) => {
@@ -972,7 +1011,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       const firstKey = Object.keys(errs)[0];
-      const el = document.querySelector(`[data-edit-field="${firstKey}"]`);
+      const el = document.querySelector(`[data-field="${firstKey}"]`);
       if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
       return;
     }
@@ -985,6 +1024,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
         alternate_contact: formData.alternateContact,
         email: formData.email,
         dob: formData.dob,
+        gender: formData.gender,
         address: formData.address,
         area: formData.area || null,
         pincode: formData.pincode,
@@ -1008,12 +1048,6 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
 
   const fieldClass = (field) =>
     `w-full px-4 py-3 border rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:ring-2 transition-all placeholder:text-on-surface-variant/50 ${
-      errors[field]
-        ? 'border-error focus:border-error focus:ring-error/20'
-        : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
-    }`;
-  const selectClass = (field) =>
-    `w-full px-4 py-3 pr-10 border rounded-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:ring-2 transition-all appearance-none ${
       errors[field]
         ? 'border-error focus:border-error focus:ring-error/20'
         : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
@@ -1043,8 +1077,8 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* UHID */}
-          <div data-edit-field="uhid">
-            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+          <div data-field="uhid">
+            <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
               UHID (UNIVERSAL ID)
             </label>
             <div className="relative">
@@ -1065,12 +1099,9 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
           </div>
 
           {/* Patient Name */}
-          <div data-edit-field="name">
-            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
-              Patient Name{' '}
-              <span className="text-error text-base font-bold leading-none">
-                *
-              </span>
+          <div data-field="name">
+            <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              Patient Name <span className="text-error text-base font-bold leading-none">*</span>
             </label>
             <input
               type="text"
@@ -1083,34 +1114,20 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
           </div>
 
           {/* Branch */}
-          <div data-edit-field="branchId">
-            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
-              Branch{' '}
-              <span className="text-error text-base font-bold leading-none">
-                *
-              </span>
-            </label>
-            <div className="relative">
-              <select
-                value={formData.branchId}
-                onChange={(e) => setField('branchId', e.target.value)}
-                className={selectClass('branchId')}>
-                <option value="">Select Branch</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
-            </div>
-            <ErrorMsg field="branchId" />
-          </div>
+          <SearchableSelect
+            label="Branch"
+            required
+            options={branches.map(b => ({ value: b.id, label: b.name }))}
+            value={formData.branchId}
+            onChange={(val) => setField('branchId', val)}
+            placeholder="Select Branch"
+            error={errors.branchId}
+          />
 
-          {/* DOB + Age + Lead Source */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div data-edit-field="dob">
-              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+          {/* DOB + Age */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div data-field="dob">
+              <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
                 Date of Birth
               </label>
               <input
@@ -1119,81 +1136,70 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
                 onChange={handleDobChange}
                 className={fieldClass('dob')}
               />
-              {formData.age && (
-                <p className="font-caption text-secondary mt-1 font-bold">
-                  {formData.age}
-                </p>
-              )}
               <ErrorMsg field="dob" />
             </div>
-            <div data-edit-field="leadSource">
-              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
-                Lead Source
+            <div data-field="age">
+              <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                Age
               </label>
-              <div className="relative">
-                <select
-                  value={formData.leadSource}
-                  onChange={(e) => setField('leadSource', e.target.value)}
-                  className={selectClass('leadSource')}>
-                  <option value="">Select lead source</option>
-                  {leadSources.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
-              </div>
-              <ErrorMsg field="leadSource" />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="e.g. 35"
+                value={formData.age}
+                onChange={handleAgeChange}
+                className={fieldClass('age')}
+                maxLength={3}
+              />
+              <ErrorMsg field="age" />
             </div>
-            <div>
-              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
-                Priority
-              </label>
-              <div className="relative">
-                <select
-                  value={formData.priority}
-                  onChange={(e) => setField('priority', e.target.value)}
-                  className={selectClass('priority')}>
-                  {priorities.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
-              </div>
-            </div>
+          </div>
+
+          {/* Gender */}
+          <SearchableSelect
+            label="Gender"
+            options={['Male', 'Female', 'Other']}
+            value={formData.gender}
+            onChange={(val) => setField('gender', val)}
+            placeholder="Select gender"
+            error={errors.gender}
+          />
+
+          {/* Lead Source + Priority */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <SearchableSelect
+              label="Lead Source"
+              options={leadSources}
+              value={formData.leadSource}
+              onChange={(val) => setField('leadSource', val)}
+              placeholder="Select lead source"
+              error={errors.leadSource}
+            />
+            <SearchableSelect
+              label="Priority"
+              options={priorities}
+              value={formData.priority}
+              onChange={(val) => setField('priority', val)}
+              placeholder="Select priority"
+            />
           </div>
 
           {/* Status */}
-          <div>
-            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
-              Status
-            </label>
-            <div className="relative w-full sm:w-1/3">
-              <select
-                value={formData.status}
-                onChange={(e) => setField('status', e.target.value)}
-                className={selectClass('status')}>
-                {statuses.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
-            </div>
-          </div>
+          <SearchableSelect
+            label="Status"
+            required
+            options={statuses}
+            value={formData.status}
+            onChange={(val) => setField('status', val)}
+            placeholder="Select status"
+            error={errors.status}
+          />
 
           {/* Contact */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div data-edit-field="contactNumber">
-              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
-                Phone Number{' '}
-                <span className="text-error text-base font-bold leading-none">
-                  *
-                </span>
+            <div data-field="contactNumber">
+              <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                Phone Number <span className="text-error text-base font-bold leading-none">*</span>
               </label>
               <input
                 type="tel"
@@ -1208,7 +1214,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
               <ErrorMsg field="contactNumber" />
             </div>
             <div>
-              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
                 Alternate Number
               </label>
               <input
@@ -1228,8 +1234,8 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
           </div>
 
           {/* Email */}
-          <div data-edit-field="email">
-            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+          <div data-field="email">
+            <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
               Email ID
             </label>
             <input
@@ -1244,7 +1250,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
 
           {/* Address */}
           <div className="bg-surface-container rounded-xl p-5 space-y-4">
-            <h3 className="font-h3 text-on-surface flex items-center gap-2">
+            <h3 className="font-h3 text-on-surface flex items-center gap-2 mb-1">
               <svg
                 className="w-5 h-5 text-secondary"
                 fill="none"
@@ -1267,8 +1273,8 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
             </h3>
             {/* Row 1: Pincode + Area */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div data-edit-field="pincode">
-                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              <div data-field="pincode">
+                <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
                   Pincode
                 </label>
                 <div className="relative">
@@ -1289,24 +1295,16 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
                 <ErrorMsg field="pincode" />
               </div>
               <div className="sm:col-span-3">
-                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
                   Area
                 </label>
                 {areas.length > 1 ? (
-                  <div className="relative">
-                    <select
-                      value={formData.area}
-                      onChange={(e) => setField('area', e.target.value)}
-                      className={`${fieldClass('area')} appearance-none pr-10`}>
-                      <option value="">Select area</option>
-                      {areas.map((a) => (
-                        <option key={a} value={a}>
-                          {a}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
-                  </div>
+                  <SearchableSelect
+                    options={areas}
+                    value={formData.area}
+                    onChange={(val) => setField('area', val)}
+                    placeholder="Select area"
+                  />
                 ) : (
                   <input
                     type="text"
@@ -1321,8 +1319,8 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
 
             {/* Row 2: City + State + Country */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div data-edit-field="city">
-                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              <div data-field="city">
+                <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
                   City
                 </label>
                 <input
@@ -1334,8 +1332,8 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
                 />
                 <ErrorMsg field="city" />
               </div>
-              <div data-edit-field="state">
-                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              <div data-field="state">
+                <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
                   State
                 </label>
                 <input
@@ -1348,7 +1346,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
                 <ErrorMsg field="state" />
               </div>
               <div>
-                <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+                <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
                   Country
                 </label>
                 <input
@@ -1362,8 +1360,8 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
             </div>
 
             {/* Row 3: Residential Address */}
-            <div data-edit-field="address">
-              <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+            <div data-field="address">
+              <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
                 Residential Address
               </label>
               <input
@@ -1378,12 +1376,9 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
           </div>
 
           {/* Remarks */}
-          <div data-edit-field="remarks">
-            <label className="inline-flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
-              Remarks{' '}
-              <span className="text-error text-base font-bold leading-none">
-                *
-              </span>
+          <div data-field="remarks">
+            <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
+              Remarks <span className="text-error text-base font-bold leading-none">*</span>
             </label>
             <textarea
               rows={3}
