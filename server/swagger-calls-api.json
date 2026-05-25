@@ -1,0 +1,584 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Calls & SIP Integration API",
+    "description": "Unified call management API for MediLead CMS. Supports telephony vendor webhooks (HMAC-SHA256), SIP event processing, manual call logging, real-time Socket.IO events, and intercom-based agent routing.\n\n## Authentication\n- **POST /api/calls/inbound**: HMAC-SHA256 via `X-Webhook-Signature` header, or JWT Bearer fallback\n- **All other endpoints**: JWT Bearer token via `Authorization` header\n\n## Base URL\n`http://localhost:5000/api`",
+    "version": "1.0.0",
+    "contact": {
+      "name": "MediLead CMS Support",
+      "url": "https://medilead.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000/api",
+      "description": "Local development"
+    }
+  ],
+  "paths": {
+    "/calls/inbound": {
+      "post": {
+        "summary": "Telephony vendor webhook — record an inbound call",
+        "description": "Records an inbound call from a telephony vendor. Authenticated via HMAC-SHA256 signature in X-Webhook-Signature header (or JWT Bearer fallback). Automatically looks up the lead by caller_phone_number. Emits Socket.IO events (call-event + incoming-call) and notifications. Returns 409 if vendor_call_id is a duplicate.",
+        "tags": ["Calls"],
+        "security": [
+          { "HmacSignature": [] },
+          { "BearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["caller_phone_number", "call_status", "timestamp"],
+                "properties": {
+                  "caller_phone_number": {
+                    "type": "string",
+                    "pattern": "^\\+?[1-9]\\d{6,14}$",
+                    "description": "Caller's phone number in E.164 format (e.g., +919876543210)",
+                    "example": "+919876543210"
+                  },
+                  "call_status": {
+                    "type": "string",
+                    "enum": ["initiated", "ringing", "in-progress", "completed", "failed", "missed"],
+                    "description": "Current status of the call",
+                    "example": "completed"
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "ISO 8601 timestamp of the call event",
+                    "example": "2026-05-24T10:45:00Z"
+                  },
+                  "vendor_call_id": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Unique call ID from the vendor — used for deduplication (returns 409 on duplicate)",
+                    "example": "vc_test_001"
+                  },
+                  "duration_seconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Call duration in seconds",
+                    "example": 142
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": ["inbound", "outbound"],
+                    "description": "Call direction (defaults to inbound if omitted)",
+                    "default": "inbound",
+                    "example": "inbound"
+                  },
+                  "recording_url": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "URL to the call recording audio file",
+                    "example": "https://recordings.example.com/calls/vc_test_001.mp3"
+                  },
+                  "intercom_number": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "description": "Intercom number for agent routing — only the assigned agent receives socket events",
+                    "example": "1001"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Call logged successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Call log recorded successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid", "description": "Call record UUID" },
+                        "caller_phone_number": { "type": "string", "description": "Masked phone number" },
+                        "call_status": { "type": "string" },
+                        "timestamp": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error — missing or invalid fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate vendor_call_id — call already recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "error" },
+                    "message": { "type": "string", "example": "Duplicate call event" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ServerError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calls/sip-event": {
+      "post": {
+        "summary": "SIP event webhook — process SIP server events",
+        "description": "Processes SIP server events (incoming, outgoing, answered, ended, missed, hold, unhold, failed). Automatically maps events to call statuses. Updates existing call if call_id matches an existing vendor_call_id. Auto-links lead by phone number. Emits Socket.IO events with enriched lead info (including call stats for incoming popup).",
+        "tags": ["Calls"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["event"],
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "enum": ["incoming", "outgoing", "answered", "ended", "missed", "hold", "unhold", "failed"],
+                    "description": "SIP event type",
+                    "example": "incoming"
+                  },
+                  "call_id": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Unique SIP call identifier — used to find and update existing call records",
+                    "example": "sip-abc123"
+                  },
+                  "caller": {
+                    "type": "string",
+                    "pattern": "^[0-9]{10,15}$",
+                    "description": "Caller phone number (10-15 digits)",
+                    "example": "9876543210"
+                  },
+                  "callee": {
+                    "type": "string",
+                    "pattern": "^[0-9]{10,15}$",
+                    "description": "Callee phone number (10-15 digits)",
+                    "example": "9988776655"
+                  },
+                  "duration": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Call duration in seconds (applied on ended/answered events)",
+                    "example": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SIP event processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "SIP event processed." }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error — invalid event type or payload", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationError" } } } },
+          "401": { "description": "Missing or invalid JWT token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UnauthorizedError" } } } },
+          "500": { "description": "Internal server error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SipEventError" } } } }
+        }
+      }
+    },
+    "/calls": {
+      "get": {
+        "summary": "List call logs with pagination and filters",
+        "description": "Returns paginated call logs with optional filters. Non-admin/non-manager users only see calls matching their intercom_number. Supports both `status` and `call_status` query params for backward compatibility.",
+        "tags": ["Calls"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "user_id", "in": "query", "schema": { "type": "integer" }, "description": "Filter by assigned user ID" },
+          { "name": "direction", "in": "query", "schema": { "type": "string", "enum": ["inbound", "outbound"] }, "description": "Filter by call direction" },
+          { "name": "status", "in": "query", "schema": { "type": "string" }, "description": "Filter by call status (alias for call_status)" },
+          { "name": "call_status", "in": "query", "schema": { "type": "string", "enum": ["initiated", "ringing", "in-progress", "completed", "failed", "missed"] }, "description": "Filter by call status" },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1, "minimum": 1 }, "description": "Page number" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 100 }, "description": "Items per page" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of calls with lead and user info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "calls": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/CallLog" }
+                        },
+                        "total": { "type": "integer", "description": "Total number of matching records" },
+                        "page": { "type": "integer" },
+                        "totalPages": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Missing or invalid JWT token" },
+          "500": { "description": "Internal server error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CallsFetchError" } } } }
+        }
+      },
+      "post": {
+        "summary": "Log a call manually",
+        "description": "Creates a manual call log entry. Auto-links lead by caller_number if lead_id not provided. Updates lead.last_call_date for linked calls. Sends missed-call notification for missed status.",
+        "tags": ["Calls"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["caller_number"],
+                "properties": {
+                  "caller_number": { "type": "string", "pattern": "^[0-9]{10,15}$", "description": "Caller phone number (10-15 digits)", "example": "9876543210" },
+                  "callee_number": { "type": "string", "pattern": "^[0-9]{10,15}$", "description": "Callee phone number (10-15 digits)", "example": "9988776655" },
+                  "direction": { "type": "string", "enum": ["inbound", "outbound"], "default": "inbound", "description": "Call direction" },
+                  "status": { "type": "string", "default": "initiated", "description": "Call status" },
+                  "duration": { "type": "integer", "minimum": 0, "default": 0, "description": "Call duration in seconds" },
+                  "lead_id": { "type": "integer", "description": "Lead ID to link (skips auto-lookup if provided)" },
+                  "notes": { "type": "string", "maxLength": 2000, "description": "Call notes" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Call logged successfully", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string" }, "data": { "type": "object", "properties": { "call": { "$ref": "#/components/schemas/ManualCallLog" } } } } } } } },
+          "400": { "description": "Validation error" },
+          "401": { "description": "Unauthorized" },
+          "500": { "description": "Server error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CallLogError" } } } }
+        }
+      }
+    },
+    "/calls/stats": {
+      "get": {
+        "summary": "Get call statistics for today",
+        "description": "Returns aggregated call statistics for the current day. Non-admin users see only stats scoped to their intercom_number. Returns both camelCase and snake_case fields for backward compatibility.",
+        "tags": ["Calls"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Call statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "totalToday": { "type": "integer", "description": "Total calls today" },
+                        "inbound": { "type": "integer", "description": "Inbound calls today" },
+                        "outbound": { "type": "integer", "description": "Outbound calls today" },
+                        "missedToday": { "type": "integer", "description": "Missed calls today (camelCase)" },
+                        "missed_today": { "type": "integer", "description": "Missed calls today (snake_case)" },
+                        "avgDuration": { "type": "integer", "description": "Average call duration in seconds (camelCase)" },
+                        "avg_duration": { "type": "integer", "description": "Average call duration in seconds (snake_case)" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "500": { "description": "Server error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CallStatsError" } } } }
+        }
+      }
+    },
+    "/calls/phone/{phone}": {
+      "get": {
+        "summary": "Get call history for a phone number",
+        "description": "Returns the last 10 calls for a given phone number. The phone parameter is normalized (digits only). Includes lead name and phone via LEFT JOIN.",
+        "tags": ["Calls"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "phone", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Phone number to look up (non-digit characters are stripped)", "example": "9876543210" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Call history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "calls": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "string", "format": "uuid" },
+                              "caller_number": { "type": "string" },
+                              "direction": { "type": "string" },
+                              "status": { "type": "string" },
+                              "duration": { "type": "integer" },
+                              "created_at": { "type": "string", "format": "date-time" },
+                              "lead_name": { "type": "string", "nullable": true },
+                              "lead_phone": { "type": "string", "nullable": true }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "500": { "description": "Server error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CallHistoryError" } } } }
+        }
+      }
+    },
+    "/calls/{id}": {
+      "put": {
+        "summary": "Update call status, duration, or notes",
+        "description": "Updates a call record with the provided fields. Only specified fields are modified (dynamic UPDATE). Returns 404 if the call ID is not found.",
+        "tags": ["Calls"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Call record UUID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "call_status": { "type": "string", "enum": ["initiated", "ringing", "in-progress", "completed", "failed", "missed"], "description": "Updated call status" },
+                  "duration_seconds": { "type": "integer", "minimum": 0, "description": "Updated duration in seconds" },
+                  "notes": { "type": "string", "maxLength": 2000, "description": "Call notes" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Call updated successfully" },
+          "400": { "description": "Validation error" },
+          "401": { "description": "Unauthorized" },
+          "404": { "description": "Call not found", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string" }, "message": { "type": "string" }, "code": { "type": "string", "example": "CALL_NOT_FOUND" } } } } } },
+          "500": { "description": "Server error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CallUpdateError" } } } }
+        }
+      }
+    },
+    "/calls/telephony": {
+      "get": {
+        "summary": "Telephony-specific backward-compatible list",
+        "description": "Same data as GET /api/calls with added phone masking. Supports ILIKE phone search. Non-admin users see only their intercom calls.",
+        "tags": ["Calls"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50 } },
+          { "name": "status", "in": "query", "schema": { "type": "string" }, "description": "Filter by call status" },
+          { "name": "direction", "in": "query", "schema": { "type": "string", "enum": ["inbound", "outbound"] } },
+          { "name": "phone", "in": "query", "schema": { "type": "string" }, "description": "ILIKE phone number search" }
+        ],
+        "responses": {
+          "200": { "description": "Paginated telephony calls with masked numbers" },
+          "401": { "description": "Unauthorized" },
+          "500": { "description": "Server error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TelephonyLogsError" } } } }
+        }
+      }
+    },
+    "/calls/telephony/stats": {
+      "get": {
+        "summary": "Telephony-specific backward-compatible stats",
+        "description": "Returns today's call statistics using received_at instead of created_at. Uses snake_case response keys for backward compatibility.",
+        "tags": ["Calls"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Telephony stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total_today": { "type": "integer" },
+                        "inbound": { "type": "integer" },
+                        "outbound": { "type": "integer" },
+                        "missed_today": { "type": "integer" },
+                        "avg_duration": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "500": { "description": "Server error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TelephonyStatsError" } } } }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token obtained from POST /api/auth/login"
+      },
+      "HmacSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Webhook-Signature",
+        "description": "HMAC-SHA256 hex digest of the raw request body, signed with TELEPHONY_WEBHOOK_SECRET"
+      }
+    },
+    "schemas": {
+      "CallLog": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "caller_number": { "type": "string" },
+          "callee_number": { "type": "string", "nullable": true },
+          "direction": { "type": "string" },
+          "call_status": { "type": "string" },
+          "status": { "type": "string", "description": "Backward-compatible alias for call_status" },
+          "duration": { "type": "integer" },
+          "duration_seconds": { "type": "integer" },
+          "recording_url": { "type": "string", "nullable": true },
+          "intercom_number": { "type": "string", "nullable": true },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "received_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "vendor_call_id": { "type": "string" },
+          "code": { "type": "string" },
+          "lead_id": { "type": "integer", "nullable": true },
+          "lead_name": { "type": "string", "nullable": true },
+          "lead_phone": { "type": "string", "nullable": true },
+          "user_id": { "type": "integer", "nullable": true },
+          "user_name": { "type": "string", "nullable": true },
+          "notes": { "type": "string", "nullable": true }
+        }
+      },
+      "ManualCallLog": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "caller_number": { "type": "string" },
+          "direction": { "type": "string" },
+          "call_status": { "type": "string" },
+          "status": { "type": "string" },
+          "duration": { "type": "integer" },
+          "lead_id": { "type": "integer", "nullable": true },
+          "user_id": { "type": "integer" },
+          "notes": { "type": "string", "nullable": true },
+          "code": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "message": { "type": "string", "example": "Validation failed" },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": { "type": "string" },
+                "message": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "UnauthorizedError": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "message": { "type": "string", "example": "Authentication required" }
+        }
+      },
+      "ServerError": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "message": { "type": "string", "example": "Internal server error" }
+        }
+      },
+      "SipEventError": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "message": { "type": "string", "example": "An error occurred: ..." },
+          "code": { "type": "string", "example": "SIP_EVENT_ERROR" }
+        }
+      },
+      "CallsFetchError": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "message": { "type": "string" },
+          "code": { "type": "string", "example": "CALLS_FETCH_ERROR" }
+        }
+      },
+      "CallStatsError": { "type": "object", "properties": { "status": { "type": "string" }, "message": { "type": "string" }, "code": { "type": "string", "example": "CALL_STATS_ERROR" } } },
+      "CallHistoryError": { "type": "object", "properties": { "status": { "type": "string" }, "message": { "type": "string" }, "code": { "type": "string", "example": "CALL_HISTORY_ERROR" } } },
+      "CallLogError": { "type": "object", "properties": { "status": { "type": "string" }, "message": { "type": "string" }, "code": { "type": "string", "example": "CALL_LOG_ERROR" } } },
+      "CallUpdateError": { "type": "object", "properties": { "status": { "type": "string" }, "message": { "type": "string" }, "code": { "type": "string", "example": "CALL_UPDATE_ERROR" } } },
+      "TelephonyLogsError": { "type": "object", "properties": { "status": { "type": "string" }, "message": { "type": "string" }, "code": { "type": "string", "example": "TELEPHONY_LOGS_ERROR" } } },
+      "TelephonyStatsError": { "type": "object", "properties": { "status": { "type": "string" }, "message": { "type": "string" }, "code": { "type": "string", "example": "TELEPHONY_STATS_ERROR" } } }
+    }
+  }
+}

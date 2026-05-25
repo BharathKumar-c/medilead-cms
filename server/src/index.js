@@ -174,8 +174,7 @@ app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/notifications', require('./routes/notifications'));
-app.use('/api/calls', require('./routes/telephonyCalls'));
-app.use('/api/calls', require('./routes/calls'));
+app.use('/api/calls', require('./routes/telephonyCalls'));  // Unified calls route (all call endpoints)
 app.use('/api/branches', require('./routes/branches'));
 app.use('/api/roles', require('./routes/roles'));
 app.use('/api/masters', require('./routes/masters'));

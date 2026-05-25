@@ -10,7 +10,7 @@ router.use(authenticate);
 router.get('/overview', async (req, res) => {
   try {
     const [calls, leads, appointments] = await Promise.all([
-      db.query(`SELECT COUNT(*) as total FROM call_logs`),
+      db.query(`SELECT COUNT(*) as total FROM telephony_call_logs`),
       db.query(`SELECT COUNT(*) as total FROM leads`),
       db.query(`SELECT COUNT(*) as total FROM appointments`),
     ]);
@@ -47,7 +47,7 @@ router.get('/call-volume', async (req, res) => {
       SELECT
         TO_CHAR(created_at, 'Mon') as month,
         COUNT(*) as calls
-      FROM call_logs
+      FROM telephony_call_logs
       GROUP BY TO_CHAR(created_at, 'Mon'), DATE_TRUNC('month', created_at)
       ORDER BY DATE_TRUNC('month', created_at)
     `);
@@ -209,13 +209,13 @@ router.get('/telecallers', async (req, res) => {
         COUNT(DISTINCT l.id) as leads,
         COUNT(DISTINCT cl.id) as calls,
         COUNT(DISTINCT a.id) as appointments,
-        AVG(cl.duration) FILTER (WHERE cl.status = 'connected') as avg_call_duration
+        AVG(cl.duration_seconds) FILTER (WHERE cl.call_status IN ('in-progress', 'completed')) as avg_call_duration
       FROM users u
       INNER JOIN user_roles ur ON u.id = ur.user_id
       INNER JOIN role_permissions rp ON ur.role_id = rp.role_id
       INNER JOIN permissions p ON rp.permission_id = p.id
       LEFT JOIN leads l ON l.assigned_to = u.id
-      LEFT JOIN call_logs cl ON cl.user_id = u.id
+      LEFT JOIN telephony_call_logs cl ON cl.user_id = u.id
       LEFT JOIN appointments a ON a.provider_id = u.id
       WHERE p.name = 'leads:view_assigned' AND u.is_active = true
       GROUP BY u.id, u.name
@@ -270,15 +270,15 @@ router.get('/conversion-funnel', async (req, res) => {
 router.get('/call-analytics', async (req, res) => {
   try {
     const [byStatus, byDirection, byHour, avgDuration] = await Promise.all([
-      db.query(`SELECT status, COUNT(*) as count FROM call_logs GROUP BY status`),
-      db.query(`SELECT direction, COUNT(*) as count FROM call_logs GROUP BY direction`),
+      db.query(`SELECT call_status as status, COUNT(*) as count FROM telephony_call_logs GROUP BY call_status`),
+      db.query(`SELECT direction, COUNT(*) as count FROM telephony_call_logs GROUP BY direction`),
       db.query(`
         SELECT EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as count
-        FROM call_logs
+        FROM telephony_call_logs
         GROUP BY EXTRACT(HOUR FROM created_at)
         ORDER BY hour
       `),
-      db.query(`SELECT AVG(duration) FILTER (WHERE status = 'connected' AND duration > 0) as avg FROM call_logs`),
+      db.query(`SELECT AVG(duration_seconds) FILTER (WHERE call_status IN ('in-progress', 'completed') AND duration_seconds > 0) as avg FROM telephony_call_logs`),
     ]);
 
     res.json({
@@ -330,7 +330,7 @@ router.get('/daily-activity', async (req, res) => {
 
     const [newLeads, callsToday, appointmentsToday, statusChanges] = await Promise.all([
       db.query(`SELECT COUNT(*) FROM leads WHERE DATE(created_at) = $1`, [today]),
-      db.query(`SELECT COUNT(*) FROM call_logs WHERE DATE(created_at) = $1`, [today]),
+      db.query(`SELECT COUNT(*) FROM telephony_call_logs WHERE DATE(created_at) = $1`, [today]),
       db.query(`SELECT COUNT(*) FROM appointments WHERE appointment_date = $1`, [today]),
       db.query(`SELECT COUNT(*) FROM lead_history WHERE DATE(created_at) = $1 AND action = 'status'`, [today]),
     ]);
@@ -374,9 +374,9 @@ router.get('/export', async (req, res) => {
       filename = 'leads_report.csv';
     } else if (type === 'calls') {
       const result = await db.query(`
-        SELECT cl.code, cl.caller_number, cl.callee_number, cl.direction, cl.status,
-               cl.duration, u.name as agent, cl.created_at
-        FROM call_logs cl
+        SELECT cl.code, cl.caller_phone_number, cl.callee_phone_number, cl.direction, cl.call_status as status,
+               cl.duration_seconds as duration, u.name as agent, cl.created_at
+        FROM telephony_call_logs cl
         LEFT JOIN users u ON cl.user_id = u.id
         ORDER BY cl.created_at DESC
       `);
@@ -451,17 +451,17 @@ const QUERIES = {
     summary: `
       SELECT
         COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'missed') as missed,
-        COUNT(*) FILTER (WHERE status = 'answered') as answered,
+        COUNT(*) FILTER (WHERE call_status = 'missed') as missed,
+        COUNT(*) FILTER (WHERE call_status IN ('in-progress', 'completed')) as answered,
         COUNT(*) FILTER (WHERE direction = 'inbound') as inbound,
         COUNT(*) FILTER (WHERE direction = 'outbound') as outbound
-      FROM call_logs WHERE ${dateFilter('created_at')}
+      FROM telephony_call_logs WHERE ${dateFilter('created_at')}
     `,
     data: (from, to) => ({
       text: `
-        SELECT cl.code, cl.caller_number, cl.callee_number, cl.direction, cl.status,
-               cl.duration, u.name as agent, cl.created_at
-        FROM call_logs cl LEFT JOIN users u ON cl.user_id = u.id
+        SELECT cl.code, cl.caller_phone_number, cl.callee_phone_number, cl.direction, cl.call_status as status,
+               cl.duration_seconds as duration, u.name as agent, cl.created_at
+        FROM telephony_call_logs cl LEFT JOIN users u ON cl.user_id = u.id
         WHERE cl.created_at >= $1 AND cl.created_at <= ($2::date + INTERVAL '1 day')
         ORDER BY cl.created_at DESC
       `,

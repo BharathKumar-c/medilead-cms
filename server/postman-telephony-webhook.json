@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Telephony Webhook API",
-    "description": "Test collection for the telephony vendor webhook endpoint (POST /api/calls/inbound) and read endpoints (GET /api/calls/telephony, GET /api/calls/telephony/stats).\n\n## Important: Intercom-based Call Routing\n\nThe `intercom_number` field is **critical** for proper call routing. When provided, the incoming call popup and socket events are delivered ONLY to the agent assigned to that intercom number.\n\n- If your vendor sends `intercom_number: \"1002\"`, only Agent B (assigned intercom 1002) gets the popup.\n- If omitted, all users with `calls:receive_sip_events` permission receive the event (fallback).",
+    "name": "Calls & SIP Integration API",
+    "description": "Complete Postman collection for the unified Calls & SIP Integration API with 9 endpoints covering inbound webhook, SIP events, manual logging, listing, stats, phone lookup, updates, and backward-compatible telephony endpoints.\n\n## Authentication\n- **Inbound webhook**: HMAC-SHA256 via `X-Webhook-Signature` header (auto-generated in pre-request scripts)\n- **All other endpoints**: JWT Bearer token via `Authorization` header (auto-set via Login request)\n\n## Environment Variables\n- `{{baseUrl}}` — Server base URL (default: http://localhost:5000)\n- `{{webhookSecret}}` — HMAC signing key for inbound webhook\n- `{{authToken}}` — Auto-populated JWT from Login request\n\n## Getting Started\n1. Import this collection into Postman\n2. Set `{{webhookSecret}}` in collection variables to match your `TELEPHONY_WEBHOOK_SECRET`\n3. Run the \"Auth → Login\" request to auto-populate the JWT token\n4. Start testing the webhook, SIP, and call management endpoints",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -30,515 +30,782 @@
   },
   "item": [
     {
-      "name": "1. Login (get token)",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"admin@medilead.com\",\n  \"password\": \"Admin@123\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/auth/login",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "auth", "login"]
-        }
-      },
-      "event": [
+      "name": "Auth",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "var jsonData = pm.response.json();",
-              "if (jsonData.data && jsonData.data.token) {",
-              "  pm.collectionVariables.set('authToken', jsonData.data.token);",
-              "  console.log('Token saved:', jsonData.data.token.substring(0, 20) + '...');",
-              "}"
-            ]
+          "name": "Login (get JWT token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.token) {",
+                  "  pm.collectionVariables.set('authToken', jsonData.data.token);",
+                  "  console.log('Token saved:', jsonData.data.token.substring(0, 20) + '...');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@medilead.com\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            }
           }
         }
       ]
     },
     {
-      "name": "2. Health Check",
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/api/health",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "health"]
-        }
-      }
-    },
-    {
-      "name": "Webhook - Completed Call (inbound) - Intercom 1001",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919876543210\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"duration_seconds\": 142,\n  \"vendor_call_id\": \"vc_test_001\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1001\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
+      "name": "Inbound Webhook (HMAC-SHA256)",
+      "description": "POST /api/calls/inbound — Telephony vendor webhook. All requests auto-generate HMAC-SHA256 signature via pre-request script.",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });",
-              "console.log('Signature:', sig);"
-            ]
+          "name": "Completed Call — Intercom 1001",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var body = pm.request.body.raw;",
+                  "var secret = pm.collectionVariables.get('webhookSecret');",
+                  "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });",
+                  "console.log('HMAC Signature:', sig);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_phone_number\": \"+919876543210\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"duration_seconds\": 142,\n  \"vendor_call_id\": \"vc_completed_001\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1001\",\n  \"recording_url\": \"https://recordings.example.com/calls/vc_completed_001.mp3\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
+          }
+        },
+        {
+          "name": "Missed Call — Intercom 1002",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var body = pm.request.body.raw;",
+                  "var secret = pm.collectionVariables.get('webhookSecret');",
+                  "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_phone_number\": \"+919123456789\",\n  \"call_status\": \"missed\",\n  \"timestamp\": \"2026-05-24T11:30:00Z\",\n  \"duration_seconds\": 0,\n  \"vendor_call_id\": \"vc_missed_002\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1002\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
+          }
+        },
+        {
+          "name": "Ringing (Triggers Popup) — Intercom 1001",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var body = pm.request.body.raw;",
+                  "var secret = pm.collectionVariables.get('webhookSecret');",
+                  "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_phone_number\": \"+919444333222\",\n  \"call_status\": \"ringing\",\n  \"timestamp\": \"2026-05-24T14:00:00Z\",\n  \"vendor_call_id\": \"vc_ringing_003\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
+          }
+        },
+        {
+          "name": "Failed Call — Intercom 1003",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var body = pm.request.body.raw;",
+                  "var secret = pm.collectionVariables.get('webhookSecret');",
+                  "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_phone_number\": \"+919555666777\",\n  \"call_status\": \"failed\",\n  \"timestamp\": \"2026-05-24T12:00:00Z\",\n  \"duration_seconds\": 5,\n  \"vendor_call_id\": \"vc_failed_004\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1003\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
+          }
+        },
+        {
+          "name": "Outbound Call — Intercom 1004",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var body = pm.request.body.raw;",
+                  "var secret = pm.collectionVariables.get('webhookSecret');",
+                  "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_phone_number\": \"+919888777666\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T13:15:00Z\",\n  \"duration_seconds\": 210,\n  \"vendor_call_id\": \"vc_outbound_005\",\n  \"direction\": \"outbound\",\n  \"intercom_number\": \"1004\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
+          }
+        },
+        {
+          "name": "Validation — Missing Phone Number",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var body = pm.request.body.raw;",
+                  "var secret = pm.collectionVariables.get('webhookSecret');",
+                  "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"intercom_number\": \"1001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
+          }
+        },
+        {
+          "name": "Validation — Invalid Status",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var body = pm.request.body.raw;",
+                  "var secret = pm.collectionVariables.get('webhookSecret');",
+                  "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_phone_number\": \"+919876543210\",\n  \"call_status\": \"invalid_status\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"intercom_number\": \"1001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
+          }
+        },
+        {
+          "name": "Validation — Missing Timestamp",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var body = pm.request.body.raw;",
+                  "var secret = pm.collectionVariables.get('webhookSecret');",
+                  "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_phone_number\": \"+919876543210\",\n  \"call_status\": \"completed\",\n  \"intercom_number\": \"1001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
+          }
+        },
+        {
+          "name": "Duplicate — Same vendor_call_id (expect 409)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var body = pm.request.body.raw;",
+                  "var secret = pm.collectionVariables.get('webhookSecret');",
+                  "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_phone_number\": \"+919876543210\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"vendor_call_id\": \"vc_completed_001\",\n  \"intercom_number\": \"1001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
+          }
+        },
+        {
+          "name": "No HMAC Signature (expect 401)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Intentionally NOT adding X-Webhook-Signature header",
+                  "console.log('Testing without signature header — expects 401');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_phone_number\": \"+919876543210\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"intercom_number\": \"1001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "inbound"]
+            }
           }
         }
       ]
     },
     {
-      "name": "Webhook - Missed Call - Intercom 1002",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919123456789\",\n  \"call_status\": \"missed\",\n  \"timestamp\": \"2026-05-24T11:30:00Z\",\n  \"duration_seconds\": 0,\n  \"vendor_call_id\": \"vc_test_002\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1002\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
+      "name": "SIP Events (JWT)",
+      "description": "POST /api/calls/sip-event — Process SIP server events. Uses JWT Bearer auth (auto-set from collection). Includes full lifecycle test (incoming → answered → ended).",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
+          "name": "Incoming Call (creates new call record)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"incoming\",\n  \"call_id\": \"sip-lifecycle-001\",\n  \"caller\": \"9876543210\",\n  \"callee\": \"9988776655\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/sip-event",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "sip-event"]
+            }
+          }
+        },
+        {
+          "name": "Answered (updates existing call)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"answered\",\n  \"call_id\": \"sip-lifecycle-001\",\n  \"caller\": \"9876543210\",\n  \"callee\": \"9988776655\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/sip-event",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "sip-event"]
+            }
+          }
+        },
+        {
+          "name": "Ended (updates existing call with duration)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"ended\",\n  \"call_id\": \"sip-lifecycle-001\",\n  \"caller\": \"9876543210\",\n  \"callee\": \"9988776655\",\n  \"duration\": 185\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/sip-event",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "sip-event"]
+            }
+          }
+        },
+        {
+          "name": "Missed Call (no call_id — creates standalone)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"missed\",\n  \"caller\": \"9123456789\",\n  \"callee\": \"9988776600\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/sip-event",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "sip-event"]
+            }
+          }
+        },
+        {
+          "name": "Validation — Invalid Event Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"invalid_event_type\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/sip-event",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "sip-event"]
+            }
+          }
+        },
+        {
+          "name": "Validation — Missing Event Field",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller\": \"9876543210\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/sip-event",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "sip-event"]
+            }
+          }
+        },
+        {
+          "name": "No Auth Token (expect 401)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"incoming\",\n  \"caller\": \"9876543210\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/sip-event",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "sip-event"]
+            }
           }
         }
       ]
     },
     {
-      "name": "Webhook - Failed Call - Intercom 1003",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919555666777\",\n  \"call_status\": \"failed\",\n  \"timestamp\": \"2026-05-24T12:00:00Z\",\n  \"duration_seconds\": 5,\n  \"vendor_call_id\": \"vc_test_003\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1003\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
+      "name": "Manual Call Log (JWT)",
+      "description": "POST /api/calls — Log a call manually with auto lead linking.",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
+          "name": "Create Manual Log (with lead auto-link)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_number\": \"9876543210\",\n  \"callee_number\": \"9988776655\",\n  \"direction\": \"inbound\",\n  \"status\": \"completed\",\n  \"duration\": 120,\n  \"notes\": \"Patient called to reschedule appointment\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls"]
+            }
+          }
+        },
+        {
+          "name": "Create Manual Log (missed call)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caller_number\": \"9123456789\",\n  \"direction\": \"outbound\",\n  \"status\": \"missed\",\n  \"duration\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls"]
+            }
+          }
+        },
+        {
+          "name": "Validation — Missing Caller Number",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"direction\": \"inbound\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls"]
+            }
           }
         }
       ]
     },
     {
-      "name": "Webhook - Outbound Call - Intercom 1004",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919888777666\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T13:15:00Z\",\n  \"duration_seconds\": 210,\n  \"vendor_call_id\": \"vc_test_004\",\n  \"direction\": \"outbound\",\n  \"intercom_number\": \"1004\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
+      "name": "List & Stats (JWT)",
+      "description": "GET endpoints for listing calls, getting stats, and phone lookup.",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
+          "name": "List All Calls (paginated)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls?limit=10&page=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls"],
+              "query": [
+                { "key": "limit", "value": "10" },
+                { "key": "page", "value": "1" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filter by Status (completed)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls?status=completed&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls"],
+              "query": [
+                { "key": "status", "value": "completed" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filter by Direction (inbound)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls?direction=inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls"],
+              "query": [
+                { "key": "direction", "value": "inbound" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Call Stats (Today)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Phone Lookup (known number)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/phone/9876543210",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "phone", "9876543210"]
+            }
+          }
+        },
+        {
+          "name": "Phone Lookup (unknown number — empty result)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/phone/9999999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "phone", "9999999999"]
+            }
           }
         }
       ]
     },
     {
-      "name": "Webhook - Incoming Call (Ringing) - Triggers POPUP - Intercom 1002",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919444333222\",\n  \"call_status\": \"ringing\",\n  \"timestamp\": \"2026-05-24T14:00:00Z\",\n  \"vendor_call_id\": \"vc_test_005\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1002\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
+      "name": "Update Call (JWT)",
+      "description": "PUT /api/calls/:id — Update call status, duration, or notes.",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
+          "name": "Update Status to Completed",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"call_status\": \"completed\",\n  \"duration_seconds\": 142,\n  \"notes\": \"Call resolved — patient confirmed appointment\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/REPLACE_WITH_CALL_ID",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "REPLACE_WITH_CALL_ID"]
+            }
+          }
+        },
+        {
+          "name": "Invalid Status (expect 400)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"call_status\": \"non_existent_status\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/REPLACE_WITH_CALL_ID",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "REPLACE_WITH_CALL_ID"]
+            }
+          }
+        },
+        {
+          "name": "Non-existent ID (expect 404)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"call_status\": \"completed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "00000000-0000-0000-0000-000000000000"]
+            }
           }
         }
       ]
     },
     {
-      "name": "Webhook - Initiated Call (triggers POPUP) - Intercom 1001",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919876500111\",\n  \"call_status\": \"initiated\",\n  \"timestamp\": \"2026-05-24T14:05:00Z\",\n  \"vendor_call_id\": \"vc_test_009\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1001\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
+      "name": "Backward Compat — Telephony Endpoints",
+      "description": "Legacy backward-compatible telephony endpoints (GET /api/calls/telephony and GET /api/calls/telephony/stats).",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
+          "name": "Telephony Stats",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/telephony/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "telephony", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Telephony List (paginated)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/telephony?limit=10&page=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "telephony"],
+              "query": [
+                { "key": "limit", "value": "10" },
+                { "key": "page", "value": "1" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Telephony — Filter by Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/telephony?status=completed",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "telephony"],
+              "query": [
+                { "key": "status", "value": "completed" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Telephony — Filter by Direction",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/telephony?direction=inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "telephony"],
+              "query": [
+                { "key": "direction", "value": "inbound" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Telephony — Phone ILIKE Search",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/telephony?phone=9876",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "calls", "telephony"],
+              "query": [
+                { "key": "phone", "value": "9876" }
+              ]
+            }
           }
         }
       ]
-    },
-    {
-      "name": "Webhook - With Recording URL - Intercom 1005",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919111222333\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T15:00:00Z\",\n  \"duration_seconds\": 95,\n  \"vendor_call_id\": \"vc_test_006\",\n  \"direction\": \"inbound\",\n  \"intercom_number\": \"1005\",\n  \"recording_url\": \"https://recordings.example.com/calls/vc_test_006.mp3\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Validation - Missing phone",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"intercom_number\": \"1001\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Validation - Invalid status",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919876543210\",\n  \"call_status\": \"invalid_status\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"intercom_number\": \"1001\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Validation - Invalid phone format",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"9876543210\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"intercom_number\": \"1001\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Validation - Missing signature",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919876543210\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"intercom_number\": \"1001\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "// Intentionally NOT adding X-Webhook-Signature header",
-              "console.log('Testing without signature header');"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Duplicate - Same vendor_call_id",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"caller_phone_number\": \"+919876543210\",\n  \"call_status\": \"completed\",\n  \"timestamp\": \"2026-05-24T10:45:00Z\",\n  \"vendor_call_id\": \"vc_test_001\",\n  \"intercom_number\": \"1001\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "inbound"]
-        }
-      },
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "var body = pm.request.body.raw;",
-              "var secret = pm.collectionVariables.get('webhookSecret');",
-              "var sig = CryptoJS.HmacSHA256(body, secret).toString();",
-              "pm.request.headers.add({ key: 'X-Webhook-Signature', value: sig });"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "GET - Telephony Stats",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/telephony/stats",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "telephony", "stats"]
-        }
-      }
-    },
-    {
-      "name": "GET - All Call Logs (paginated)",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/telephony?limit=10&page=1",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "telephony"],
-          "query": [
-            { "key": "limit", "value": "10" },
-            { "key": "page", "value": "1" }
-          ]
-        }
-      }
-    },
-    {
-      "name": "GET - Filter by status (completed)",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/telephony?status=completed",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "telephony"],
-          "query": [
-            { "key": "status", "value": "completed" }
-          ]
-        }
-      }
-    },
-    {
-      "name": "GET - Filter by direction (inbound)",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/calls/telephony?direction=inbound",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "calls", "telephony"],
-          "query": [
-            { "key": "direction", "value": "inbound" }
-          ]
-        }
-      }
     }
   ]
 }

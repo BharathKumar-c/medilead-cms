@@ -398,10 +398,10 @@ router.get('/phone/:phone', authenticate, async (req, res) => {
     const statsResult = await db.query(
       `SELECT
          COUNT(*) as total_calls,
-         COUNT(*) FILTER (WHERE status = 'missed') as missed_calls,
+         COUNT(*) FILTER (WHERE call_status = 'missed') as missed_calls,
          MAX(created_at) as last_call_at
-       FROM call_logs
-       WHERE caller_number = $1`,
+       FROM telephony_call_logs
+       WHERE caller_phone_number = $1`,
       [phone]
     );
 

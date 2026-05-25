@@ -226,10 +226,12 @@ class ApiService {
     });
   }
 
-  async updateCallStatus(id, status, notes) {
-    return this.request(`/calls/${id}/status`, {
+  async updateCallStatus(id, statusData, notes) {
+    // Unified: PUT /calls/:id supports call_status, duration_seconds, notes
+    const body = typeof statusData === 'object' ? statusData : { call_status: statusData, notes };
+    return this.request(`/calls/${id}`, {
       method: 'PUT',
-      body: { status, notes },
+      body,
     });
   }
 

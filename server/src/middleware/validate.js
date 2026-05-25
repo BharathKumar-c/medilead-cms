@@ -401,11 +401,11 @@ const validateReschedule = [
   handleValidationErrors,
 ];
 
-// Call update validations
+// Call update validations (unified telephony_call_logs statuses)
 const validateCallUpdate = [
   body('status')
     .optional()
-    .isIn(['ringing', 'connected', 'disconnected', 'missed', 'hold'])
+    .isIn(['initiated', 'ringing', 'in-progress', 'completed', 'failed', 'missed'])
     .withMessage('Invalid call status'),
   body('duration')
     .optional()
@@ -419,12 +419,12 @@ const validateCallUpdate = [
   handleValidationErrors,
 ];
 
-// SIP event validations
+// SIP event validations (unified)
 const validateSipEvent = [
   body('event')
     .notEmpty()
     .withMessage('Event type is required')
-    .isIn(['incoming', 'outgoing', 'answered', 'ended', 'missed', 'hold', 'unhold'])
+    .isIn(['incoming', 'outgoing', 'answered', 'ended', 'missed', 'hold', 'unhold', 'failed'])
     .withMessage('Invalid SIP event type'),
   body('call_id')
     .optional({ checkFalsy: true })
@@ -499,7 +499,7 @@ const validateAppointment = [
   handleValidationErrors,
 ];
 
-// Call log validations
+// Call log validations (unified)
 const validateCallLog = [
   body('caller_number')
     .trim()
@@ -520,6 +520,10 @@ const validateCallLog = [
     .optional({ checkFalsy: true })
     .isInt({ min: 1 })
     .withMessage('Invalid lead ID'),
+  body('call_status')
+    .optional()
+    .isIn(['initiated', 'ringing', 'in-progress', 'completed', 'failed', 'missed'])
+    .withMessage('Invalid call status'),
   handleValidationErrors,
 ];
 

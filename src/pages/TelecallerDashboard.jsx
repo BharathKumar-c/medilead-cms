@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Phone, PhoneMissed, Clock,
   PhoneIncoming, PhoneOutgoing, UserPlus,
-  Headphones, Search,
+  Headphones,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import Pagination from '../components/Pagination';
@@ -58,32 +58,6 @@ const TelecallerDashboard = () => {
   const [selectedCall, setSelectedCall] = useState(null);
   const loadRequestId = useRef(0);
 
-  const addToast = useCallback((type, title, message) => {
-    const id = ++toastId;
-    setToasts(prev => [...prev, { id, type, title, message }]);
-  }, []);
-
-  const removeToast = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // Refresh call data when SIP events arrive via Layout's socket
-  useEffect(() => {
-    const handleCallUpdate = () => {
-      loadData();
-    };
-    window.addEventListener('call-update', handleCallUpdate);
-    return () => window.removeEventListener('call-update', handleCallUpdate);
-  }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filter]);
-
   const loadData = async () => {
     const requestId = ++loadRequestId.current;
     setLoading(true);
@@ -102,6 +76,29 @@ const TelecallerDashboard = () => {
     }
   };
 
+  const addToast = useCallback((type, title, message) => {
+    const id = ++toastId;
+    setToasts(prev => [...prev, { id, type, title, message }]);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData();
+  }, []);
+
+  // Refresh call data when SIP events arrive via Layout's socket
+  useEffect(() => {
+    const handleCallUpdate = () => {
+      loadData();
+    };
+    window.addEventListener('call-update', handleCallUpdate);
+    return () => window.removeEventListener('call-update', handleCallUpdate);
+  }, []);
+
   const filteredCalls = calls.filter(c => {
     if (filter === 'missed') return c.status === 'missed';
     if (filter === 'inbound') return c.direction === 'inbound';
@@ -110,7 +107,6 @@ const TelecallerDashboard = () => {
   });
 
   const paginatedCalls = filteredCalls.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const totalPages = Math.ceil(filteredCalls.length / pageSize);
 
   const formatDuration = (seconds) => {
     if (!seconds) return '0:00';
@@ -134,12 +130,17 @@ const TelecallerDashboard = () => {
   };
 
   const statusColors = {
+    // Unified telephony_call_logs statuses
+    initiated: 'bg-secondary/10 text-secondary',
     ringing: 'bg-secondary/10 text-secondary',
+    'in-progress': 'bg-on-tertiary-container/10 text-on-tertiary-container',
+    completed: 'bg-green-100 text-green-700',
+    failed: 'bg-error/10 text-error',
+    missed: 'bg-error/10 text-error',
+    // Legacy SIP statuses (backward compat)
     connected: 'bg-on-tertiary-container/10 text-on-tertiary-container',
     on_hold: 'bg-on-tertiary-container/10 text-on-tertiary-container',
     disconnected: 'bg-surface-container-high text-on-surface-variant',
-    missed: 'bg-error/10 text-error',
-    failed: 'bg-error/10 text-error',
   };
 
   const directionIcons = {
@@ -179,7 +180,7 @@ const TelecallerDashboard = () => {
             { key: 'inbound', label: 'Inbound' },
             { key: 'outbound', label: 'Outbound' },
           ].map(tab => (
-            <button key={tab.key} onClick={() => setFilter(tab.key)}
+            <button key={tab.key} onClick={() => { setFilter(tab.key); setCurrentPage(1); }}
               className={`px-4 py-2 rounded-lg font-body-md font-bold transition-all whitespace-nowrap ${
                 filter === tab.key ? 'bg-secondary text-on-secondary' : 'bg-surface-container-lowest border border-outline-variant text-on-surface hover:bg-surface-container'
               }`}>

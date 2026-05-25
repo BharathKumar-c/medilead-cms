@@ -1,14 +1,37 @@
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
 
 /**
- * Verify HMAC-SHA256 signature from telephony vendor webhook.
+ * Unified telephony webhook signature validation.
+ *
+ * Primary: HMAC-SHA256 via X-Webhook-Signature header
+ *   (used by telephony vendor — verifies request authenticity)
+ *
+ * Fallback: JWT Bearer token
+ *   (used for Postman / dev testing — anyone with a valid JWT can bypass HMAC)
+ *
  * Expects header: X-Webhook-Signature = hex(HMAC-SHA256(secret, rawBody))
  */
 const validateTelephonySignature = (req, res, next) => {
+  // JWT Bearer token fallback (for Postman / dev testing)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+      req.user = decoded;
+      logger.info('Inbound call authenticated via JWT token', { ip: req.ip, userId: decoded.id });
+      return next();
+    } catch (err) {
+      // JWT invalid — fall through to HMAC validation below
+      logger.warn('JWT verification failed, falling back to HMAC', { ip: req.ip });
+    }
+  }
+
+  // ── HMAC-SHA256 signature validation (primary) ──
   const secret = process.env.TELEPHONY_WEBHOOK_SECRET;
 
-  // In development, skip if no secret is configured
   if (!secret) {
     if (process.env.NODE_ENV !== 'production') {
       logger.warn('TELEPHONY_WEBHOOK_SECRET not set — skipping signature validation in dev');
@@ -36,12 +59,17 @@ const validateTelephonySignature = (req, res, next) => {
     .digest('hex');
 
   // timingSafeEqual requires equal-length buffers
-  const sigBuf = Buffer.from(signature, 'hex');
-  const expBuf = Buffer.from(expected, 'hex');
+  try {
+    const sigBuf = Buffer.from(signature, 'hex');
+    const expBuf = Buffer.from(expected, 'hex');
 
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-    logger.warn('Invalid webhook signature', { ip: req.ip });
-    return res.status(403).json({ success: false, message: 'Invalid signature' });
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      logger.warn('Invalid webhook signature', { ip: req.ip });
+      return res.status(403).json({ success: false, message: 'Invalid signature' });
+    }
+  } catch (err) {
+    logger.warn('Signature comparison error', { ip: req.ip, error: err.message });
+    return res.status(401).json({ success: false, message: 'Invalid signature format' });
   }
 
   next();
