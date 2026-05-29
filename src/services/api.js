@@ -5,6 +5,7 @@ class ApiService {
     this.token = localStorage.getItem('token');
     this._onUnauthorized = null;
     this._onServiceUnavailable = null;
+    this._onEnvConfigError = null;
   }
 
   setToken(token) {
@@ -26,6 +27,10 @@ class ApiService {
 
   onServiceUnavailable(callback) {
     this._onServiceUnavailable = callback;
+  }
+
+  onEnvConfigError(callback) {
+    this._onEnvConfigError = callback;
   }
 
   async request(endpoint, options = {}) {
@@ -70,8 +75,10 @@ class ApiService {
           this._onUnauthorized();
         }
       }
-      if (response.status === 503 && data?.code === 'SERVICE_UNAVAILABLE') {
-        if (this._onServiceUnavailable) {
+      if (response.status === 503) {
+        if (data?.code === 'ENV_MISSING' && this._onEnvConfigError) {
+          this._onEnvConfigError();
+        } else if (data?.code === 'SERVICE_UNAVAILABLE' && this._onServiceUnavailable) {
           this._onServiceUnavailable();
         }
       }

@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import {
   UserPlus, Edit, Trash2, X, Shield, Eye, EyeOff, Save, Search,
-  AlertTriangle, ChevronDown, Phone,
+  AlertTriangle, Phone,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import Pagination from '../components/Pagination';
 import Toast from '../components/Toast';
+import SearchableSelect from '../components/SearchableSelect';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import MultiCheckboxSelect from '../components/MultiCheckboxSelect';
 
 let toastId = 0;
 
@@ -188,15 +191,18 @@ const UserManagement = () => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => handleEdit(user)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Edit">
+                        <button onClick={() => handleEdit(user)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Edit User">
                           <Edit className="w-4 h-4 text-on-surface-variant" />
+                          <span className="font-caption text-xs text-on-surface-variant font-bold">Edit</span>
                         </button>
-                        <button onClick={() => setResetPasswordUser(user)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Reset Password">
+                        <button onClick={() => setResetPasswordUser(user)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Reset Password">
                           <Shield className="w-4 h-4 text-on-surface-variant" />
+                          <span className="font-caption text-xs text-on-surface-variant font-bold">Reset Pwd</span>
                         </button>
                         {user.is_active && (
-                          <button onClick={() => setDeleteConfirm(user)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Deactivate">
+                          <button onClick={() => setDeleteConfirm(user)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Deactivate User">
                             <Trash2 className="w-4 h-4 text-on-surface-variant" />
+                            <span className="font-caption text-xs text-on-surface-variant font-bold">Deactivate</span>
                           </button>
                         )}
                       </div>
@@ -220,6 +226,7 @@ const UserManagement = () => {
         {showForm && (
           <UserFormPanel
             user={editUser}
+            users={users}
             departments={departments}
             onClose={() => { setShowForm(false); setEditUser(null); }}
             onSave={() => { setShowForm(false); setEditUser(null); loadUsers(); }}
@@ -283,64 +290,10 @@ const FormField = ({ label, required, error, children }) => (
   </div>
 );
 
-const MultiCheckboxSelect = ({ options, selected, onChange, placeholder }) => {
-  const [open, setOpen] = useState(false);
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      setOpen(false);
-    } else if (e.key === 'Tab') {
-      setOpen(false);
-    }
-  };
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        onKeyDown={handleKeyDown}
-        className={`w-full px-4 py-3 border rounded-lg font-body-md text-left flex items-center justify-between bg-surface-container-lowest transition-all ${open ? 'border-secondary ring-2 ring-secondary/20' : 'border-outline-variant'}`}
-      >
-        <span className={selected.length === 0 ? 'text-on-surface-variant/50' : 'text-on-surface'}>
-          {selected.length === 0 ? (placeholder || 'Select...') : `${selected.length} selected`}
-        </span>
-        <ChevronDown className={`w-4 h-4 text-on-surface-variant transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute z-20 mt-1 w-full bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg max-h-48 overflow-y-auto">
-          {options.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-on-surface-variant">No options available</p>
-          ) : options.map((opt) => {
-            const label = typeof opt === 'string' ? opt : (opt.name || opt.label || opt);
-            const val = typeof opt === 'string' ? opt : (opt.name || opt.value || opt);
-            const isSelected = selected.includes(val);
-            return (
-              <label key={val} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container cursor-pointer transition-colors">
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => {
-                    if (isSelected) {
-                      onChange(selected.filter(s => s !== val));
-                    } else {
-                      onChange([...selected, val]);
-                    }
-                  }}
-                  className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary/20"
-                />
-                <span className="text-sm text-on-surface">{label}</span>
-              </label>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
 
 // User Form Panel (Create/Edit)
-const UserFormPanel = ({ user, departments, onClose, onSave, onError, onSuccess }) => {
+const UserFormPanel = ({ user, departments, users, onClose, onSave, onError, onSuccess }) => {
   const [form, setForm] = useState({
     first_name: user?.first_name || '',
     last_name: user?.last_name || '',
@@ -354,6 +307,7 @@ const UserFormPanel = ({ user, departments, onClose, onSave, onError, onSuccess 
     intercom_number: user?.intercom_number || '',
     date_of_birth: user?.date_of_birth ? user.date_of_birth.slice(0, 10) : '',
     phone: user?.phone || '',
+    user_agent: user?.user_agent || '',
     is_active: user?.is_active !== undefined ? user.is_active : true,
   });
   const [allowedDepartments, setAllowedDepartments] = useState(() => {
@@ -374,8 +328,28 @@ const UserFormPanel = ({ user, departments, onClose, onSave, onError, onSuccess 
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [showPasswordRules, setShowPasswordRules] = useState(false);
+  const [searchRoles, setSearchRoles] = useState('');
+  const { user: currentUser } = useAuth();
 
   const depOptions = departments.map(d => d.name || d);
+
+  // Filter roles based on search term
+  const filteredRoles = availableRoles.filter(role => {
+    const term = searchRoles.toLowerCase();
+    return (
+      (role.display_name || '').toLowerCase().includes(term) ||
+      (role.name || '').toLowerCase().includes(term)
+    );
+  });
+
+  // Determine if the current user is editing their own profile
+  const isEditingSelf = user && currentUser && user.id === currentUser.id;
+  // Count active super admins from the users list
+  const superAdmins = (users || []).filter(u => {
+    const roles = u.roles || [];
+    return (roles.some(r => r.name === 'super_admin') || u.role === 'super_admin') && u.is_active !== false;
+  });
+  const isLastSuperAdmin = isEditingSelf && superAdmins.length <= 1;
 
   // Fetch available roles
   useEffect(() => {
@@ -399,6 +373,7 @@ const UserFormPanel = ({ user, departments, onClose, onSave, onError, onSuccess 
     if (!form.designation.trim()) errors.designation = 'Designation is required.';
     if (allowedDepartments.length === 0) errors.allowedDepartments = 'At least one allowed department is required.';
     if (!form.email.trim()) errors.email = 'Email is required.';
+    if (!form.phone.trim()) errors.phone = 'Mobile number is required.';
     if (!user && !form.password) errors.password = 'Password is required.';
     if (!user && form.password) {
       const failedRule = passwordRules.find(r => !r.test(form.password));
@@ -426,7 +401,9 @@ const UserFormPanel = ({ user, departments, onClose, onSave, onError, onSuccess 
         date_of_birth: form.date_of_birth || null,
         allowed_departments: allowedDepartments.length > 0 ? allowedDepartments : null,
         phone: form.phone || null,
-        role_ids: selectedRoleIds.length > 0 ? selectedRoleIds : undefined,
+        user_agent: form.user_agent || null,
+        // Don't send role_ids if the current user is the last super admin editing themselves
+        role_ids: !isLastSuperAdmin && selectedRoleIds.length > 0 ? selectedRoleIds : undefined,
       };
 
       if (user) {
@@ -548,7 +525,7 @@ const UserFormPanel = ({ user, departments, onClose, onSave, onError, onSuccess 
           )}
 
           {/* Row: Mobile Number */}
-          <FormField label="Mobile Number" error={fieldErrors.phone}>
+          <FormField label="Mobile Number" required error={fieldErrors.phone}>
             <input type="tel" value={form.phone} onChange={(e) => setField('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
               placeholder="9876543210" maxLength={10}
               className={inputClass('phone', fieldErrors)} />
@@ -562,19 +539,26 @@ const UserFormPanel = ({ user, departments, onClose, onSave, onError, onSuccess 
             <p className="mt-1.5 text-xs text-on-surface-variant">Calls will be routed based on this intercom number. Each agent must have a unique intercom.</p>
           </FormField>
 
-          {/* Row: Department */}
-          <FormField label="Department" error={fieldErrors.department}>
-            <div className="relative">
-              <select value={form.department} onChange={(e) => setField('department', e.target.value)}
-                className={`${inputClass('department', fieldErrors)} appearance-none pr-10`}>
-                <option value="">Select department...</option>
-                {depOptions.map(d => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
-            </div>
+          {/* Row: User Agent */}
+          <FormField label="User Agent" error={fieldErrors.user_agent}>
+            <input type="text" value={form.user_agent} onChange={(e) => setField('user_agent', e.target.value)}
+              placeholder="e.g. SIP softphone, WebRTC, Desk phone"
+              className={inputClass('user_agent', fieldErrors)} />
+            <p className="mt-1.5 text-xs text-on-surface-variant">Specify the user agent type or SIP client this user uses.</p>
           </FormField>
+
+          {/* Row: Department */}
+          <div>
+            <SearchableSelect
+              label="Department"
+              required
+              options={depOptions}
+              value={form.department}
+              onChange={(val) => setField('department', val)}
+              placeholder="Select department..."
+              error={fieldErrors.department}
+            />
+          </div>
 
           {/* Row: Designation */}
           <FormField label="Designation" required error={fieldErrors.designation}>
@@ -598,43 +582,65 @@ const UserFormPanel = ({ user, departments, onClose, onSave, onError, onSuccess 
           <FormField label="Roles" error={fieldErrors.role}>
             <div className="space-y-2">
               <p className="text-xs text-on-surface-variant">Select up to 2 roles for this user.</p>
-              <div className="space-y-2 max-h-40 overflow-y-auto border border-outline-variant rounded-lg p-3">
-                {availableRoles.length === 0 ? (
-                  <p className="text-sm text-on-surface-variant">Loading roles...</p>
-                ) : availableRoles.map(role => {
-                  const isSelected = selectedRoleIds.includes(role.id);
-                  const isDisabled = !isSelected && selectedRoleIds.length >= 2;
-                  return (
-                    <label
-                      key={role.id}
-                      className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                        isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary/5'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        disabled={isDisabled}
-                        onChange={() => {
-                          setSelectedRoleIds(prev => {
-                            if (prev.includes(role.id)) return prev.filter(id => id !== role.id);
-                            if (prev.length >= 2) return prev;
-                            return [...prev, role.id];
-                          });
-                          if (!isSelected) {
-                            setField('role', role.name);
-                          }
-                        }}
-                        className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary/20"
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-on-surface">{role.display_name}</p>
-                        <p className="text-xs text-on-surface-variant font-mono">{role.name}</p>
-                      </div>
-                    </label>
-                  );
-                })}
+              <div className="border border-outline-variant rounded-lg overflow-hidden">
+                {/* Search input for roles */}
+                <div className="relative p-2 border-b border-outline-variant">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-on-surface-variant" />
+                  <input
+                    id="roles-search-input"
+                    type="text"
+                    value={searchRoles}
+                    onChange={(e) => setSearchRoles(e.target.value)}
+                    placeholder="Search roles..."
+                    className="w-full pl-7 pr-3 py-1.5 border border-outline-variant rounded-lg font-body-sm text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary transition-all"
+                  />
+                </div>
+                <div className="max-h-40 overflow-y-auto p-1.5 space-y-0.5">
+                  {filteredRoles.length === 0 ? (
+                    <p className="text-sm text-on-surface-variant px-3 py-3">
+                      {searchRoles ? 'No roles match your search.' : 'Loading roles...'}
+                    </p>
+                  ) : filteredRoles.map(role => {
+                    const isSelected = selectedRoleIds.includes(role.id);
+                    const isDisabled = !isSelected && selectedRoleIds.length >= 2;
+                    return (
+                      <label
+                        key={role.id}
+                        className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
+                          isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-primary/5'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={isDisabled || isLastSuperAdmin}
+                          onChange={() => {
+                            setSelectedRoleIds(prev => {
+                              if (prev.includes(role.id)) return prev.filter(id => id !== role.id);
+                              if (prev.length >= 2) return prev;
+                              return [...prev, role.id];
+                            });
+                            if (!isSelected) {
+                              setField('role', role.name);
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary/20"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-on-surface">{role.display_name}</p>
+                          <p className="text-xs text-on-surface-variant font-mono">{role.name}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
+              {isLastSuperAdmin && (
+                <p className="mt-1.5 text-xs text-error flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  You cannot change your own role as you are the only active super admin.
+                </p>
+              )}
             </div>
           </FormField>
 

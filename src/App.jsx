@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LicenseProvider, useLicense } from './context/LicenseContext';
 import { ThemeProvider } from './context/ThemeContext';
+import api from './services/api';
 import Dashboard from './pages/Dashboard';
 import LeadBox from './pages/LeadBox';
 import Reports from './pages/Reports';
@@ -123,8 +125,45 @@ function AppRoutes() {
   );
 }
 
+function EnvConfigErrorPage() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md text-center">
+        <div className="w-16 h-16 bg-error rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+          <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h2 className="font-h2 text-on-surface mb-2">Configuration Error</h2>
+        <p className="font-body-md text-on-surface-variant mb-6">
+          The .env file is missing. Please create it and set the required
+          environment variables.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-6 py-3 bg-secondary text-on-secondary rounded-lg font-body-md font-bold hover:opacity-90 transition-all">
+          Retry
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AppContent() {
   const { licenseExpired } = useLicense();
+  const [envConfigError, setEnvConfigError] = useState(false);
+
+  useEffect(() => {
+    api.onEnvConfigError(() => {
+      setEnvConfigError(true);
+    });
+    return () => api.onEnvConfigError(null);
+  }, []);
+
+  if (envConfigError) {
+    return <EnvConfigErrorPage />;
+  }
+
   if (licenseExpired) {
     return <LicenseExpired />;
   }

@@ -1,4 +1,4 @@
-const { Pool } = require('pg');
+const {Pool} = require('pg');
 require('dotenv').config();
 
 const logger = require('../utils/logger');
@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'cms_db',
+  database: process.env.DB_NAME || 'medway_cms_db',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
   // Connection pool settings
@@ -31,7 +31,10 @@ pool.on('remove', () => {
 });
 
 pool.on('error', (err) => {
-  logger.error('Unexpected error on idle client', { error: err.message, stack: err.stack });
+  logger.error('Unexpected error on idle client', {
+    error: err.message,
+    stack: err.stack,
+  });
 });
 
 // Query with logging for slow queries

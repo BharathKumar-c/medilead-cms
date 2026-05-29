@@ -1,6 +1,33 @@
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+
+// ─── Early .env check ─────────────────────────────────────
+const expectedEnvPath = path.resolve(__dirname, '..', '..', '.env');
+const hasEssentialConfig = process.env.DATABASE_URL || process.env.DB_NAME;
+
+if (!fs.existsSync(expectedEnvPath) && !hasEssentialConfig) {
+  console.error('');
+  console.error('  ╔══════════════════════════════════════════════════════════════╗');
+  console.error('  ║                   [31m[1m[4m[7m MISSING .ENV FILE [0m[31m[1m                      ║');
+  console.error('  ╠══════════════════════════════════════════════════════════════╣');
+  console.error('  ║                                                              ║');
+  console.error('  ║  [33mThe .env file is missing from the application.[0m              ║');
+  console.error('  ║                                                              ║');
+  console.error('  ║  [37mPlease create one with the necessary configuration variables.[0m ║');
+  console.error('  ║                                                              ║');
+  console.error(`  ║  [90mExpected location: ${expectedEnvPath}[0m`);
+  console.error('  ║                                                              ║');
+  console.error('  ║  [90mTip: Copy [36m.env.example[90m to [36m.env[90m and adjust the values.[0m      ║');
+  console.error('  ║                                                              ║');
+  console.error('  ╚══════════════════════════════════════════════════════════════╝');
+  console.error('');
+  // NOTE: Not calling process.exit(1) here so the server stays alive
+  // The env guard middleware in index.js handles API request rejection.
+  // CLI scripts (migrate, seed) will fail with connection errors naturally.
+}
+// ──────────────────────────────────────────────────────────
+
 require('dotenv').config();
 
 const logger = require('../utils/logger');
@@ -67,7 +94,7 @@ const createPool = () => {
   return new Pool({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT) || 5432,
-    database: process.env.DB_NAME || 'cms_db',
+    database: process.env.DB_NAME || 'medway_cms_db',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres',
     ssl: getSSLConfig(),

@@ -2,9 +2,61 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const helmet = require('helmet');
+
+// ─── Env config validation ──────────────────────────────────
+let envConfigInvalid = false;
+
+const expectedEnvPath = path.resolve(__dirname, '..', '.env');
+const hasEssentialConfig = process.env.DATABASE_URL || process.env.DB_NAME;
+
+if (!fs.existsSync(expectedEnvPath) && !hasEssentialConfig) {
+  envConfigInvalid = true;
+  console.error('');
+  console.error('  ╔══════════════════════════════════════════════════════════════╗');
+  console.error('  ║                   [31m[1m[4m[7m MISSING .ENV FILE [0m[31m[1m                      ║');
+  console.error('  ╠══════════════════════════════════════════════════════════════╣');
+  console.error('  ║                                                              ║');
+  console.error(`  ║  [33mThe .env file is missing from the application.[0m              ║`);
+  console.error('  ║                                                              ║');
+  console.error('  ║  [37mPlease create one with the necessary configuration variables.[0m ║');
+  console.error('  ║                                                              ║');
+  console.error(`  ║  [90mExpected location: ${expectedEnvPath}[0m`);
+  console.error('  ║                                                              ║');
+  console.error('  ║  [90mTip: Copy [36m.env.example[90m to [36m.env[90m and adjust the values.[0m      ║');
+  console.error('  ║                                                              ║');
+  console.error('  ╚══════════════════════════════════════════════════════════════╝');
+  console.error('');
+}
+
 require('dotenv').config();
+
+// Post-check: after dotenv.loads, verify essential vars are actually set
+if (!envConfigInvalid) {
+  const dbConfigOk = process.env.DATABASE_URL || process.env.DB_NAME;
+  const jwtOk = process.env.JWT_SECRET;
+
+  if (!dbConfigOk || !jwtOk) {
+    envConfigInvalid = true;
+    console.error('');
+    console.error('  ╔══════════════════════════════════════════════════════════════╗');
+    console.error('  ║            [31m[1m[4m[7m INCOMPLETE ENV CONFIGURATION [0m[31m[1m             ║');
+    console.error('  ╠══════════════════════════════════════════════════════════════╣');
+    console.error('  ║                                                              ║');
+    console.error('  ║  [33mEssential environment variables are missing.[0m               ║');
+    console.error('  ║                                                              ║');
+    console.error(`  ║  [37mRequired: DB_NAME (or DATABASE_URL) and JWT_SECRET[0m            ║`);
+    console.error('  ║                                                              ║');
+    console.error(`  ║  [90mExpected location: ${expectedEnvPath}[0m`);
+    console.error('  ║  [90mTip: Copy [36m.env.example[90m to [36m.env[90m and adjust the values.[0m      ║');
+    console.error('  ║                                                              ║');
+    console.error('  ╚══════════════════════════════════════════════════════════════╝');
+    console.error('');
+  }
+}
+// ──────────────────────────────────────────────────────────
 
 const db = require('./config/database');
 const logger = require('./utils/logger');
@@ -21,6 +73,20 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 // Trust proxy — required for correct IP resolution behind reverse proxies (Vite dev proxy, Nginx, Render)
 app.set('trust proxy', 1);
+
+// ─── Env config guard — blocks all API calls if config is missing ───
+app.use((req, res, next) => {
+  if (envConfigInvalid) {
+    logger.warn('Rejecting request due to missing env configuration', { path: req.path });
+    return res.status(503).json({
+      status: 'error',
+      code: 'ENV_MISSING',
+      message: 'The .env file is missing. Please create it and set the required environment variables.',
+    });
+  }
+  next();
+});
+// ─────────────────────────────────────────────────────────────────────
 
 // Security headers with helmet
 app.use(helmet({

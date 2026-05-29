@@ -52,6 +52,41 @@ const STATUS_COLORS = {
   failed: 'bg-error/10 text-error',
 };
 
+// ── Quick date range helpers ──────────────────────────────────────────
+const getToday = () => new Date().toISOString().split('T')[0];
+
+const getTomorrow = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split('T')[0];
+};
+
+const getThisWeekMonday = () => {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diff);
+  return d.toISOString().split('T')[0];
+};
+
+const getPreviousMonthSameDay = () => {
+  const today = new Date();
+  const day = today.getDate();
+  let prevMonth = today.getMonth() - 1;
+  let prevYear = today.getFullYear();
+  if (prevMonth < 0) { prevMonth = 11; prevYear -= 1; }
+  const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
+  const adjustedDay = Math.min(day, daysInPrevMonth);
+  return new Date(prevYear, prevMonth, adjustedDay).toISOString().split('T')[0];
+};
+
+const QUICK_RANGES = [
+  { label: 'Today',     getRange: () => ({ from: getToday(), to: getToday() }) },
+  { label: 'Tomorrow',  getRange: () => ({ from: getTomorrow(), to: getTomorrow() }) },
+  { label: 'This Week', getRange: () => ({ from: getThisWeekMonday(), to: getToday() }) },
+  { label: 'This Month',getRange: () => ({ from: getPreviousMonthSameDay(), to: getToday() }) },
+];
+
 const ExportPanel = ({ isOpen, onClose }) => {
   const [reportType, setReportType] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -213,6 +248,24 @@ const ExportPanel = ({ isOpen, onClose }) => {
           {reportType && (
             <div>
               <h3 className="font-body-md text-on-surface font-bold mb-3">2. Date Range</h3>
+
+              {/* Quick date chips */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {QUICK_RANGES.map(({ label, getRange }) => (
+                  <button
+                    key={label}
+                    onClick={() => {
+                      const { from, to } = getRange();
+                      setDateFrom(from);
+                      setDateTo(to);
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold rounded-full border border-outline-variant text-on-surface-variant hover:bg-secondary hover:text-on-secondary hover:border-secondary transition-all active:scale-95"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block font-caption text-on-surface-variant uppercase mb-1.5 inline-flex items-center gap-1 leading-none">

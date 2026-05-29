@@ -185,7 +185,7 @@ router.get('/me', authenticate, async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, name, first_name, last_name, employee_id, email, role, avatar_url, specialty,
-              department, designation, intercom_number, allowed_departments, date_of_birth, phone, created_at
+              department, designation, intercom_number, allowed_departments, date_of_birth, phone, user_agent, created_at
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -326,7 +326,7 @@ router.get('/users', authenticate, authorize('super_admin', 'manager'), async (r
     const result = await db.query(
       `SELECT id, name, first_name, last_name, employee_id, email, role, avatar_url, specialty,
               department, designation, intercom_number, allowed_departments, date_of_birth,
-              phone, is_active, created_at
+              phone, user_agent, is_active, created_at
        FROM users ORDER BY created_at DESC`
     );
 
@@ -334,7 +334,7 @@ router.get('/users', authenticate, authorize('super_admin', 'manager'), async (r
     const userIds = result.rows.map(u => u.id);
     if (userIds.length > 0) {
       const rolesResult = await db.query(
-        `SELECT ur.user_id, r.name, r.display_name
+        `SELECT ur.user_id, r.id, r.name, r.display_name
          FROM user_roles ur
          INNER JOIN roles r ON ur.role_id = r.id
          WHERE ur.user_id = ANY($1)`,
@@ -343,7 +343,7 @@ router.get('/users', authenticate, authorize('super_admin', 'manager'), async (r
       const rolesMap = {};
       for (const row of rolesResult.rows) {
         if (!rolesMap[row.user_id]) rolesMap[row.user_id] = [];
-        rolesMap[row.user_id].push({ name: row.name, display_name: row.display_name });
+        rolesMap[row.user_id].push({ id: row.id, name: row.name, display_name: row.display_name });
       }
       for (const user of result.rows) {
         user.roles = rolesMap[user.id] || [];
@@ -360,7 +360,7 @@ router.get('/users', authenticate, authorize('super_admin', 'manager'), async (r
 // POST /api/auth/users — create user (Super Admin / Manager)
 router.post('/users', authenticate, authorize('super_admin', 'manager'), validateRegister, async (req, res) => {
   try {
-    const { first_name, last_name, employee_id, name, email, password, role, specialty, phone, department, designation, intercom_number, date_of_birth, allowed_departments, role_ids } = req.body;
+    const { first_name, last_name, employee_id, name, email, password, role, specialty, phone, department, designation, intercom_number, date_of_birth, allowed_departments, role_ids, user_agent } = req.body;
 
     // Build full name from first/last or use provided name
     const fullName = name || `${first_name || ''} ${last_name || ''}`.trim();
@@ -398,10 +398,10 @@ router.post('/users', authenticate, authorize('super_admin', 'manager'), validat
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await db.query(
-      `INSERT INTO users (name, first_name, last_name, employee_id, email, password_hash, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-       RETURNING id, name, first_name, last_name, employee_id, email, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone, is_active, created_at`,
-      [fullName, first_name || null, last_name || null, employee_id || null, email, passwordHash, roleName, specialty || null, department || null, designation || null, intercom_number || null, date_of_birth || null, allowed_departments || null, phone || null]
+      `INSERT INTO users (name, first_name, last_name, employee_id, email, password_hash, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       RETURNING id, name, first_name, last_name, employee_id, email, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone, user_agent, is_active, created_at`,
+      [fullName, first_name || null, last_name || null, employee_id || null, email, passwordHash, roleName, specialty || null, department || null, designation || null, intercom_number || null, date_of_birth || null, allowed_departments || null, phone || null, user_agent || null]
     );
 
     const user = result.rows[0];
@@ -447,9 +447,24 @@ router.put('/users/:id', authenticate, authorize('super_admin', 'manager'), vali
     const deactivating = req.body.is_active === false || req.body.is_active === 'false';
 
     if (changingRole || deactivating) {
-      const targetUser = await db.query('SELECT role, is_active FROM users WHERE id = $1', [targetId]);
-      if (targetUser.rows.length > 0 && targetUser.rows[0].role === 'super_admin' && targetUser.rows[0].is_active) {
-        const superAdminCount = await db.query("SELECT COUNT(*) FROM users WHERE role = 'super_admin' AND is_active = true");
+      // Check via user_roles table (not just legacy role column)
+      const targetRoles = await db.query(
+        `SELECT r.name FROM roles r
+         INNER JOIN user_roles ur ON r.id = ur.role_id
+         WHERE ur.user_id = $1`,
+        [targetId]
+      );
+      const isTargetSuperAdmin = targetRoles.rows.some(r => r.name === 'super_admin');
+
+      if (isTargetSuperAdmin) {
+        const superAdminCount = await db.query(
+          `SELECT COUNT(*) FROM (
+            SELECT ur.user_id FROM user_roles ur
+            INNER JOIN roles r ON ur.role_id = r.id AND r.name = 'super_admin'
+            INNER JOIN users u ON ur.user_id = u.id
+            WHERE u.is_active = true
+          ) AS active_super_admins`
+        );
         if (parseInt(superAdminCount.rows[0].count) <= 1) {
           const action = deactivating ? 'deactivate' : 'change the role of';
           return res.status(400).json({
@@ -500,6 +515,7 @@ router.put('/users/:id', authenticate, authorize('super_admin', 'manager'), vali
       email: null, role: null, specialty: null, department: null,
       designation: null, intercom_number: null, date_of_birth: null,
       allowed_departments: null, phone: null, is_active: null,
+      user_agent: null,
     };
     const setClauses = [];
     const params = [];
@@ -507,6 +523,7 @@ router.put('/users/:id', authenticate, authorize('super_admin', 'manager'), vali
 
     for (const field of Object.keys(allowedFields)) {
       if (req.body[field] !== undefined) {
+        if (field === 'role' && req.body.role_ids !== undefined) continue;
         setClauses.push(`${field} = $${paramIndex}`);
         params.push(req.body[field]);
         paramIndex++;
@@ -613,9 +630,23 @@ router.put('/users/:id/password', authenticate, authorize('super_admin', 'manage
 router.delete('/users/:id', authenticate, authorize('super_admin', 'manager'), validateId, async (req, res) => {
   try {
     // Protect last super admin from deactivation
-    const targetUser = await db.query('SELECT role, is_active FROM users WHERE id = $1', [req.params.id]);
-    if (targetUser.rows.length > 0 && targetUser.rows[0].role === 'super_admin' && targetUser.rows[0].is_active) {
-      const superAdminCount = await db.query("SELECT COUNT(*) FROM users WHERE role = 'super_admin' AND is_active = true");
+    const targetRoles = await db.query(
+      `SELECT r.name FROM roles r
+       INNER JOIN user_roles ur ON r.id = ur.role_id
+       WHERE ur.user_id = $1`,
+      [req.params.id]
+    );
+    const isTargetSuperAdmin = targetRoles.rows.some(r => r.name === 'super_admin');
+
+    if (isTargetSuperAdmin) {
+      const superAdminCount = await db.query(
+        `SELECT COUNT(*) FROM (
+          SELECT ur.user_id FROM user_roles ur
+          INNER JOIN roles r ON ur.role_id = r.id AND r.name = 'super_admin'
+          INNER JOIN users u ON ur.user_id = u.id
+          WHERE u.is_active = true
+        ) AS active_super_admins`
+      );
       if (parseInt(superAdminCount.rows[0].count) <= 1) {
         return res.status(400).json({
           status: 'error',

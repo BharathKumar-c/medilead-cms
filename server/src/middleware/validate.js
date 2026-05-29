@@ -134,6 +134,11 @@ const validateRegister = [
     .trim()
     .matches(/^[0-9]{10}$/)
     .withMessage('Phone number must be 10 digits'),
+  body('user_agent')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 })
+    .withMessage('User agent must be less than 255 characters'),
   handleValidationErrors,
 ];
 
@@ -628,6 +633,11 @@ const validateUserUpdate = [
     .optional()
     .isBoolean()
     .withMessage('is_active must be a boolean'),
+  body('user_agent')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 })
+    .withMessage('User agent must be less than 255 characters'),
   handleValidationErrors,
 ];
 
