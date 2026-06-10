@@ -262,6 +262,40 @@ class ApiService {
     return this.request('/calls/telephony/stats');
   }
 
+  // ─── VAC Dialer Integration ───
+
+  async vacClick2Call(phoneNumber) {
+    return this.request('/calls/vac/click2call', {
+      method: 'POST',
+      body: { phone_number: phoneNumber },
+    });
+  }
+
+  async vacHangup(dispo) {
+    return this.request('/calls/vac/hangup', {
+      method: 'POST',
+      body: { dispo: dispo || 'A' },
+    });
+  }
+
+  async vacDisposition(dispo) {
+    return this.request('/calls/vac/disposition', {
+      method: 'POST',
+      body: { dispo },
+    });
+  }
+
+  async vacTransfer(transferTo, type = 'blind') {
+    return this.request('/calls/vac/transfer', {
+      method: 'POST',
+      body: { transfer_to: transferTo, type },
+    });
+  }
+
+  async vacStatus() {
+    return this.request('/calls/vac/status');
+  }
+
   // Leads
   async getLeadSources() {
     return this.request('/leads/master-data');

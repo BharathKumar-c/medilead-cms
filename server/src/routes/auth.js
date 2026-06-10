@@ -185,7 +185,7 @@ router.get('/me', authenticate, async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, name, first_name, last_name, employee_id, email, role, avatar_url, specialty,
-              department, designation, intercom_number, allowed_departments, date_of_birth, phone, user_agent, created_at
+              department, designation, intercom_number, vac_agent_id, allowed_departments, date_of_birth, phone, user_agent, created_at
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -325,7 +325,7 @@ router.get('/users', authenticate, authorize('super_admin', 'manager'), async (r
   try {
     const result = await db.query(
       `SELECT id, name, first_name, last_name, employee_id, email, role, avatar_url, specialty,
-              department, designation, intercom_number, allowed_departments, date_of_birth,
+              department, designation, intercom_number, vac_agent_id, allowed_departments, date_of_birth,
               phone, user_agent, is_active, created_at
        FROM users ORDER BY created_at DESC`
     );
@@ -360,7 +360,7 @@ router.get('/users', authenticate, authorize('super_admin', 'manager'), async (r
 // POST /api/auth/users — create user (Super Admin / Manager)
 router.post('/users', authenticate, authorize('super_admin', 'manager'), validateRegister, async (req, res) => {
   try {
-    const { first_name, last_name, employee_id, name, email, password, role, specialty, phone, department, designation, intercom_number, date_of_birth, allowed_departments, role_ids, user_agent } = req.body;
+    const { first_name, last_name, employee_id, name, email, password, role, specialty, phone, department, designation, intercom_number, vac_agent_id, date_of_birth, allowed_departments, role_ids, user_agent } = req.body;
 
     // Build full name from first/last or use provided name
     const fullName = name || `${first_name || ''} ${last_name || ''}`.trim();
@@ -398,10 +398,10 @@ router.post('/users', authenticate, authorize('super_admin', 'manager'), validat
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await db.query(
-      `INSERT INTO users (name, first_name, last_name, employee_id, email, password_hash, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-       RETURNING id, name, first_name, last_name, employee_id, email, role, specialty, department, designation, intercom_number, date_of_birth, allowed_departments, phone, user_agent, is_active, created_at`,
-      [fullName, first_name || null, last_name || null, employee_id || null, email, passwordHash, roleName, specialty || null, department || null, designation || null, intercom_number || null, date_of_birth || null, allowed_departments || null, phone || null, user_agent || null]
+      `INSERT INTO users (name, first_name, last_name, employee_id, email, password_hash, role, specialty, department, designation, intercom_number, vac_agent_id, date_of_birth, allowed_departments, phone, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       RETURNING id, name, first_name, last_name, employee_id, email, role, specialty, department, designation, intercom_number, vac_agent_id, date_of_birth, allowed_departments, phone, user_agent, is_active, created_at`,
+      [fullName, first_name || null, last_name || null, employee_id || null, email, passwordHash, roleName, specialty || null, department || null, designation || null, intercom_number || null, vac_agent_id || null, date_of_birth || null, allowed_departments || null, phone || null, user_agent || null]
     );
 
     const user = result.rows[0];
@@ -513,9 +513,9 @@ router.put('/users/:id', authenticate, authorize('super_admin', 'manager'), vali
     const allowedFields = {
       name: null, first_name: null, last_name: null, employee_id: null,
       email: null, role: null, specialty: null, department: null,
-      designation: null, intercom_number: null, date_of_birth: null,
-      allowed_departments: null, phone: null, is_active: null,
-      user_agent: null,
+      designation: null, intercom_number: null, vac_agent_id: null,
+      date_of_birth: null, allowed_departments: null, phone: null,
+      is_active: null, user_agent: null,
     };
     const setClauses = [];
     const params = [];

@@ -44,6 +44,27 @@ const Appointments = () => {
   };
   const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
 
+  const handleCallPatient = async (phoneNumber) => {
+    if (!phoneNumber) return;
+    try {
+      const result = await api.vacClick2Call(phoneNumber);
+      if (result?.status === 'success') {
+        addToast('success', 'Call Initiated', `Calling ${phoneNumber}...`);
+      }
+    } catch (err) {
+      const code = err.code || '';
+      if (code === 'VAC_AGENT_NOT_LOGGED_IN') {
+        addToast('warning', 'Agent Not Logged In', 'Please log into the VAC Dialer first, then try again.');
+      } else if (code === 'VAC_AGENT_NOT_SET') {
+        addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
+      } else if (code === 'VAC_NOT_CONFIGURED') {
+        addToast('error', 'VAC Not Configured', 'VAC Dialer integration is not configured on this server.');
+      } else {
+        addToast('error', 'Call Failed', err.message || 'Could not initiate call. Please try again.');
+      }
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -405,7 +426,7 @@ const Appointments = () => {
               <div className="space-y-3">
                 {[
                   { icon: <User className="w-4 h-4 text-secondary" />, label: 'Patient', value: selectedAppointment.patient_name },
-                  { icon: <Phone className="w-4 h-4 text-secondary" />, label: 'Phone', value: selectedAppointment.phone || '—' },
+                  { icon: <Phone className="w-4 h-4 text-secondary" />, label: 'Phone', value: selectedAppointment.phone || '—', callablePhone: selectedAppointment.phone },
                   { icon: <Mail className="w-4 h-4 text-secondary" />, label: 'Email', value: selectedAppointment.email || '—' },
                   { icon: <FileText className="w-4 h-4 text-secondary" />, label: 'Department', value: selectedAppointment.department },
                   { icon: <User className="w-4 h-4 text-secondary" />, label: 'Provider', value: selectedAppointment.provider_name || '—' },
@@ -414,9 +435,20 @@ const Appointments = () => {
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-3">
                     {item.icon}
-                    <div>
+                    <div className="flex-1">
                       <p className="font-caption text-on-surface-variant uppercase">{item.label}</p>
-                      <p className="font-body-md text-on-surface">{item.value}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-body-md text-on-surface">{item.value}</p>
+                        {item.callablePhone && (
+                          <button
+                            onClick={() => handleCallPatient(item.callablePhone)}
+                            className="p-1 rounded-md bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors"
+                            title={`Call ${item.callablePhone}`}
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

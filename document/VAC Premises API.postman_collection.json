@@ -1,0 +1,1476 @@
+{
+  "info": {
+    "_postman_id": "df2e9e05-e65c-4e62-ab43-2330e63e704e",
+    "name": "VAC Premises API",
+    "description": "**VAC Premises API** is an on-premise integration platform designed for organizations that require secure and direct access to their telephony, CRM, and communication systems.\n\n  \nIt enables seamless connectivity between internal applications, PBX systems, dialers, WhatsApp services, and enterprise workflows through robust APIs.\n\n  \nBuilt for reliability and complete infrastructure control, VAC Premises API ensures secure data handling within the customer’s own environment.\n\n  \nThe platform helps businesses automate operations, streamline communication processes, and integrate enterprise systems efficiently.\n\nIt wont't support inbuilt HTTPS SSL Certificate. SSL certificate is customer scope. VAC Cloud APIs which will support HTTPS is commerical involved for the Premises customers.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "32775298"
+  },
+  "item": [
+    {
+      "name": "VAC Dialer",
+      "item": [
+        {
+          "name": "Calls API",
+          "item": [
+            {
+              "name": "API from VAC",
+              "item": [
+                {
+                  "name": "Click2Call",
+                  "protocolProfileBehavior": {
+                    "disableBodyPruning": true
+                  },
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": []
+                    },
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?operation=dial&agent={{agent}}&phone_number={{customer_number}}",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "operation",
+                          "value": "dial"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}"
+                        },
+                        {
+                          "key": "phone_number",
+                          "value": "{{customer_number}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Click2Call",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [],
+                        "body": {
+                          "mode": "urlencoded",
+                          "urlencoded": []
+                        },
+                        "url": {
+                          "raw": "{{client_serverip}}/VAC/API/api.php?operation=dial&agent={{agent}}&phone_number={{customer_number}}",
+                          "host": [
+                            "{{client_serverip}}"
+                          ],
+                          "path": [
+                            "VAC",
+                            "API",
+                            "api.php"
+                          ],
+                          "query": [
+                            {
+                              "key": "operation",
+                              "value": "dial"
+                            },
+                            {
+                              "key": "agent",
+                              "value": "{{agent}}"
+                            },
+                            {
+                              "key": "phone_number",
+                              "value": "{{customer_number}}"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": "Text",
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Tue, 26 May 2026 07:05:50 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "Apache/2.4.37 (AlmaLinux) OpenSSL/1.1.1k"
+                        },
+                        {
+                          "key": "X-Powered-By",
+                          "value": "PHP/7.4.33"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "X-XSS-Protection",
+                          "value": "1; mode=block"
+                        },
+                        {
+                          "key": "Keep-Alive",
+                          "value": "timeout=5, max=100"
+                        },
+                        {
+                          "key": "Connection",
+                          "value": "Keep-Alive"
+                        },
+                        {
+                          "key": "Transfer-Encoding",
+                          "value": "chunked"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "text/html; charset=UTF-8"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"success\": false,\n    \"message\": \" agent_user is not logged in \",\n    \"output\": \"ERROR: agent_user is not logged in - 1001\\n\"\n}\n"
+                    }
+                  ]
+                },
+                {
+                  "name": "Add Lead",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=addLead&agent={{agent}}&phone_number={{phone_number}}&list_id=301&source=API",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "addLead",
+                          "description": "add Lead Operation"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}",
+                          "description": "Agent Number"
+                        },
+                        {
+                          "key": "phone_number",
+                          "value": "{{phone_number}}",
+                          "description": "Customer Number"
+                        },
+                        {
+                          "key": "list_id",
+                          "value": "301",
+                          "description": "List Number"
+                        },
+                        {
+                          "key": "source",
+                          "value": "API"
+                        }
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Add Lead",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=addLead&agent={{agent}}&phone_number={{phone_number}}&list_id=301&source=API",
+                          "host": [
+                            "{{client_serverip}}"
+                          ],
+                          "path": [
+                            "VAC",
+                            "API",
+                            "api.php"
+                          ],
+                          "query": [
+                            {
+                              "key": "module",
+                              "value": "dialer"
+                            },
+                            {
+                              "key": "operation",
+                              "value": "addLead",
+                              "description": "add Lead Operation"
+                            },
+                            {
+                              "key": "agent",
+                              "value": "{{agent}}",
+                              "description": "Agent Number"
+                            },
+                            {
+                              "key": "phone_number",
+                              "value": "{{phone_number}}",
+                              "description": "Customer Number"
+                            },
+                            {
+                              "key": "list_id",
+                              "value": "301",
+                              "description": "List Number"
+                            },
+                            {
+                              "key": "source",
+                              "value": "API"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": "Text",
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Tue, 26 May 2026 07:06:45 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "Apache/2.4.37 (AlmaLinux) OpenSSL/1.1.1k"
+                        },
+                        {
+                          "key": "X-Powered-By",
+                          "value": "PHP/7.4.33"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "X-XSS-Protection",
+                          "value": "1; mode=block"
+                        },
+                        {
+                          "key": "Keep-Alive",
+                          "value": "timeout=5, max=100"
+                        },
+                        {
+                          "key": "Connection",
+                          "value": "Keep-Alive"
+                        },
+                        {
+                          "key": "Transfer-Encoding",
+                          "value": "chunked"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "text/html; charset=UTF-8"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"success\": true,\n    \"message\": \" add_lead LEAD HAS BEEN ADDED \",\n    \"output\": \"SUCCESS: add_lead LEAD HAS BEEN ADDED - 7502519749|301|89|-4|6666\\nNOTICE: add_lead ADDED TO HOPPER - 7502519749|89|11|6666\\n\"\n}\n"
+                    }
+                  ]
+                },
+                {
+                  "name": "Calls_In_Queue",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=Calls_In_Queue&agent={{agent}}",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "Calls_In_Queue",
+                          "description": "Click to Call Operation"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}",
+                          "description": "Agent Number"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Disposition",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?operation=Dispo&agent={{agent}}&dispo=A&module=dialer",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "operation",
+                          "value": "Dispo",
+                          "description": "Click to Call Operation"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}",
+                          "description": "Agent Number"
+                        },
+                        {
+                          "key": "dispo",
+                          "value": "A"
+                        },
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Hangup",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=Hangup&agent={{agent}}&dispo=A",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "Hangup",
+                          "description": "Click to Call Operation"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}",
+                          "description": "Agent Number"
+                        },
+                        {
+                          "key": "dispo",
+                          "value": "A"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Park Call",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=Park&agent={{agent}}",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "Park"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Grab Call",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=Grab&agent={{agent}}",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "Grab"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Blind Txer",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=BTxer&agent={{agent}}&txer_to={{txer_to}}",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "BTxer",
+                          "description": "Click to Call Operation"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}",
+                          "description": "Agent Number"
+                        },
+                        {
+                          "key": "txer_to",
+                          "value": "{{txer_to}}",
+                          "description": "Txer Number"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Attended Txer",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=ATxer&agent={{agent}}&txer_to={{txer_to}}",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "ATxer",
+                          "description": "Click to Call Operation"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}",
+                          "description": "Agent Number"
+                        },
+                        {
+                          "key": "txer_to",
+                          "value": "{{txer_to}}",
+                          "description": "Txer Number"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Hangup Txer",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=HangUpTxer&agent={{agent}}",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "HangUpTxer",
+                          "description": "Confernce 3rd party out"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}",
+                          "description": "Agent Number"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "HangupBoth",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=HangUpBoth&agent={{agent}}",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "HangUpBoth",
+                          "description": "Conference Cut"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}",
+                          "description": "Agent Number"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Leave3Way Call",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{token}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{client_serverip}}/VAC/API/api.php?module=dialer&operation=Leave3Way&agent={{agent}}",
+                      "host": [
+                        "{{client_serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "api.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "dialer"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "Leave3Way",
+                          "description": "Leave Conference Operatoon"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "{{agent}}",
+                          "description": "Agent Number"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Webhook from remote party",
+              "item": [
+                {
+                  "name": "Call Popup",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": [
+                        {
+                          "key": "phone_number",
+                          "value": "9876543210",
+                          "type": "text",
+                          "uuid": "dfa6d4a3-6b97-423c-a3e0-151a5da5a77a"
+                        },
+                        {
+                          "key": "user",
+                          "value": "1001",
+                          "type": "text",
+                          "uuid": "838eed54-204f-4b37-8414-b12d52481230"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{webhook-url}}",
+                      "host": [
+                        "{{webhook-url}}"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Call Completion",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": [
+                        {
+                          "key": "phone_number",
+                          "value": "9876543210",
+                          "type": "text",
+                          "uuid": "5ed343e1-be03-4516-83ce-c11706753a67"
+                        },
+                        {
+                          "key": "agent",
+                          "value": "1001",
+                          "type": "text",
+                          "uuid": "41f5b90d-6d1a-4d18-be73-db41650f6536"
+                        },
+                        {
+                          "key": "duration",
+                          "value": "34",
+                          "type": "text",
+                          "uuid": "0b6e9466-0504-4b61-84ba-fece67d4af93"
+                        },
+                        {
+                          "key": "recording_url",
+                          "value": "http://domain/url.wav",
+                          "type": "text",
+                          "uuid": "d10cf871-d029-4d93-8e49-b0c908579628"
+                        },
+                        {
+                          "key": "dispo",
+                          "value": "B",
+                          "type": "text",
+                          "uuid": "b156de7d-85a2-4387-8fa8-5e448321711c"
+                        },
+                        {
+                          "key": "start_time",
+                          "value": "2026-05-15 10:00:00",
+                          "type": "text",
+                          "uuid": "0cea34a7-23b8-46e9-869a-8ee7356fd583"
+                        },
+                        {
+                          "key": "end_time",
+                          "value": "2026-05-15 10:00:34",
+                          "type": "text",
+                          "uuid": "1077eeb6-a54f-436d-ad54-dc3b5db3d762"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{webhook-url}}",
+                      "host": [
+                        "{{webhook-url}}"
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Admin API",
+          "item": [
+            {
+              "name": "Storage",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{client_serverip}}/VAC/API/api.php?operation=storageapi",
+                  "host": [
+                    "{{client_serverip}}"
+                  ],
+                  "path": [
+                    "VAC",
+                    "API",
+                    "api.php"
+                  ],
+                  "query": [
+                    {
+                      "key": "operation",
+                      "value": "storageapi"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ],
+      "description": "This guide provides instructions for integrating a 3rd Party Application with a **VAC Dialer or Customer Care system**. The integration involves using various APIs provided by the VAC Team to enable seamless communication and data exchange.\n\n**The Operations:**\n\n- dial - Manual Dial\n    \n- BTxer - Blind Transfer\n    \n- ATxer - Attended Transfer\n    \n- Grab - Grab the Customer\n    \n- Leave2Way - Leave 3 Way Call\n    \n- HangupTxer - Disconnect the 3rd Line Call\n    \n- Hangup Both - Disconnect the Conference Call\n    \n- logRequest - getting Call log of the number\n    \n- addLead - Auto Dial add number from webforms.\n    \n\n**Integration Steps:**\n\n- Obtain the API endpoints and parameters from both the VAC Team\n    \n- Ensure that the parameters are correctly passed in the API calls for seamless integration.\n    \n- Test the integration thoroughly to verify functionality and data exchange between the applications.\n    \n- Monitor and troubleshoot any issues that may arise during integration to ensure smooth operation.\n    \n\nBy following these steps, you can successfully integrate your 3rd Party Application with the VAC Dialer/Customer Care system, enabling enhanced communication capabilities and streamlined call management.\n\n**VAC DIaler Web Hooks:**\n\nOperations:\n\n1. Call Popup Webhook\n    \n2. Call Starting Event Webhook\n    \n3. Call Ending Event Webhook\n    \n\n**1\\. Call Popup Webhook:**\n\n**a. API Provided:** 3rd Party Application will provide the API endpoint.  \n**b. Method:** GET or POST  \n**c. Params**  \n**i.** \\`phone_number\\`: Customer's phone number (can be named differently as per API)  \n**ii. Example URL:** Any URL provided by the 3rd Party API\n\n**2\\. Call Start Event Webhook:**\n\n**a. API Provided:** 3rd Party Application will provide the API endpoint.  \n**b. Method:** GET or POST  \n**c. Params:**  \n**i.** \\`phone_number\\`: Customer's phone number  \n**ii.** \\`agent\\`: Agent ID  \n**iii.** \\`start_time\\`: Timestamp of call start  \n**iv.** \\`campaign_name\\`: Name of the campaign  \n**v.** Additional params as required by the 3rd Party Application  \n**d. Example URL:** Any URL provided by the 3rd Party API.\n\n**3\\. Call End Event Webhook:**\n\n**a. API Provided:** 3rd Party Application will provide the API endpoint.  \n**b. Method:** GET or POST  \n**c. Params:**  \ni. \\`phone_number\\`: Customer's phone number  \nii. \\`agent\\`: Agent ID  \niii. \\`start_time\\`: Timestamp of call start  \niv. \\`campaign_name\\`: Name of the campaign  \nv. \\`duration\\`: Duration of the call  \nvi. \\`status\\`: Call status (e.g., completed, missed)  \nvii. \\`recording_url\\`: URL of the call recording  \nviii. Additional params as required by the 3rd Party Application  \n**d. Example URL:** Any URL provided by the 3rd Party API.\n\n**Note: All the APIs are available. But we strongly recommend all calling operation should be used only in the dialer screen not by the any 3rd Party applications.(eg: Hold, Park, Grab, Call Transfer operations are strongly recommended to use only in the Dialer Screen for seamless operations).**",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{vault:authorization-secret}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "VACPBX",
+      "item": [
+        {
+          "name": "API from VAC",
+          "item": [
+            {
+              "name": "Standard API",
+              "item": [
+                {
+                  "name": "Click2Call",
+                  "protocolProfileBehavior": {
+                    "disableBodyPruning": true
+                  },
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "ALLISWELL",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": []
+                    },
+                    "url": {
+                      "raw": "{{serverip}}/VAC/API/endpoint.php?module=pbx&operation=dial&from={{from}}&to={{phone_number}}",
+                      "host": [
+                        "{{serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "endpoint.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "pbx"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "dial"
+                        },
+                        {
+                          "key": "from",
+                          "value": "{{from}}"
+                        },
+                        {
+                          "key": "to",
+                          "value": "{{phone_number}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Peers",
+                  "protocolProfileBehavior": {
+                    "disableBodyPruning": true
+                  },
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "ALLISWELL",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": []
+                    },
+                    "url": {
+                      "raw": "{{serverip}}/VAC/API/endpoint.php?module=pbx&operation=getpeers",
+                      "host": [
+                        "{{serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "endpoint.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "pbx"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "getpeers"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Channels",
+                  "protocolProfileBehavior": {
+                    "disableBodyPruning": true
+                  },
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "ALLISWELL",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": []
+                    },
+                    "url": {
+                      "raw": "{{serverip}}/VAC/API/endpoint.php?module=pbx&operation=getChannels",
+                      "host": [
+                        "{{serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "endpoint.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "pbx"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "getChannels"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Premium API",
+              "item": [
+                {
+                  "name": "CallTransfer",
+                  "protocolProfileBehavior": {
+                    "disableBodyPruning": true
+                  },
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "ALLISWELL",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": []
+                    },
+                    "url": {
+                      "raw": "{{serverip}}/VAC/API/endpoint.php?module=pbx&operation=transferCall&from={{from}}&to={{phone_number}}",
+                      "host": [
+                        "{{serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "endpoint.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "pbx"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "transferCall"
+                        },
+                        {
+                          "key": "from",
+                          "value": "{{from}}"
+                        },
+                        {
+                          "key": "to",
+                          "value": "{{phone_number}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Call Listening",
+                  "protocolProfileBehavior": {
+                    "disableBodyPruning": true
+                  },
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "ALLISWELL",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": []
+                    },
+                    "url": {
+                      "raw": "{{serverip}}/VAC/API/endpoint.php?module=pbx&operation=monitor&from={{from}}&to={{phone_number}}",
+                      "host": [
+                        "{{serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "endpoint.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "pbx"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "monitor"
+                        },
+                        {
+                          "key": "from",
+                          "value": "{{from}}"
+                        },
+                        {
+                          "key": "to",
+                          "value": "{{phone_number}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Call Whisper",
+                  "protocolProfileBehavior": {
+                    "disableBodyPruning": true
+                  },
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "ALLISWELL",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": []
+                    },
+                    "url": {
+                      "raw": "{{serverip}}/VAC/API/endpoint.php?module=pbx&operation=whisper&from={{from}}&to={{phone_number}}",
+                      "host": [
+                        "{{serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "endpoint.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "pbx"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "whisper"
+                        },
+                        {
+                          "key": "from",
+                          "value": "{{from}}"
+                        },
+                        {
+                          "key": "to",
+                          "value": "{{phone_number}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Call Barge",
+                  "protocolProfileBehavior": {
+                    "disableBodyPruning": true
+                  },
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "ALLISWELL",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "body": {
+                      "mode": "urlencoded",
+                      "urlencoded": []
+                    },
+                    "url": {
+                      "raw": "{{serverip}}/VAC/API/endpoint.php?module=pbx&operation=barge&from={{from}}&to={{phone_number}}",
+                      "host": [
+                        "{{serverip}}"
+                      ],
+                      "path": [
+                        "VAC",
+                        "API",
+                        "endpoint.php"
+                      ],
+                      "query": [
+                        {
+                          "key": "module",
+                          "value": "pbx"
+                        },
+                        {
+                          "key": "operation",
+                          "value": "barge"
+                        },
+                        {
+                          "key": "from",
+                          "value": "{{from}}"
+                        },
+                        {
+                          "key": "to",
+                          "value": "{{phone_number}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Webhook from Remote Party",
+          "item": [
+            {
+              "name": "Call Popup",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [
+                    {
+                      "key": "phone_number",
+                      "value": "9876543210",
+                      "type": "text",
+                      "uuid": "dfa6d4a3-6b97-423c-a3e0-151a5da5a77a"
+                    },
+                    {
+                      "key": "extension",
+                      "value": "1001",
+                      "type": "text",
+                      "uuid": "838eed54-204f-4b37-8414-b12d52481230"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{webhook-url}}",
+                  "host": [
+                    "{{webhook-url}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Call Completion",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [
+                    {
+                      "key": "phone_number",
+                      "value": "9876543210",
+                      "type": "text",
+                      "uuid": "5ed343e1-be03-4516-83ce-c11706753a67"
+                    },
+                    {
+                      "key": "extension",
+                      "value": "101",
+                      "type": "text",
+                      "uuid": "41f5b90d-6d1a-4d18-be73-db41650f6536"
+                    },
+                    {
+                      "key": "duration",
+                      "value": "34",
+                      "type": "text",
+                      "uuid": "0b6e9466-0504-4b61-84ba-fece67d4af93"
+                    },
+                    {
+                      "key": "recording_url",
+                      "value": "http://domain/url.wav",
+                      "type": "text",
+                      "uuid": "d10cf871-d029-4d93-8e49-b0c908579628"
+                    },
+                    {
+                      "key": "status",
+                      "value": "Answered",
+                      "type": "text",
+                      "uuid": "b156de7d-85a2-4387-8fa8-5e448321711c"
+                    },
+                    {
+                      "key": "calldate",
+                      "value": "2026-05-15 10:00:00",
+                      "type": "text",
+                      "uuid": "0cea34a7-23b8-46e9-869a-8ee7356fd583"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{webhook-url}}",
+                  "host": [
+                    "{{webhook-url}}"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{vault:authorization-secret}}",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "agent",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "customer_number",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "txer_to",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "phone_number",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "from",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "webhook-url",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "client_serverip",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}

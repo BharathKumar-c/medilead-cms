@@ -132,8 +132,24 @@ const CallLogsTable = () => {
   const paginatedCalls = filteredCalls.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const totalPages = Math.ceil(filteredCalls.length / pageSize);
 
-  const handleCall = (phoneNumber) => {
-    window.open(`tel:${phoneNumber}`, '_self');
+  const handleCall = async (phoneNumber) => {
+    try {
+      const result = await api.vacClick2Call(phoneNumber);
+      if (result?.status === 'success') {
+        addToast('success', 'Call Initiated', `Calling ${phoneNumber}...`);
+      }
+    } catch (err) {
+      const code = err.code || '';
+      if (code === 'VAC_AGENT_NOT_LOGGED_IN') {
+        addToast('warning', 'Agent Not Logged In', 'Please log into the VAC Dialer first, then try again.');
+      } else if (code === 'VAC_AGENT_NOT_SET') {
+        addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
+      } else if (code === 'VAC_NOT_CONFIGURED') {
+        addToast('error', 'VAC Not Configured', 'VAC Dialer integration is not configured on this server.');
+      } else {
+        addToast('error', 'Call Failed', err.message || 'Could not initiate call. Please try again.');
+      }
+    }
   };
 
   const handleCreateLead = (phoneNumber) => {

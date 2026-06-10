@@ -8,6 +8,7 @@ const { handleValidationErrors, validatePagination } = require('../middleware/va
 const { body } = require('express-validator');
 const logger = require('../utils/logger');
 const { notifyByPermission } = require('../utils/notify');
+const { vacClient, VacError } = require('../services/vacClient');
 
 const router = express.Router();
 
@@ -819,6 +820,556 @@ router.get('/telephony', authenticate, async (req, res) => {
   } catch (err) {
     logger.error('Get telephony logs error', { error: err.message, userId: req.user.id });
     res.status(500).json({ status: 'error', message: 'An error occurred', code: 'TELEPHONY_LOGS_ERROR' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VAC DIALER INTEGRATION ROUTES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Middleware: Validate VAC webhook requests
+ * Uses IP whitelist + shared secret header (VAC doesn't sign payloads with HMAC)
+ */
+function validateVacWebhook(req, res, next) {
+  const secret = process.env.VAC_WEBHOOK_SECRET;
+
+  // In dev mode without secret configured, allow all
+  if (!secret && process.env.NODE_ENV !== 'production') {
+    logger.warn('VAC_WEBHOOK_SECRET not set — skipping VAC webhook auth in dev');
+    return next();
+  }
+
+  if (!secret) {
+    logger.error('VAC_WEBHOOK_SECRET not configured in production');
+    return res.status(500).json({ success: false, message: 'Webhook not configured' });
+  }
+
+  // Check X-VAC-Secret header
+  const headerSecret = req.headers['x-vac-secret'];
+  if (headerSecret === secret) {
+    return next();
+  }
+
+  // Fallback: check IP whitelist
+  const allowedIps = (process.env.VAC_ALLOWED_IPS || '').split(',').map(ip => ip.trim()).filter(Boolean);
+  const clientIp = req.ip?.replace('::ffff:', '') || '';
+
+  if (allowedIps.length > 0 && allowedIps.includes(clientIp)) {
+    return next();
+  }
+
+  logger.warn('VAC webhook auth failed', { ip: clientIp, hasSecret: !!headerSecret });
+  return res.status(403).json({ success: false, message: 'Unauthorized webhook request' });
+}
+
+/**
+ * Helper: Resolve VAC agent ID for the authenticated user
+ */
+async function resolveVacAgent(userId) {
+  const result = await db.query(
+    'SELECT vac_agent_id, intercom_number, name FROM users WHERE id = $1 AND is_active = true',
+    [userId]
+  );
+  if (result.rows.length === 0) return null;
+  const user = result.rows[0];
+  // Prefer vac_agent_id, fall back to intercom_number
+  const agentId = user.vac_agent_id || user.intercom_number;
+  return agentId ? { agentId, userName: user.name } : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  POST /api/calls/vac/click2call  — Initiate outbound call via VAC Dialer
+//  Auth: JWT required
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/vac/click2call', authenticate, [
+  body('phone_number')
+    .trim().notEmpty().withMessage('Phone number is required')
+    .matches(/^[0-9]{10,15}$/).withMessage('Phone number must be 10-15 digits'),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const { phone_number } = req.body;
+
+    // Check VAC configuration
+    if (!vacClient.isConfigured()) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'VAC Dialer integration is not configured. Contact your administrator.',
+        code: 'VAC_NOT_CONFIGURED',
+      });
+    }
+
+    // Resolve agent ID from user profile
+    const agent = await resolveVacAgent(req.user.id);
+    if (!agent) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No VAC Agent ID configured for your account. Please update your profile or contact admin.',
+        code: 'VAC_AGENT_NOT_SET',
+      });
+    }
+
+    // Auto-lookup lead by phone
+    const lead = await lookupLead(db, phone_number);
+
+    // Call VAC Click2Call API
+    const vacResult = await vacClient.click2Call(agent.agentId, phone_number);
+
+    // Log the outbound call to telephony_call_logs
+    const callResult = await db.query(
+      `INSERT INTO telephony_call_logs
+         (caller_phone_number, call_status, direction, user_id, lead_id, intercom_number, raw_payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, caller_phone_number, call_status, direction`,
+      [phone_number, 'initiated', 'outbound', req.user.id, lead?.id || null,
+       agent.agentId, { vac_click2call: true, vac_response: vacResult.raw }]
+    );
+
+    const call = callResult.rows[0];
+
+    // Generate call code
+    const code = generateCallCode(call.id);
+    await db.query('UPDATE telephony_call_logs SET code = $1 WHERE id = $2', [code, call.id]);
+
+    // Update lead's last_call_date if linked
+    if (lead) {
+      await db.query(
+        'UPDATE leads SET last_call_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        [lead.id]
+      );
+    }
+
+    // Emit socket event for real-time UI update
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${req.user.id}`).emit('call-event', {
+        event: 'outgoing',
+        call_id: call.id,
+        caller: phone_number,
+        status: 'initiated',
+        direction: 'outbound',
+        timestamp: new Date().toISOString(),
+        lead_id: lead?.id || null,
+        lead_name: lead?.name || null,
+      });
+    }
+
+    logger.info('VAC Click2Call initiated', {
+      callId: call.id,
+      agent: agent.agentId,
+      phone: maskPhone(phone_number),
+      leadId: lead?.id || null,
+      userId: req.user.id,
+    });
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Call initiated successfully',
+      data: {
+        call_id: call.id,
+        code,
+        phone_number,
+        direction: 'outbound',
+        call_status: 'initiated',
+        lead_id: lead?.id || null,
+        lead_name: lead?.name || null,
+        vac_message: vacResult.message,
+      },
+    });
+  } catch (err) {
+    if (err instanceof VacError) {
+      logger.warn('VAC Click2Call error', { code: err.code, message: err.message, userId: req.user.id });
+
+      const statusMap = {
+        VAC_AGENT_NOT_LOGGED_IN: 409,
+        VAC_DIAL_FAILED: 502,
+        VAC_TIMEOUT: 504,
+        VAC_UNREACHABLE: 503,
+        VAC_NOT_CONFIGURED: 503,
+      };
+
+      return res.status(statusMap[err.code] || 500).json({
+        status: 'error',
+        message: err.message,
+        code: err.code,
+      });
+    }
+
+    logger.error('VAC Click2Call unexpected error', { error: err.message, stack: err.stack });
+    res.status(500).json({ status: 'error', message: 'An error occurred', code: 'VAC_INTERNAL_ERROR' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  POST /api/calls/vac/hangup  — Hangup current call via VAC
+//  Auth: JWT required
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/vac/hangup', authenticate, [
+  body('dispo').optional().trim().isLength({ max: 10 }).withMessage('Disposition code must be under 10 characters'),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const { dispo = 'A' } = req.body;
+
+    if (!vacClient.isConfigured()) {
+      return res.status(503).json({ status: 'error', message: 'VAC not configured', code: 'VAC_NOT_CONFIGURED' });
+    }
+
+    const agent = await resolveVacAgent(req.user.id);
+    if (!agent) {
+      return res.status(400).json({ status: 'error', message: 'No VAC Agent ID configured', code: 'VAC_AGENT_NOT_SET' });
+    }
+
+    const vacResult = await vacClient.hangup(agent.agentId, dispo);
+
+    logger.info('VAC Hangup', { agent: agent.agentId, dispo, userId: req.user.id });
+
+    res.json({
+      status: 'success',
+      message: 'Call ended',
+      data: { vac_message: vacResult.message },
+    });
+  } catch (err) {
+    if (err instanceof VacError) {
+      return res.status(502).json({ status: 'error', message: err.message, code: err.code });
+    }
+    logger.error('VAC Hangup error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred', code: 'VAC_INTERNAL_ERROR' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  POST /api/calls/vac/disposition  — Set call disposition via VAC
+//  Auth: JWT required
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/vac/disposition', authenticate, [
+  body('dispo').trim().notEmpty().withMessage('Disposition code is required'),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const { dispo } = req.body;
+
+    if (!vacClient.isConfigured()) {
+      return res.status(503).json({ status: 'error', message: 'VAC not configured', code: 'VAC_NOT_CONFIGURED' });
+    }
+
+    const agent = await resolveVacAgent(req.user.id);
+    if (!agent) {
+      return res.status(400).json({ status: 'error', message: 'No VAC Agent ID configured', code: 'VAC_AGENT_NOT_SET' });
+    }
+
+    const vacResult = await vacClient.disposition(agent.agentId, dispo);
+
+    logger.info('VAC Disposition set', { agent: agent.agentId, dispo, userId: req.user.id });
+
+    res.json({
+      status: 'success',
+      message: 'Disposition recorded',
+      data: { vac_message: vacResult.message },
+    });
+  } catch (err) {
+    if (err instanceof VacError) {
+      return res.status(502).json({ status: 'error', message: err.message, code: err.code });
+    }
+    logger.error('VAC Disposition error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred', code: 'VAC_INTERNAL_ERROR' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  POST /api/calls/vac/transfer  — Transfer call via VAC (blind or attended)
+//  Auth: JWT required
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/vac/transfer', authenticate, [
+  body('transfer_to').trim().notEmpty().withMessage('Transfer target is required'),
+  body('type').optional().isIn(['blind', 'attended']).withMessage('Type must be blind or attended'),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const { transfer_to, type = 'blind' } = req.body;
+
+    if (!vacClient.isConfigured()) {
+      return res.status(503).json({ status: 'error', message: 'VAC not configured', code: 'VAC_NOT_CONFIGURED' });
+    }
+
+    const agent = await resolveVacAgent(req.user.id);
+    if (!agent) {
+      return res.status(400).json({ status: 'error', message: 'No VAC Agent ID configured', code: 'VAC_AGENT_NOT_SET' });
+    }
+
+    const vacResult = type === 'attended'
+      ? await vacClient.attendedTransfer(agent.agentId, transfer_to)
+      : await vacClient.blindTransfer(agent.agentId, transfer_to);
+
+    logger.info('VAC Transfer', { agent: agent.agentId, type, transferTo: transfer_to, userId: req.user.id });
+
+    res.json({
+      status: 'success',
+      message: `Call ${type} transfer initiated`,
+      data: { vac_message: vacResult.message },
+    });
+  } catch (err) {
+    if (err instanceof VacError) {
+      return res.status(502).json({ status: 'error', message: err.message, code: err.code });
+    }
+    logger.error('VAC Transfer error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred', code: 'VAC_INTERNAL_ERROR' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  POST /api/calls/vac/webhook/popup  — VAC Call Popup webhook
+//  Auth: IP whitelist + X-VAC-Secret header
+//  VAC sends: phone_number, user (agent ID)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/vac/webhook/popup', validateVacWebhook, async (req, res) => {
+  try {
+    const { phone_number, user: vacAgentId, extension } = req.body;
+    const agentId = vacAgentId || extension;
+
+    if (!phone_number || !agentId) {
+      return res.status(400).json({ success: false, message: 'phone_number and user/extension are required' });
+    }
+
+    logger.info('VAC webhook: Call Popup', { phone: maskPhone(phone_number), agent: agentId });
+
+    // Find the CMS user by VAC agent ID
+    const userResult = await db.query(
+      'SELECT id, name FROM users WHERE (vac_agent_id = $1 OR intercom_number = $1) AND is_active = true',
+      [agentId]
+    );
+
+    // Auto-lookup lead
+    const lead = await lookupLead(db, phone_number);
+
+    // Log inbound call
+    const callResult = await db.query(
+      `INSERT INTO telephony_call_logs
+         (caller_phone_number, call_status, direction, intercom_number, lead_id, user_id, raw_payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, caller_phone_number, call_status`,
+      [phone_number, 'ringing', 'inbound', agentId, lead?.id || null,
+       userResult.rows[0]?.id || null, { vac_webhook: 'popup', ...req.body }]
+    );
+
+    const call = callResult.rows[0];
+    const code = generateCallCode(call.id);
+    await db.query('UPDATE telephony_call_logs SET code = $1 WHERE id = $2', [code, call.id]);
+
+    // Emit real-time incoming call popup via Socket.IO
+    const io = req.app.get('io');
+    if (io && userResult.rows.length > 0) {
+      const targetUsers = userResult.rows;
+
+      // Enrich lead info with call stats
+      let enrichedLeadInfo = null;
+      if (lead) {
+        const statsResult = await db.query(
+          `SELECT COUNT(*) as total_calls,
+                  COUNT(*) FILTER (WHERE call_status = 'missed') as missed_calls
+           FROM telephony_call_logs
+           WHERE caller_phone_number = $1 OR lead_id = $2`,
+          [phone_number, lead.id]
+        );
+        enrichedLeadInfo = {
+          id: lead.id,
+          name: lead.name,
+          uhid: lead.uhid || null,
+          phone: lead.phone,
+          callStats: {
+            totalCalls: parseInt(statsResult.rows[0].total_calls) || 0,
+            missedCalls: parseInt(statsResult.rows[0].missed_calls) || 0,
+          },
+        };
+      }
+
+      await emitCallEvent(io, targetUsers, 'incoming-call', {
+        call: {
+          id: call.id,
+          caller_number: phone_number,
+          direction: 'inbound',
+          status: 'ringing',
+          intercom_number: agentId,
+        },
+        leadInfo: enrichedLeadInfo,
+      });
+
+      await emitCallEvent(io, targetUsers, 'call-event', {
+        event: 'incoming',
+        call_id: call.id,
+        caller: phone_number,
+        status: 'ringing',
+        direction: 'inbound',
+        timestamp: new Date().toISOString(),
+        lead_id: lead?.id || null,
+        lead_name: lead?.name || null,
+      });
+
+      // Send notification
+      notifyByPermission(io, 'calls:receive_sip_events', {
+        type: 'info',
+        title: `Incoming call from ${phone_number}${lead ? ` (${lead.name})` : ''}`,
+        link: '/vendor-call-logs',
+      }).catch(err => logger.error('VAC popup notification error', { error: err.message }));
+    }
+
+    res.json({ success: true, message: 'Call popup processed', call_id: call.id });
+  } catch (err) {
+    logger.error('VAC webhook popup error', { error: err.message, stack: err.stack });
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  POST /api/calls/vac/webhook/completion  — VAC Call Completion webhook
+//  Auth: IP whitelist + X-VAC-Secret header
+//  VAC Dialer sends: phone_number, agent, duration, recording_url, dispo, start_time, end_time
+//  VAC PBX sends: phone_number, extension, duration, recording_url, status, calldate
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/vac/webhook/completion', validateVacWebhook, async (req, res) => {
+  try {
+    const {
+      phone_number,
+      agent, extension,
+      duration, duration_seconds,
+      recording_url,
+      dispo, status,
+      start_time, end_time, calldate,
+    } = req.body;
+
+    const agentId = agent || extension;
+    const callDuration = parseInt(duration || duration_seconds) || 0;
+    const callStatus = (dispo === 'B' || status === 'Missed' || status === 'missed') ? 'missed' : 'completed';
+    const recordingUrlFinal = recording_url || null;
+
+    if (!phone_number) {
+      return res.status(400).json({ success: false, message: 'phone_number is required' });
+    }
+
+    logger.info('VAC webhook: Call Completion', {
+      phone: maskPhone(phone_number),
+      agent: agentId,
+      duration: callDuration,
+      status: callStatus,
+    });
+
+    // Find user by agent ID
+    let userId = null;
+    if (agentId) {
+      const userResult = await db.query(
+        'SELECT id FROM users WHERE (vac_agent_id = $1 OR intercom_number = $1) AND is_active = true',
+        [agentId]
+      );
+      if (userResult.rows.length > 0) userId = userResult.rows[0].id;
+    }
+
+    // Try to find the existing call record (from popup webhook)
+    const existingCall = await db.query(
+      `SELECT id FROM telephony_call_logs
+       WHERE caller_phone_number = $1 AND call_status IN ('ringing', 'initiated', 'in-progress')
+       AND intercom_number = $2
+       ORDER BY created_at DESC LIMIT 1`,
+      [phone_number, agentId || '']
+    );
+
+    const lead = await lookupLead(db, phone_number);
+
+    let callId;
+    if (existingCall.rows.length > 0) {
+      // Update existing call record
+      callId = existingCall.rows[0].id;
+      await db.query(
+        `UPDATE telephony_call_logs SET
+           call_status = $1, duration_seconds = $2, recording_url = $3,
+           user_id = COALESCE(user_id, $4), lead_id = COALESCE(lead_id, $5),
+           raw_payload = raw_payload || $6::jsonb, updated_at = NOW()
+         WHERE id = $7`,
+        [callStatus, callDuration, recordingUrlFinal, userId, lead?.id || null,
+         JSON.stringify({ vac_webhook: 'completion', ...req.body }), callId]
+      );
+    } else {
+      // Insert new call record (completion without prior popup)
+      const direction = 'inbound'; // Completion webhooks are typically for inbound calls
+      const timestamp = start_time || calldate || new Date().toISOString();
+      const result = await db.query(
+        `INSERT INTO telephony_call_logs
+           (caller_phone_number, call_status, duration_seconds, direction, recording_url,
+            intercom_number, lead_id, user_id, timestamp, raw_payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING id`,
+        [phone_number, callStatus, callDuration, direction, recordingUrlFinal,
+         agentId || null, lead?.id || null, userId, timestamp,
+         { vac_webhook: 'completion', ...req.body }]
+      );
+      callId = result.rows[0].id;
+      const code = generateCallCode(callId);
+      await db.query('UPDATE telephony_call_logs SET code = $1 WHERE id = $2', [code, callId]);
+    }
+
+    // Update lead's last_call_date
+    if (lead) {
+      await db.query(
+        'UPDATE leads SET last_call_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        [lead.id]
+      );
+    }
+
+    // Emit socket event for real-time UI refresh
+    const io = req.app.get('io');
+    if (io) {
+      const targetUsers = userId
+        ? [{ id: userId }]
+        : await getSipUsers(db, agentId);
+
+      await emitCallEvent(io, targetUsers, 'call-event', {
+        event: callStatus === 'missed' ? 'missed' : 'ended',
+        call_id: callId,
+        caller: phone_number,
+        status: callStatus,
+        duration: callDuration,
+        direction: 'inbound',
+        timestamp: new Date().toISOString(),
+        lead_id: lead?.id || null,
+        lead_name: lead?.name || null,
+      });
+
+      // Notification for missed calls
+      if (callStatus === 'missed') {
+        notifyByPermission(io, 'calls:receive_sip_events', {
+          type: 'warning',
+          title: `Missed call from ${phone_number}${lead ? ` (${lead.name})` : ''}`,
+          link: '/vendor-call-logs',
+        }).catch(err => logger.error('VAC completion notification error', { error: err.message }));
+      }
+    }
+
+    res.json({ success: true, message: 'Call completion recorded', call_id: callId });
+  } catch (err) {
+    logger.error('VAC webhook completion error', { error: err.message, stack: err.stack });
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  GET /api/calls/vac/status  — Check VAC integration status
+//  Auth: JWT required
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/vac/status', authenticate, async (req, res) => {
+  try {
+    const configured = vacClient.isConfigured();
+    const agent = await resolveVacAgent(req.user.id);
+
+    res.json({
+      status: 'success',
+      data: {
+        vac_configured: configured,
+        agent_configured: !!agent,
+        agent_id: agent?.agentId || null,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: 'An error occurred' });
   }
 });
 

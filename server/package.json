@@ -9,6 +9,7 @@
     "seed": "node src/seeds/seed.js",
     "migrate": "node src/config/migrate.js",
     "migrate:full": "node src/config/migrate-full.js",
+    "migrate:vac-agent": "node src/config/migrate-vac-agent.js",
     "migrate:status-history": "node src/config/migrate-lead-status-history.js",
     "generate-codes": "node src/config/generate-codes.js"
   },

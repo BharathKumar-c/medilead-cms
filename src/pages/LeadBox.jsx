@@ -230,6 +230,27 @@ const LeadBox = () => {
   const handleEdit = (lead) => setEditLead(lead);
   const handleDelete = (lead) => setDeleteConfirm(lead);
 
+  const handleCallLead = async (phoneNumber) => {
+    if (!phoneNumber) return;
+    try {
+      const result = await api.vacClick2Call(phoneNumber);
+      if (result?.status === 'success') {
+        addToast('success', 'Call Initiated', `Calling ${phoneNumber}...`);
+      }
+    } catch (err) {
+      const code = err.code || '';
+      if (code === 'VAC_AGENT_NOT_LOGGED_IN') {
+        addToast('warning', 'Agent Not Logged In', 'Please log into the VAC Dialer first, then try again.');
+      } else if (code === 'VAC_AGENT_NOT_SET') {
+        addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
+      } else if (code === 'VAC_NOT_CONFIGURED') {
+        addToast('error', 'VAC Not Configured', 'VAC Dialer integration is not configured on this server.');
+      } else {
+        addToast('error', 'Call Failed', err.message || 'Could not initiate call. Please try again.');
+      }
+    }
+  };
+
   const confirmDelete = async () => {
     try {
       await api.deleteLead(deleteConfirm.id);
@@ -579,7 +600,18 @@ const LeadBox = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 font-data-tabular text-on-surface-variant">
-                        {lead.phone || '—'}
+                        <div className="flex items-center gap-1.5">
+                          <span>{lead.phone || '—'}</span>
+                          {lead.phone && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleCallLead(lead.phone); }}
+                              className="p-1 rounded-md bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors"
+                              title={`Call ${lead.phone}`}
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -1502,6 +1534,15 @@ const ViewLeadModal = ({lead, statusColors, priorityColors, onClose}) => {
               <span className="font-data-tabular text-on-surface font-bold">
                 {lead.phone || '—'}
               </span>
+              {lead.phone && (
+                <button
+                  onClick={() => handleCallLead(lead.phone)}
+                  className="ml-1 p-1.5 rounded-lg bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors"
+                  title={`Call ${lead.phone}`}
+                >
+                  <PhoneOutgoing className="w-4 h-4" />
+                </button>
+              )}
             </div>
             {lead.email && (
               <div className="flex items-center gap-2">
@@ -1570,8 +1611,28 @@ const ViewLeadModal = ({lead, statusColors, priorityColors, onClose}) => {
                     <h3 className="font-body-md text-on-surface font-bold mb-2 pb-1.5 border-b border-outline-variant">
                       Contact
                     </h3>
-                    <Row label="Phone" value={lead.phone} />
-                    <Row label="Alt Phone" value={lead.alternateContact} />
+                    <div className="flex items-center justify-between py-1.5">
+                      <span className="font-caption text-on-surface-variant w-24 flex-shrink-0">Phone</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-body-md text-on-surface">{lead.phone || '—'}</span>
+                        {lead.phone && (
+                          <button onClick={() => handleCallLead(lead.phone)} className="p-1 rounded-md bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors" title={`Call ${lead.phone}`}>
+                            <Phone className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5">
+                      <span className="font-caption text-on-surface-variant w-24 flex-shrink-0">Alt Phone</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-body-md text-on-surface">{lead.alternateContact || '—'}</span>
+                        {lead.alternateContact && (
+                          <button onClick={() => handleCallLead(lead.alternateContact)} className="p-1 rounded-md bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors" title={`Call ${lead.alternateContact}`}>
+                            <Phone className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <Row label="Email" value={lead.email} />
                   </div>
                   <div>
