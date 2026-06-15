@@ -61,6 +61,7 @@ if (!envConfigInvalid) {
 const db = require('./config/database');
 const logger = require('./utils/logger');
 const { startFollowUpReminders } = require('./cron/reminders');
+const { startFollowUpReminderCron } = require('./cron/followUpReminders');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
 const licenseGuard = require('./middleware/licenseGuard');
 const licenseModule = require('./license/licenseModule');
@@ -244,6 +245,7 @@ app.use('/api/calls', require('./routes/telephonyCalls'));  // Unified calls rou
 app.use('/api/branches', require('./routes/branches'));
 app.use('/api/roles', require('./routes/roles'));
 app.use('/api/masters', require('./routes/masters'));
+app.use('/api/follow-ups', require('./routes/followUps'));
 
 // License unlock endpoint (IP-whitelisted, rate-limited)
 app.use('/internal/license/unlock', require('./routes/licenseUnlock'));
@@ -370,6 +372,7 @@ server.listen(PORT, () => {
 
   // Start background jobs
   startFollowUpReminders(io);
+  startFollowUpReminderCron(io);
 });
 
 module.exports = app;

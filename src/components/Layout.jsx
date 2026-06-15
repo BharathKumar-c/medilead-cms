@@ -13,6 +13,7 @@ import {
   Phone,
   Shield,
   Database,
+  Clock,
 } from 'lucide-react';
 import Header from './Header';
 import PatientIntakeForm from './PatientIntakeForm';
@@ -134,6 +135,7 @@ const Layout = ({children, title = 'Medway CMS'}) => {
   const navItems = [
     {to: '/', icon: LayoutDashboard, label: 'Dashboard'},
     {to: '/lead-box', icon: Inbox, label: 'Lead Box'},
+    {to: '/follow-ups', icon: Clock, label: 'Follow-Ups'},
     {to: '/vendor-call-logs', icon: Phone, label: 'Calls'},
     {to: '/appointments', icon: Calendar, label: 'Appointments'},
     {to: '/reports', icon: BarChart3, label: 'Reports'},

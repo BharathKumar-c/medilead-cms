@@ -1,9 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Search, Bell, X, ChevronRight, User, Moon, LogOut, Settings, Menu } from 'lucide-react';
+import { Search, Bell, X, ChevronRight, User, Moon, LogOut, Settings, Menu, Megaphone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket, playNotificationSound } from '../hooks/useSocket';
 import api from '../services/api';
+import SystemAnnouncementModal from './SystemAnnouncementModal';
+
+const formatRelativeTime = (dateStr) => {
+  if (!dateStr) return '—';
+  const now = new Date();
+  const then = new Date(dateStr);
+  const diffMs = now - then;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHrs = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHrs / 24);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
+
+  if (diffSec < 60) return 'Just now';
+  if (diffMin < 60) return `${diffMin} min${diffMin > 1 ? 's' : ''} ago`;
+  if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
+  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
+  return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
+};
 
 const breadcrumbMap = {
   '/': [{ label: 'Dashboard', to: '/' }],
@@ -27,6 +48,8 @@ const Header = ({ title = 'Medway CMS', onNewPatientClick, sidebarCollapsed, onT
   const [notifs, setNotifs] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [bellFlash, setBellFlash] = useState(false);
+  const [announceOpen, setAnnounceOpen] = useState(false);
+  const [announceSuccess, setAnnounceSuccess] = useState('');
   const bellFlashTimer = useRef(null);
 
   const breadcrumbs = breadcrumbMap[location.pathname] || [{ label: 'Dashboard', to: '/' }];
@@ -161,6 +184,16 @@ const Header = ({ title = 'Medway CMS', onNewPatientClick, sidebarCollapsed, onT
 
       {/* Right: New + Notifications + Avatar */}
       <div className="flex items-center gap-1 sm:gap-2">
+        {user?.role === 'super_admin' && (
+          <button
+            onClick={() => setAnnounceOpen(true)}
+            className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-error transition-all"
+            title="Send System Announcement"
+          >
+            <Megaphone className="w-5 h-5" />
+          </button>
+        )}
+
         <button
           onClick={onNewPatientClick}
           className="bg-secondary text-white px-3 sm:px-5 py-2 rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all text-sm sm:text-base"
@@ -205,13 +238,25 @@ const Header = ({ title = 'Medway CMS', onNewPatientClick, sidebarCollapsed, onT
                   notifs.map(notif => (
                     <div
                       key={notif.id}
-                      onClick={() => { markAsRead(notif.id); if (notif.link) { navigate(notif.link); setNotifOpen(false); } }}
+                      onClick={() => {
+                        markAsRead(notif.id);
+                        if (notif.link) {
+                          // Use state with timestamp to force re-navigation even on same path
+                          navigate(notif.link, { state: { ts: Date.now() } });
+                          setNotifOpen(false);
+                        }
+                      }}
                       className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-surface-container-low transition-colors border-b border-outline-variant/50 ${!notif.is_read ? 'bg-secondary-fixed/30' : ''}`}
                     >
                       <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${getNotifIcon(notif.type)}`} />
                       <div className="flex-1 min-w-0">
                         <p className={`font-body-md text-on-surface ${!notif.is_read ? 'font-bold' : ''}`}>{notif.title}</p>
-                        <p className="font-caption text-on-surface-variant">{new Date(notif.created_at).toLocaleString()}</p>
+                        <p
+                          className="font-caption text-on-surface-variant"
+                          title={new Date(notif.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        >
+                          {formatRelativeTime(notif.created_at)}
+                        </p>
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); clearNotification(notif.id); }}
@@ -295,6 +340,27 @@ const Header = ({ title = 'Medway CMS', onNewPatientClick, sidebarCollapsed, onT
 
       {(notifOpen || avatarOpen) && (
         <div className="fixed inset-0 z-30" onClick={() => { setNotifOpen(false); setAvatarOpen(false); }} />
+      )}
+
+      {/* System Announcement Modal */}
+      {announceOpen && (
+        <SystemAnnouncementModal
+          isOpen={announceOpen}
+          onClose={() => setAnnounceOpen(false)}
+          onSuccess={(msg) => {
+            setAnnounceSuccess(msg);
+            setTimeout(() => setAnnounceSuccess(''), 5000);
+          }}
+          onError={(msg) => {
+            setAnnounceSuccess('');
+            alert(msg);
+          }}
+        />
+      )}
+      {announceSuccess && (
+        <div className="fixed bottom-20 right-6 z-50 bg-on-tertiary-container text-white px-4 py-3 rounded-xl shadow-lg font-body-md animate-slide-in">
+          {announceSuccess}
+        </div>
       )}
     </header>
   );

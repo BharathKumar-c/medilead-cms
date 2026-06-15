@@ -26,13 +26,16 @@ import {
   UserCircle,
   List,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, getVacAgentId } from '../context/AuthContext';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import Layout from '../components/Layout';
 import Pagination from '../components/Pagination';
 import SearchableSelect from '../components/SearchableSelect';
 import {leadBoxMetrics as defaultMetrics, pincodeData} from '../data/mockData';
 import api from '../services/api';
 import Toast from '../components/Toast';
+import FollowUpModal from '../components/FollowUpModal';
+
 
 const formatRelativeTime = (dateStr) => {
   if (!dateStr) return '—';
@@ -62,6 +65,7 @@ const DEFAULT_PAGE_SIZE = 10;
 const mapLead = (l) => ({
   id: l.id,
   code: l.code || '',
+  salutation: l.salutation || '',
   name: l.name,
   initials: (
     l.initials ||
@@ -103,6 +107,8 @@ let toastId = 0;
 
 const LeadBox = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const [leads, setLeads] = useState([]);
   const [metrics, setMetrics] = useState(defaultMetrics);
   const [loading, setLoading] = useState(true);
@@ -113,7 +119,7 @@ const LeadBox = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [totalItems, setTotalItems] = useState(0);
-  const [viewMode, setViewMode] = useState('all'); // 'today' | 'my' | 'all'
+  const [viewMode, setViewMode] = useState('all'); // 'today' | 'my' | 'all' | 'followups' | 'my-followups' | 'today-followups'
   const [viewLead, setViewLead] = useState(null);
   const [editLead, setEditLead] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -123,6 +129,10 @@ const LeadBox = () => {
   const [dateRange, setDateRange] = useState('all'); // 'today' | 'month' | 'all'
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState('');
+  const [followUpModal, setFollowUpModal] = useState(null);
+  const [editFollowUpModal, setEditFollowUpModal] = useState(null);
+  const [followUpRefreshKey, setFollowUpRefreshKey] = useState(0);
+  const [systemAnnounceOpen, setSystemAnnounceOpen] = useState(false);
   const filterRef = useRef(null);
   const [toasts, setToasts] = useState([]);
 
@@ -132,6 +142,23 @@ const LeadBox = () => {
   };
   const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
+
+  // Auto-open lead details when navigating from a notification with ?viewLead=<id>
+  useEffect(() => {
+    const viewLeadId = searchParams.get('viewLead');
+    if (viewLeadId) {
+      // Clear the query param so it doesn't re-trigger on re-renders
+      setSearchParams({}, { replace: true });
+      // Fetch the lead and open the view modal
+      api.getLead(viewLeadId).then((res) => {
+        if (res?.data?.lead) {
+          setViewLead(mapLead(res.data.lead));
+        }
+      }).catch(() => {
+        addToast('error', 'Lead Not Found', 'Could not load the lead details.');
+      });
+    }
+  }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounce search term: only trigger API calls 300ms after user stops typing
   useEffect(() => {
@@ -232,6 +259,11 @@ const LeadBox = () => {
 
   const handleCallLead = async (phoneNumber) => {
     if (!phoneNumber) return;
+    const agentId = getVacAgentId(user);
+    if (!agentId) {
+      addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
+      return;
+    }
     try {
       const result = await api.vacClick2Call(phoneNumber);
       if (result?.status === 'success') {
@@ -438,6 +470,10 @@ const LeadBox = () => {
                 label: 'All Leads',
                 icon: <List className="w-4 h-4" />,
               },
+              // Follow-up buttons hidden — functionality moved to dedicated Follow-up page
+              // { key: 'followups', label: 'Follow-Up Leads', icon: <Clock className="w-4 h-4" /> },
+              // { key: 'my-followups', label: 'My Follow-Ups', icon: <UserCircle className="w-4 h-4" /> },
+              // { key: 'today-followups', label: "Today's Follow-Ups", icon: <CalendarDays className="w-4 h-4" /> },
             ].map((btn) => (
               <button
                 key={btn.key}
@@ -596,7 +632,7 @@ const LeadBox = () => {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-body-md text-on-surface font-bold">
-                          {lead.name}
+                          {lead.salutation ? `${lead.salutation} ` : ''}{lead.name}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-data-tabular text-on-surface-variant">
@@ -684,6 +720,8 @@ const LeadBox = () => {
             statusColors={statusColors}
             priorityColors={priorityColors}
             onClose={() => setViewLead(null)}
+            onRescheduleFollowUp={(fu) => setEditFollowUpModal(fu)}
+            followUpRefreshKey={followUpRefreshKey}
           />
         )}
 
@@ -698,6 +736,7 @@ const LeadBox = () => {
             }}
             onError={(msg) => addToast('error', 'Update Failed', msg)}
             onSuccess={(msg) => addToast('success', 'Lead Updated', msg)}
+            onScheduleFollowUp={(leadData) => setFollowUpModal(leadData)}
           />
         )}
 
@@ -806,6 +845,35 @@ const LeadBox = () => {
           </div>
         )}
 
+        {/* Follow-Up Scheduling Modal */}
+        {followUpModal && (
+          <FollowUpModal
+            isOpen={!!followUpModal}
+            onClose={() => setFollowUpModal(null)}
+            lead={followUpModal}
+            onSuccess={(msg) => {
+              addToast('success', 'Follow-Up Scheduled', msg);
+              loadLeads();
+            }}
+            onError={(msg) => addToast('error', 'Follow-Up Error', msg)}
+          />
+        )}
+
+        {/* Follow-Up Reschedule Modal */}
+        {editFollowUpModal && (
+          <FollowUpModal
+            isOpen={!!editFollowUpModal}
+            onClose={() => setEditFollowUpModal(null)}
+            editFollowUp={editFollowUpModal}
+            onSuccess={(msg) => {
+              addToast('success', 'Follow-Up Updated', msg);
+              loadLeads();
+              setFollowUpRefreshKey(k => k + 1);
+            }}
+            onError={(msg) => addToast('error', 'Follow-Up Error', msg)}
+          />
+        )}
+
         <Toast toasts={toasts} onRemove={removeToast} />
       </div>
     </Layout>
@@ -813,9 +881,10 @@ const LeadBox = () => {
 };
 
 // Edit Panel — slide-in from right, same structure as PatientIntakeForm
-const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
+const EditPanel = ({lead, onClose, onSave, onError, onSuccess, onScheduleFollowUp}) => {
   const [formData, setFormData] = useState({
     uhid: lead.uhid || '',
+    salutation: lead.salutation || '',
     name: lead.name || '',
     dob: lead.dob ? lead.dob.split('T')[0] : '',
     age: '',
@@ -835,13 +904,17 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
     priority: lead.priority || 'Medium',
     remarks: lead.clinicalRemarks || '',
   });
+  // Track if status was changed to Follow-up so we can trigger the modal after save
+  const prevStatusRef = useRef(lead.status || 'New');
   const [errors, setErrors] = useState({});
   const [areas, setAreas] = useState([]);
   const [uhidLoading, setUhidLoading] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [followUpTriggered, setFollowUpTriggered] = useState(false);
   const [leadSources, setLeadSources] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [salutations, setSalutations] = useState([]);
   const [priorities, setPriorities] = useState(['High', 'Medium', 'Low']);
   const [statuses, setStatuses] = useState(['Appointment Booked']);
   const uhidTimerRef = useRef(null);
@@ -855,6 +928,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
           if (res.data.sources) setLeadSources(res.data.sources);
           if (res.data.priorities) setPriorities(res.data.priorities);
           if (res.data.statuses) setStatuses(res.data.statuses);
+          if (res.data.salutations) setSalutations(res.data.salutations);
         }
       })
       .catch(() => {});
@@ -881,6 +955,66 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
   const setField = (field, value) => {
     setFormData((prev) => ({...prev, [field]: value}));
     clearError(field);
+  };
+
+  // When status changes to Follow-up, track it for auto-popup on blur
+  const handleStatusChange = (val) => {
+    setField('status', val);
+    if (val !== 'Follow-up') setFollowUpTriggered(false);
+  };
+
+  // On blur of status field: if status just changed to Follow-up, save & open popup
+  const handleStatusBlur = async () => {
+    if (formData.status === 'Follow-up' && prevStatusRef.current !== 'Follow-up' && !followUpTriggered) {
+      setFollowUpTriggered(true);
+      const errs = validate();
+      if (Object.keys(errs).length > 0) {
+        setErrors(errs);
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await api.updateLead(lead.id, {
+          salutation: formData.salutation,
+          name: formData.name,
+          uhid: formData.uhid,
+          phone: formData.contactNumber,
+          alternate_contact: formData.alternateContact,
+          email: formData.email,
+          dob: formData.dob,
+          gender: formData.gender,
+          address: formData.address,
+          area: formData.area || null,
+          pincode: formData.pincode,
+          city: formData.city,
+          state: formData.state,
+          country: formData.country,
+          lead_source: formData.leadSource,
+          branch_id: formData.branchId || null,
+          status: formData.status,
+          priority: formData.priority,
+          clinical_remarks: formData.remarks,
+        });
+        prevStatusRef.current = 'Follow-up';
+        if (onSuccess) onSuccess(`${formData.name} has been updated.`);
+        if (onScheduleFollowUp) {
+          onSave();
+          onScheduleFollowUp({
+            id: lead.id,
+            name: formData.name,
+            code: lead.code,
+            assignedTo: lead.assignedTo,
+            assignedToId: lead.assignedToId,
+          });
+        } else {
+          onSave();
+        }
+      } catch (err) {
+        if (onError) onError(err.message || 'Failed to update lead.');
+      } finally {
+        setSubmitting(false);
+      }
+    }
   };
 
   const calculateAge = (dob) => {
@@ -932,6 +1066,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
             const p = res.data.patient;
             setFormData((prev) => ({
               ...prev,
+              salutation: p.salutation || prev.salutation,
               name: p.name || prev.name,
               dob: p.dob ? p.dob.split('T')[0] : prev.dob,
               contactNumber: p.phone || prev.contactNumber,
@@ -1010,6 +1145,8 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
 
   const validate = () => {
     const errs = {};
+    // Salutation: mandatory
+    if (!formData.salutation) errs.salutation = 'Salutation is required';
     // Patient Name: mandatory, min 2 chars, only valid name characters
     if (!formData.name.trim()) errs.name = 'Patient name is required';
     else if (formData.name.trim().length < 2)
@@ -1050,6 +1187,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
     setSubmitting(true);
     try {
       await api.updateLead(lead.id, {
+        salutation: formData.salutation,
         name: formData.name,
         uhid: formData.uhid,
         phone: formData.contactNumber,
@@ -1070,7 +1208,19 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
         clinical_remarks: formData.remarks,
       });
       if (onSuccess) onSuccess(`${formData.name} has been updated.`);
-      onSave();
+      // If status just changed to Follow-up via blur (not already handled), open popup
+      if (formData.status === 'Follow-up' && prevStatusRef.current !== 'Follow-up' && onScheduleFollowUp && !followUpTriggered) {
+        onSave();
+        onScheduleFollowUp({
+          id: lead.id,
+          name: formData.name,
+          code: lead.code,
+          assignedTo: lead.assignedTo,
+          assignedToId: lead.assignedToId,
+        });
+      } else {
+        onSave();
+      }
     } catch (err) {
       if (onError) onError(err.message || 'Failed to update lead.');
     } finally {
@@ -1130,18 +1280,46 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
             <ErrorMsg field="uhid" />
           </div>
 
-          {/* Patient Name */}
+          {/* Patient Name with Salutation */}
           <div data-field="name">
             <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
               Patient Name <span className="text-error text-base font-bold leading-none">*</span>
             </label>
-            <input
-              type="text"
-              placeholder="Enter full name"
-              value={formData.name}
-              onChange={(e) => setField('name', e.target.value)}
-              className={fieldClass('name')}
-            />
+            <div className="flex">
+              <div className="relative w-[20%]">
+                <select
+                  value={formData.salutation}
+                  onChange={(e) => setField('salutation', e.target.value)}
+                  className={`w-full h-full px-4 py-3 border rounded-l-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:ring-2 transition-all appearance-none pr-7 ${
+                    errors.salutation
+                      ? 'border-error focus:border-error focus:ring-error/20'
+                      : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
+                  } border-r-0`}
+                >
+                  <option value="">Title</option>
+                  {salutations.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center">
+                  <svg className="w-4 h-4 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+              <input
+                type="text"
+                placeholder="Enter full name"
+                value={formData.name}
+                onChange={(e) => setField('name', e.target.value)}
+                className={`w-[80%] px-4 py-3 border rounded-r-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:ring-2 transition-all placeholder:text-on-surface-variant/50 ${
+                  errors.name
+                    ? 'border-error focus:border-error focus:ring-error/20'
+                    : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
+                }`}
+              />
+            </div>
+            {errors.salutation && <p className="font-caption text-error mt-1">{errors.salutation}</p>}
             <ErrorMsg field="name" />
           </div>
 
@@ -1201,6 +1379,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <SearchableSelect
               label="Lead Source"
+              required
               options={leadSources}
               value={formData.leadSource}
               onChange={(val) => setField('leadSource', val)}
@@ -1209,6 +1388,7 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
             />
             <SearchableSelect
               label="Priority"
+              required
               options={priorities}
               value={formData.priority}
               onChange={(val) => setField('priority', val)}
@@ -1216,16 +1396,18 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
             />
           </div>
 
-          {/* Status */}
-          <SearchableSelect
-            label="Status"
-            required
-            options={statuses}
-            value={formData.status}
-            onChange={(val) => setField('status', val)}
-            placeholder="Select status"
-            error={errors.status}
-          />
+          {/* Status — on blur, auto-save & open follow-up popup */}
+          <div onBlur={handleStatusBlur} tabIndex={-1} className="outline-none">
+            <SearchableSelect
+              label="Status"
+              required
+              options={statuses}
+              value={formData.status}
+              onChange={handleStatusChange}
+              placeholder="Select status"
+              error={errors.status}
+            />
+          </div>
 
           {/* Contact */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1442,12 +1624,30 @@ const EditPanel = ({lead, onClose, onSave, onError, onSuccess}) => {
 };
 
 // View Lead Slide-Over Panel
-const ViewLeadModal = ({lead, statusColors, priorityColors, onClose}) => {
+const ViewLeadModal = ({lead, statusColors, priorityColors, onClose, onRescheduleFollowUp, followUpRefreshKey}) => {
   const [activeTab, setActiveTab] = useState('details');
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [callHistory, setCallHistory] = useState([]);
   const [loadingCalls, setLoadingCalls] = useState(true);
+  const [followUps, setFollowUps] = useState([]);
+  const [loadingFollowUps, setLoadingFollowUps] = useState(true);
+
+  const loadFollowUps = useCallback(() => {
+    setLoadingFollowUps(true);
+    api
+      .getFollowUpsByLead(lead.id)
+      .then((res) => {
+        if (res?.data?.followUps) setFollowUps(res.data.followUps);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingFollowUps(false));
+  }, [lead.id]);
+
+  // Re-fetch follow-ups when external refresh is triggered (e.g. after reschedule)
+  useEffect(() => {
+    if (followUpRefreshKey > 0) loadFollowUps();
+  }, [followUpRefreshKey, loadFollowUps]);
 
   useEffect(() => {
     api
@@ -1468,7 +1668,38 @@ const ViewLeadModal = ({lead, statusColors, priorityColors, onClose}) => {
     } else {
       setLoadingCalls(false);
     }
-  }, [lead.id, lead.phone]);
+    loadFollowUps();
+  }, [lead.id, lead.phone, loadFollowUps]);
+
+  const handleCompleteFollowUp = async (fu) => {
+    try {
+      await api.completeFollowUp(fu.id);
+      setFollowUps(prev => prev.map(f => f.id === fu.id ? {...f, status: 'completed', completed_at: new Date().toISOString()} : f));
+    } catch (err) {
+      console.error('Failed to complete follow-up:', err);
+    }
+  };
+
+  const handleCancelFollowUp = async (fu) => {
+    try {
+      await api.cancelFollowUp(fu.id);
+      setFollowUps(prev => prev.map(f => f.id === fu.id ? {...f, status: 'cancelled'} : f));
+    } catch (err) {
+      console.error('Failed to cancel follow-up:', err);
+    }
+  };
+
+  const handleRescheduleFollowUp = (fu) => {
+    if (onRescheduleFollowUp) {
+      onRescheduleFollowUp({
+        id: fu.id,
+        leadId: lead.id,
+        leadName: lead.name,
+        leadCode: lead.code,
+        scheduled_at: fu.scheduled_at,
+      });
+    }
+  };
 
   const actionLabels = {
     created: 'Lead Created',
@@ -1512,7 +1743,7 @@ const ViewLeadModal = ({lead, statusColors, priorityColors, onClose}) => {
               </span>
             </div>
             <h2 className="font-h1 text-2xl text-on-surface truncate">
-              {lead.name}
+              {lead.salutation ? `${lead.salutation} ` : ''}{lead.name}
             </h2>
             <p className="font-body-sm text-on-surface-variant mt-0.5">
               {lead.branchName || 'No branch'} ·{' '}
@@ -1585,6 +1816,7 @@ const ViewLeadModal = ({lead, statusColors, priorityColors, onClose}) => {
             {key: 'details', label: 'Details'},
             {key: 'activity', label: `Activity (${history.length})`},
             {key: 'calls', label: `Calls (${callHistory.length})`},
+            {key: 'follow-ups', label: `Follow-Ups (${followUps.length})`},
           ].map((tab) => (
             <button
               key={tab.key}
@@ -1693,6 +1925,37 @@ const ViewLeadModal = ({lead, statusColors, priorityColors, onClose}) => {
                       value={formatRelativeTime(lead.lastCallDate)}
                     />
                   </div>
+                  {followUps.filter(f => f.status === 'pending').length > 0 && (() => {
+                    const nextFollowUp = followUps
+                      .filter(f => f.status === 'pending')
+                      .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))[0];
+                    if (!nextFollowUp) return null;
+                    const isOverdue = new Date(nextFollowUp.scheduled_at) < new Date();
+                    return (
+                      <div>
+                        <h3 className="font-body-md text-on-surface font-bold mb-2 pb-1.5 border-b border-outline-variant flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-on-tertiary-container" />
+                          Scheduled Follow-Up
+                        </h3>
+                        <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${isOverdue ? 'bg-error/10 border border-error/20' : 'bg-on-tertiary-container/10 border border-on-tertiary-container/20'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isOverdue ? 'bg-error/20' : 'bg-on-tertiary-container/20'}`}>
+                            <Clock className={`w-4 h-4 ${isOverdue ? 'text-error' : 'text-on-tertiary-container'}`} />
+                          </div>
+                          <div>
+                            <p className={`font-body-md font-bold ${isOverdue ? 'text-error' : 'text-on-surface'}`}>
+                              {new Date(nextFollowUp.scheduled_at).toLocaleString('en-IN', {
+                                day: '2-digit', month: 'short', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit',
+                              })}
+                            </p>
+                            {isOverdue && (
+                              <p className="font-caption text-error">Overdue</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {lead.clinicalRemarks && (
                     <div>
                       <h3 className="font-body-md text-on-surface font-bold mb-2 pb-1.5 border-b border-outline-variant">
@@ -1843,6 +2106,118 @@ const ViewLeadModal = ({lead, statusColors, priorityColors, onClose}) => {
                             </p>
                           )}
                         </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'follow-ups' && (
+            <div className="px-8 py-6">
+              {loadingFollowUps ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : followUps.length === 0 ? (
+                <div className="text-center py-16">
+                  <Calendar className="w-10 h-10 text-on-surface-variant/30 mx-auto mb-3" />
+                  <p className="font-body-md text-on-surface-variant">
+                    No follow-ups scheduled for this lead.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {followUps.map((fu) => {
+                    const isPending = fu.status === 'pending';
+                    const isCompleted = fu.status === 'completed';
+                    const isCancelled = fu.status === 'cancelled';
+                    const isMissed = fu.status === 'missed';
+                    const scheduledDate = new Date(fu.scheduled_at);
+                    const isOverdue = isPending && scheduledDate < new Date();
+
+                    const statusStyles = {
+                      pending: isOverdue
+                        ? 'bg-error/10 text-error border border-error/20'
+                        : 'bg-secondary/10 text-secondary border border-secondary/20',
+                      completed: 'bg-on-tertiary-container/10 text-on-tertiary-container border border-on-tertiary-container/20',
+                      cancelled: 'bg-surface-container-high text-on-surface-variant border border-outline-variant',
+                      missed: 'bg-error/10 text-error border border-error/20',
+                    };
+
+                    return (
+                      <div
+                        key={fu.id}
+                        className={`flex items-start gap-4 p-4 rounded-lg border ${
+                          isPending && !isOverdue ? 'bg-surface-container-lowest' : 'bg-surface-container'
+                        }`}
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          isCompleted ? 'bg-on-tertiary-container/10' : isOverdue || isMissed ? 'bg-error/10' : 'bg-secondary/10'
+                        }`}>
+                          <Calendar className={`w-4 h-4 ${
+                            isCompleted ? 'text-on-tertiary-container' : isOverdue || isMissed ? 'text-error' : 'text-secondary'
+                          }`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-body-md text-on-surface font-bold">
+                              {scheduledDate.toLocaleString('en-IN', {
+                                day: '2-digit', month: 'short', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit',
+                              })}
+                            </p>
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${statusStyles[fu.status] || ''}`}>
+                              {isOverdue && isPending ? 'Overdue' : fu.status.charAt(0).toUpperCase() + fu.status.slice(1)}
+                            </span>
+                          </div>
+                          {fu.assigned_to_name && (
+                            <p className="font-body-sm text-on-surface-variant">
+                              Assigned to: <span className="font-bold text-on-surface">{fu.assigned_to_name}</span>
+                            </p>
+                          )}
+                          {fu.created_by_name && (
+                            <p className="font-caption text-on-surface-variant/70 mt-0.5">
+                              Created by {fu.created_by_name} · {formatRelativeTime(fu.created_at)}
+                            </p>
+                          )}
+                          {fu.notes && (
+                            <p className="font-body-sm text-on-surface-variant mt-2 bg-surface-container-lowest rounded px-3 py-2">
+                              {fu.notes}
+                            </p>
+                          )}
+                          {fu.completed_at && (
+                            <p className="font-caption text-on-surface-variant/70 mt-1">
+                              Completed {formatRelativeTime(fu.completed_at)}
+                            </p>
+                          )}
+                        </div>
+                        {isPending && (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => handleRescheduleFollowUp(fu)}
+                              className="p-1.5 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors"
+                              title="Reschedule Follow-Up"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleCompleteFollowUp(fu)}
+                              className="p-1.5 rounded-lg bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors"
+                              title="Mark as Completed"
+                            >
+                              <CircleCheck className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleCancelFollowUp(fu)}
+                              className="p-1.5 rounded-lg bg-error/10 text-error hover:bg-error/20 transition-colors"
+                              title="Cancel Follow-Up"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

@@ -889,8 +889,67 @@ router.post('/vac/click2call', authenticate, [
   handleValidationErrors,
 ], async (req, res) => {
   try {
-    const { phone_number } = req.body;
+    const { phone_number, _log_only, agent_id: frontendAgentId } = req.body;
 
+    // Auto-lookup lead by phone
+    const lead = await lookupLead(db, phone_number);
+
+    // ── LOG-ONLY MODE ──
+    // When _log_only is true, the frontend has already called VAC directly.
+    // Only record the call in the database — do NOT call VAC again.
+    if (_log_only) {
+      // Use the agent_id from the frontend body if available, otherwise resolve from user profile
+      let logAgentId = frontendAgentId || null;
+      if (!logAgentId) {
+        const resolved = await resolveVacAgent(req.user.id);
+        logAgentId = resolved?.agentId || null;
+      }
+
+      const callResult = await db.query(
+        `INSERT INTO telephony_call_logs
+           (caller_phone_number, call_status, direction, user_id, lead_id, intercom_number, raw_payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, caller_phone_number, call_status, direction`,
+        [phone_number, 'initiated', 'outbound', req.user.id, lead?.id || null,
+         logAgentId, { vac_click2call: true, log_only: true, frontend_agent_id: frontendAgentId }]
+      );
+
+      const call = callResult.rows[0];
+      const code = generateCallCode(call.id);
+      await db.query('UPDATE telephony_call_logs SET code = $1 WHERE id = $2', [code, call.id]);
+
+      // Update lead's last_call_date if linked
+      if (lead) {
+        await db.query(
+          'UPDATE leads SET last_call_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+          [lead.id]
+        );
+      }
+
+      logger.info('VAC Click2Call logged (log-only)', {
+        callId: call.id,
+        agent: logAgentId,
+        phone: maskPhone(phone_number),
+        leadId: lead?.id || null,
+        userId: req.user.id,
+      });
+
+      return res.status(201).json({
+        status: 'success',
+        message: 'Call logged successfully',
+        data: {
+          call_id: call.id,
+          code,
+          phone_number,
+          direction: 'outbound',
+          call_status: 'initiated',
+          lead_id: lead?.id || null,
+          lead_name: lead?.name || null,
+        },
+      });
+    }
+
+    // ── FULL VAC CALL MODE ──
     // Check VAC configuration
     if (!vacClient.isConfigured()) {
       return res.status(503).json({
@@ -909,9 +968,6 @@ router.post('/vac/click2call', authenticate, [
         code: 'VAC_AGENT_NOT_SET',
       });
     }
-
-    // Auto-lookup lead by phone
-    const lead = await lookupLead(db, phone_number);
 
     // Call VAC Click2Call API
     const vacResult = await vacClient.click2Call(agent.agentId, phone_number);

@@ -95,4 +95,12 @@ export const usePermissions = () => {
   };
 };
 
+/**
+ * Resolve VAC agent ID for Click2Call.
+ * Prefers vac_agent_id, falls back to intercom_number.
+ * @param {Object} user - The authenticated user object from useAuth()
+ * @returns {string|undefined} The agent ID, or undefined if neither is set
+ */
+export const getVacAgentId = (user) => user?.vac_agent_id || user?.intercom_number;
+
 export default AuthContext;

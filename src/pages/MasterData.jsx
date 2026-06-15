@@ -11,6 +11,7 @@ import api from '../services/api';
 let toastId = 0;
 
 const TABS = [
+  { key: 'salutations', label: 'Salutations', entity: 'salutation' },
   { key: 'lead-sources', label: 'Lead Sources', entity: 'leadSource' },
   { key: 'lead-statuses', label: 'Lead Statuses', entity: 'leadStatus' },
   { key: 'departments', label: 'Departments', entity: 'department' },
@@ -55,6 +56,7 @@ const MasterData = () => {
     try {
       let res;
       switch (activeTab) {
+        case 'salutations': res = await api.getMasterSalutations(); break;
         case 'lead-sources': res = await api.getMasterLeadSources(); break;
         case 'departments': res = await api.getMasterDepartments(); break;
         case 'branches': res = await api.getMasterBranches(); break;
@@ -197,6 +199,7 @@ const MasterData = () => {
     try {
       if (editItem) {
         switch (activeTab) {
+          case 'salutations': await api.updateMasterSalutation(editItem.id, form); break;
           case 'lead-sources': await api.updateMasterLeadSource(editItem.id, form); break;
           case 'priorities': await api.updateMasterPriority(editItem.id, form); break;
           case 'lead-statuses': await api.updateMasterLeadStatus(editItem.id, form); break;
@@ -207,6 +210,7 @@ const MasterData = () => {
         addToast('success', 'Updated', `${form.name} has been updated.`);
       } else {
         switch (activeTab) {
+          case 'salutations': await api.createMasterSalutation(form); break;
           case 'lead-sources': await api.createMasterLeadSource(form); break;
           case 'priorities': await api.createMasterPriority(form); break;
           case 'lead-statuses': await api.createMasterLeadStatus(form); break;
@@ -231,6 +235,7 @@ const MasterData = () => {
   const handleDelete = async () => {
     try {
       switch (activeTab) {
+        case 'salutations': await api.deleteMasterSalutation(deleteConfirm.id); break;
         case 'lead-sources': await api.deleteMasterLeadSource(deleteConfirm.id); break;
         case 'priorities': await api.deleteMasterPriority(deleteConfirm.id); break;
         case 'lead-statuses': await api.deleteMasterLeadStatus(deleteConfirm.id); break;

@@ -8,6 +8,77 @@ const router = express.Router();
 // All master data routes require super_admin
 router.use(authenticate, authorize('super_admin'));
 
+// ─── SALUTATIONS ─────────────────────────────────────────────
+
+router.get('/salutations', async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM master_salutation ORDER BY name');
+    res.json({ status: 'success', data: { items: result.rows } });
+  } catch (err) {
+    logger.error('List salutations error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred: ' + err.message });
+  }
+});
+
+router.post('/salutations', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) {
+      return res.status(400).json({ status: 'error', message: 'Name is required.' });
+    }
+    const dup = await db.query('SELECT id FROM master_salutation WHERE LOWER(name) = LOWER($1)', [name.trim()]);
+    if (dup.rows.length > 0) {
+      return res.status(409).json({ status: 'error', message: `"${name.trim()}" already exists.`, code: 'DUPLICATE' });
+    }
+    const result = await db.query('INSERT INTO master_salutation (name) VALUES ($1) RETURNING *', [name.trim()]);
+    logger.info('Salutation created', { name: name.trim() });
+    res.status(201).json({ status: 'success', data: { item: result.rows[0] } });
+  } catch (err) {
+    logger.error('Create salutation error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred: ' + err.message });
+  }
+});
+
+router.put('/salutations/:id', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) {
+      return res.status(400).json({ status: 'error', message: 'Name is required.' });
+    }
+    const dup = await db.query('SELECT id FROM master_salutation WHERE LOWER(name) = LOWER($1) AND id != $2', [name.trim(), req.params.id]);
+    if (dup.rows.length > 0) {
+      return res.status(409).json({ status: 'error', message: `"${name.trim()}" already exists.`, code: 'DUPLICATE' });
+    }
+    const result = await db.query('UPDATE master_salutation SET name = $1 WHERE id = $2 RETURNING *', [name.trim(), req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Salutation not found.' });
+    }
+    logger.info('Salutation updated', { id: req.params.id, name: name.trim() });
+    res.json({ status: 'success', data: { item: result.rows[0] } });
+  } catch (err) {
+    logger.error('Update salutation error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred: ' + err.message });
+  }
+});
+
+router.delete('/salutations/:id', async (req, res) => {
+  try {
+    const usage = await db.query('SELECT COUNT(*)::int AS count FROM leads WHERE salutation = (SELECT name FROM master_salutation WHERE id = $1)', [req.params.id]);
+    if (usage.rows[0]?.count > 0) {
+      return res.status(409).json({ status: 'error', message: `Cannot delete: this salutation is used by ${usage.rows[0].count} lead(s).`, code: 'IN_USE' });
+    }
+    const result = await db.query('DELETE FROM master_salutation WHERE id = $1 RETURNING *', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Salutation not found.' });
+    }
+    logger.info('Salutation deleted', { id: req.params.id });
+    res.json({ status: 'success', data: { item: result.rows[0] } });
+  } catch (err) {
+    logger.error('Delete salutation error', { error: err.message });
+    res.status(500).json({ status: 'error', message: 'An error occurred: ' + err.message });
+  }
+});
+
 // ─── LEAD SOURCES ────────────────────────────────────────────
 
 router.get('/lead-sources', async (req, res) => {

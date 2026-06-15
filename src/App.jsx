@@ -6,6 +6,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import api from './services/api';
 import Dashboard from './pages/Dashboard';
 import LeadBox from './pages/LeadBox';
+import FollowUps from './pages/FollowUps';
 import Reports from './pages/Reports';
 import Appointments from './pages/Appointments';
 import AppointmentForm from './pages/AppointmentForm';
@@ -104,6 +105,7 @@ function AppRoutes() {
       {/* Protected routes — auth required */}
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/lead-box" element={<ProtectedRoute><LeadBox /></ProtectedRoute>} />
+      <Route path="/follow-ups" element={<ProtectedRoute><FollowUps /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
       <Route path="/appointments" element={<ProtectedRoute><Appointments /></ProtectedRoute>} />
       <Route path="/appointments/new" element={<ProtectedRoute><AppointmentForm /></ProtectedRoute>} />

@@ -156,6 +156,12 @@ const validateChangePassword = [
 
 // Lead validations (for CREATE - name required)
 const validateLead = [
+  body('salutation')
+    .trim()
+    .notEmpty()
+    .withMessage('Salutation is required')
+    .isLength({ max: 50 })
+    .withMessage('Salutation must be less than 50 characters'),
   body('name')
     .trim()
     .notEmpty()
@@ -252,6 +258,11 @@ const validateLead = [
 
 // Lead update validations (for UPDATE - all fields optional)
 const validateLeadUpdate = [
+  body('salutation')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('Salutation must be less than 50 characters'),
   body('name')
     .optional()
     .trim()
