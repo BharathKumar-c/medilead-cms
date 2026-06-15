@@ -31,6 +31,12 @@ server/uploads/*
 server/uploads/recordings/*
 !server/uploads/recordings/sample-call.wav
 
+# CSV exports
+server/exports/
+
+# Development environment files
+server/.env.dev
+
 # Editor directories and files
 .vscode/*
 .clawpatch
