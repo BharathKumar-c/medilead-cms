@@ -133,4 +133,52 @@ router.delete('/:id', validateId, async (req, res) => {
   }
 });
 
+// POST /api/notifications/announce — admin system announcement (super_admin only)
+router.post('/announce', async (req, res) => {
+  try {
+    // Only super_admin can send system announcements
+    if (req.user.role !== 'super_admin') {
+      return res.status(403).json({ status: 'error', message: 'Only administrators can send system announcements.', code: 'FORBIDDEN' });
+    }
+
+    const { title, message, type = 'info' } = req.body;
+    if (!title?.trim()) {
+      return res.status(400).json({ status: 'error', message: 'Title is required.', code: 'VALIDATION_ERROR' });
+    }
+
+    // Get all active users
+    const users = await db.query('SELECT id FROM users WHERE is_active = true');
+    const notifications = [];
+
+    for (const user of users.rows) {
+      const result = await db.query(
+        `INSERT INTO notifications (user_id, type, title, link) VALUES ($1, $2, $3, $4) RETURNING *`,
+        [user.id, type, `[System] ${title}`, null]
+      );
+      notifications.push(result.rows[0]);
+
+      // Emit via Socket.IO for real-time delivery
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`user_${user.id}`).emit('notification', result.rows[0]);
+      }
+    }
+
+    logger.info('System announcement sent', {
+      title,
+      recipientCount: users.rows.length,
+      createdBy: req.user.id,
+    });
+
+    res.status(201).json({
+      status: 'success',
+      message: `Announcement sent to ${users.rows.length} users.`,
+      data: { recipientCount: users.rows.length },
+    });
+  } catch (err) {
+    logger.error('Send announcement error', { error: err.message, userId: req.user.id });
+    res.status(500).json({ status: 'error', message: "An error occurred: " + err.message, code: 'ANNOUNCEMENT_ERROR' });
+  }
+});
+
 module.exports = router;

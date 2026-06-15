@@ -13,6 +13,7 @@ import {pincodeData} from '../data/mockData';
 import api from '../services/api';
 import SlotPicker from '../pages/components/SlotPicker';
 import SearchableSelect from './SearchableSelect';
+import FollowUpModal from './FollowUpModal';
 
 const formatRelativeTime = (dateStr) => {
   if (!dateStr) return '—';
@@ -39,6 +40,7 @@ const formatRelativeTime = (dateStr) => {
 
 const emptyForm = {
   uhid: '',
+  salutation: '',
   name: '',
   dob: '',
   age: '',
@@ -101,10 +103,13 @@ const PatientIntakeForm = ({
   ]);
   const [areas, setAreas] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [salutations, setSalutations] = useState([]);
   const [callHistory, setCallHistory] = useState([]);
   const [loadingCalls, setLoadingCalls] = useState(false);
   const [duplicateLeads, setDuplicateLeads] = useState([]);
   const [loadingDuplicate, setLoadingDuplicate] = useState(false);
+  const [followUpModal, setFollowUpModal] = useState(null);
+  const [followUpBlurTriggered, setFollowUpBlurTriggered] = useState(false);
   const uhidTimerRef = useRef(null);
   const pincodeTimerRef = useRef(null);
   const phoneTimerRef = useRef(null);
@@ -120,6 +125,7 @@ const PatientIntakeForm = ({
             if (res.data.sources) setLeadSources(res.data.sources);
             if (res.data.priorities) setPriorities(res.data.priorities);
             if (res.data.statuses) setStatuses(res.data.statuses);
+            if (res.data.salutations) setSalutations(res.data.salutations);
           }
         })
         .catch(() => {});
@@ -154,6 +160,8 @@ const PatientIntakeForm = ({
       setStep(1);
       setAppointmentData(emptyAppointment);
       setAppointmentErrors({});
+      setFollowUpModal(null);
+      setFollowUpBlurTriggered(false);
       setDoctors([]);
       if (uhidTimerRef.current) {
         clearTimeout(uhidTimerRef.current);
@@ -278,6 +286,7 @@ const PatientIntakeForm = ({
       setFormData((prev) => ({
         ...prev,
         uhid: '',
+        salutation: '',
         name: '',
         dob: '',
         age: '',
@@ -300,6 +309,7 @@ const PatientIntakeForm = ({
         // Clear auto-filled fields before lookup
         setFormData((prev) => ({
           ...prev,
+          salutation: '',
           name: '',
           dob: '',
           age: '',
@@ -319,6 +329,7 @@ const PatientIntakeForm = ({
             const p = res.data.patient;
             setFormData((prev) => ({
               ...prev,
+              salutation: p.salutation || '',
               name: p.name || '',
               dob: p.dob ? p.dob.split('T')[0] : '',
               contactNumber: p.phone || '',
@@ -409,6 +420,8 @@ const PatientIntakeForm = ({
 
   const validate = () => {
     const errs = {};
+    // Salutation: mandatory
+    if (!formData.salutation) errs.salutation = 'Salutation is required';
     // Patient Name: mandatory, min 2 chars, only valid name characters
     if (!formData.name.trim()) errs.name = 'Patient name is required';
     else if (formData.name.trim().length < 2)
@@ -436,6 +449,7 @@ const PatientIntakeForm = ({
   };
 
   const buildLeadPayload = () => ({
+    salutation: formData.salutation,
     name: formData.name,
     uhid: formData.uhid,
     phone: formData.contactNumber,
@@ -466,6 +480,42 @@ const PatientIntakeForm = ({
       return;
     }
     setStep(2);
+  };
+
+  // Save lead and optionally trigger follow-up modal
+  const saveLeadAndSchedule = async (withFollowUp) => {
+    const errs = validate();
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      const firstKey = Object.keys(errs)[0];
+      const el = document.querySelector(`[data-field="${firstKey}"]`);
+      if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const leadRes = await api.createLead(buildLeadPayload());
+      const createdLead = leadRes?.data?.lead;
+      if (onSuccess) onSuccess(`${formData.name} has been added to the patient list.`);
+      if (withFollowUp && createdLead) {
+        setFollowUpModal({
+          id: createdLead.id,
+          name: formData.name,
+          code: createdLead.code || `L${createdLead.id}`,
+          assignedTo: createdLead.assigned_to_name || '',
+          assignedToId: createdLead.assigned_to || '',
+        });
+      } else {
+        setFormData(emptyForm);
+        setErrors({});
+        onClose();
+        window.dispatchEvent(new Event('leadCreated'));
+      }
+    } catch (err) {
+      if (onError) onError(err.message || 'Failed to save patient. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleStep2Submit = async () => {
@@ -515,33 +565,15 @@ const PatientIntakeForm = ({
     }
   };
 
-  const handleSubmit = async () => {
-    // For non-appointment statuses, submit lead directly
-    const errs = validate();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
-      const firstKey = Object.keys(errs)[0];
-      const el = document.querySelector(`[data-field="${firstKey}"]`);
-      if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await api.createLead(buildLeadPayload());
-      if (onSuccess)
-        onSuccess(`${formData.name} has been added to the patient list.`);
-      setFormData(emptyForm);
-      setErrors({});
-      onClose();
-      window.dispatchEvent(new Event('leadCreated'));
-    } catch (err) {
-      if (onError)
-        onError(err.message || 'Failed to save patient. Please try again.');
-    } finally {
-      setSubmitting(false);
+  // On blur of status field: if Follow-up selected, auto-save and show scheduling popup
+  const handleStatusBlur = () => {
+    if (formData.status === 'Follow-up' && !followUpBlurTriggered) {
+      setFollowUpBlurTriggered(true);
+      saveLeadAndSchedule(true);
     }
   };
+
+  const handleSubmit = () => saveLeadAndSchedule(false);
 
   if (!isOpen) return null;
 
@@ -602,18 +634,46 @@ const PatientIntakeForm = ({
             <ErrorMsg field="uhid" />
           </div>
 
-          {/* Patient Name */}
+          {/* Patient Name with Salutation */}
           <div data-field="name">
             <label className="flex items-center gap-1 font-caption text-on-surface-variant uppercase mb-1.5 leading-none">
               Patient Name <span className="text-error text-base font-bold leading-none">*</span>
             </label>
-            <input
-              type="text"
-              placeholder="Enter full name"
-              value={formData.name}
-              onChange={(e) => setField('name', e.target.value)}
-              className={fieldClass('name')}
-            />
+            <div className="flex">
+              <div className="relative w-[20%]">
+                <select
+                  value={formData.salutation}
+                  onChange={(e) => setField('salutation', e.target.value)}
+                  className={`w-full h-full px-4 py-3 border rounded-l-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:ring-2 transition-all appearance-none pr-7 ${
+                    errors.salutation
+                      ? 'border-error focus:border-error focus:ring-error/20'
+                      : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
+                  } border-r-0`}
+                >
+                  <option value="">Title</option>
+                  {salutations.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center">
+                  <svg className="w-4 h-4 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+              <input
+                type="text"
+                placeholder="Enter full name"
+                value={formData.name}
+                onChange={(e) => setField('name', e.target.value)}
+                className={`w-[80%] px-4 py-3 border rounded-r-lg font-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:ring-2 transition-all placeholder:text-on-surface-variant/50 ${
+                  errors.name
+                    ? 'border-error focus:border-error focus:ring-error/20'
+                    : 'border-outline-variant focus:border-secondary focus:ring-secondary/20'
+                }`}
+              />
+            </div>
+            {errors.salutation && <p className="font-caption text-error mt-1">{errors.salutation}</p>}
             <ErrorMsg field="name" />
           </div>
 
@@ -673,6 +733,7 @@ const PatientIntakeForm = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <SearchableSelect
               label="Lead Source"
+              required
               options={leadSources}
               value={formData.leadSource}
               onChange={(val) => setField('leadSource', val)}
@@ -681,6 +742,7 @@ const PatientIntakeForm = ({
             />
             <SearchableSelect
               label="Priority"
+              required
               options={priorities}
               value={formData.priority}
               onChange={(val) => setField('priority', val)}
@@ -689,15 +751,17 @@ const PatientIntakeForm = ({
           </div>
 
           {/* Status */}
-          <SearchableSelect
-            label="Status"
-            required
-            options={statuses}
-            value={formData.status}
-            onChange={(val) => setField('status', val)}
-            placeholder="Select status"
-            error={errors.status}
-          />
+          <div onBlur={handleStatusBlur} tabIndex={-1} className="outline-none">
+            <SearchableSelect
+              label="Status"
+              required
+              options={statuses}
+              value={formData.status}
+              onChange={(val) => { setField('status', val); if (val !== 'Follow-up') setFollowUpBlurTriggered(false); }}
+              placeholder="Select status"
+              error={errors.status}
+            />
+          </div>
 
           {/* Contact Numbers */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1164,7 +1228,22 @@ const PatientIntakeForm = ({
             {step === 2 ? 'Cancel' : 'Discard Changes'}
           </button>
           {step === 1 ? (
-            formData.status === 'Appointment Booked' ? (
+            formData.status === 'Follow-up' ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => saveLeadAndSchedule(false)}
+                  disabled={submitting}
+                  className="px-5 py-2.5 border border-outline-variant rounded-lg font-body-md text-on-surface hover:bg-surface-container transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  {submitting ? 'Saving...' : 'Save Without Follow-Up'}
+                </button>
+                <button
+                  onClick={() => saveLeadAndSchedule(true)}
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-on-tertiary-container text-white rounded-lg font-body-md font-bold hover:opacity-90 active:scale-95 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                  {submitting ? 'Saving...' : 'Save & Schedule Follow-Up'}
+                </button>
+              </div>
+            ) : formData.status === 'Appointment Booked' ? (
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleSubmit}
@@ -1196,6 +1275,31 @@ const PatientIntakeForm = ({
           )}
         </div>
       </div>
+      {/* Follow-Up Scheduling Modal */}
+      {followUpModal && (
+        <FollowUpModal
+          isOpen={!!followUpModal}
+          onClose={() => {
+            setFollowUpModal(null);
+            setFormData(emptyForm);
+            setErrors({});
+            onClose();
+            window.dispatchEvent(new Event('leadCreated'));
+          }}
+          lead={followUpModal}
+          onSuccess={(msg) => {
+            setFollowUpModal(null);
+            setFormData(emptyForm);
+            setErrors({});
+            if (onSuccess) onSuccess(msg);
+            onClose();
+            window.dispatchEvent(new Event('leadCreated'));
+          }}
+          onError={(msg) => {
+            if (onError) onError(msg);
+          }}
+        />
+      )}
     </div>
   );
 };

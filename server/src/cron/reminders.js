@@ -31,7 +31,7 @@ function startFollowUpReminders(io) {
             user_id: lead.assigned_to,
             type: 'warning',
             title: `Follow-up overdue: ${lead.name} — last contacted ${Math.floor((Date.now() - new Date(lead.last_call_date)) / 86400000)} days ago`,
-            link: '/lead-box',
+            link: `/lead-box?viewLead=${lead.id}`,
           });
         }
       }
@@ -57,7 +57,7 @@ function startFollowUpReminders(io) {
             user_id: lead.assigned_to,
             type: 'urgent',
             title: `New lead untouched for 2+ days: ${lead.name}`,
-            link: '/lead-box',
+            link: `/lead-box?viewLead=${lead.id}`,
           });
         }
       }

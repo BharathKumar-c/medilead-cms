@@ -119,7 +119,7 @@ router.post('/login', validateLogin, async (req, res) => {
     const { email, password } = req.body;
 
     const result = await db.query(
-      'SELECT id, name, email, password_hash, role, avatar_url, specialty, phone FROM users WHERE email = $1 AND is_active = true',
+      'SELECT id, name, email, password_hash, role, avatar_url, specialty, phone, intercom_number, vac_agent_id FROM users WHERE email = $1 AND is_active = true',
       [email]
     );
 

@@ -22,7 +22,7 @@ router.get('/', validateLeadQuery, async (req, res) => {
 
     const today = new Date().toISOString().split('T')[0];
 
-    // View filters: today, my, all
+    // View filters: today, my, all, followups, my-followups, today-followups
     if (view === 'today') {
       where.push(`DATE(l.created_at) = $${paramIndex}`);
       params.push(today);
@@ -34,6 +34,17 @@ router.get('/', validateLeadQuery, async (req, res) => {
       where.push(`l.created_by = $${paramIndex}`);
       params.push(req.user.id);
       paramIndex++;
+    } else if (view === 'followups') {
+      // All leads with status 'Follow-up' that have pending follow-ups
+      where.push(`l.id IN (SELECT lead_id FROM follow_ups WHERE status = 'pending')`);
+    } else if (view === 'my-followups') {
+      // Follow-ups assigned to the logged-in user
+      where.push(`l.id IN (SELECT lead_id FROM follow_ups WHERE status = 'pending' AND assigned_to = $${paramIndex})`);
+      params.push(req.user.id);
+      paramIndex++;
+    } else if (view === 'today-followups') {
+      // Follow-ups scheduled for today
+      where.push(`l.id IN (SELECT lead_id FROM follow_ups WHERE status = 'pending' AND DATE(scheduled_at) = CURRENT_DATE)`);
     }
     // view === 'all' or no view: no extra filter — show ALL leads
 
@@ -253,7 +264,7 @@ router.put('/:id/assign', async (req, res) => {
         user_id: assigned_to,
         type: 'info',
         title: `Lead ${result.rows[0].code || result.rows[0].name} assigned to you`,
-        link: '/lead-box',
+        link: `/lead-box?viewLead=${req.params.id}`,
       });
     }
     res.json({ status: 'success', data: { lead: result.rows[0] } });
@@ -263,7 +274,7 @@ router.put('/:id/assign', async (req, res) => {
   }
 });
 
-// GET /api/leads/master-data — dropdown data (sources, priorities, statuses)
+// GET /api/leads/master-data — dropdown data (sources, priorities, statuses, salutations)
 router.get('/master-data', async (req, res) => {
   try {
     const [sources, priorities, statuses] = await Promise.all([
@@ -272,12 +283,22 @@ router.get('/master-data', async (req, res) => {
       db.query('SELECT name FROM master_lead_status ORDER BY name'),
     ]);
 
+    // Salutations query is separate to gracefully handle missing table
+    let salutationNames = [];
+    try {
+      const salutations = await db.query('SELECT name FROM master_salutation ORDER BY name');
+      salutationNames = salutations.rows.map(r => r.name);
+    } catch (_) {
+      // Table may not exist yet if migration hasn't run
+    }
+
     res.json({
       status: 'success',
       data: {
         sources: sources.rows.map(r => r.name),
         priorities: priorities.rows.map(r => r.name),
         statuses: statuses.rows.map(r => r.name),
+        salutations: salutationNames,
       },
     });
   } catch (err) {
@@ -359,7 +380,7 @@ router.get('/pincode/:pincode', async (req, res) => {
 router.get('/uhid/:uhid', async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, name, uhid, phone, alternate_contact, email, dob, address, area, pincode, city, state, country
+      `SELECT id, salutation, name, uhid, phone, alternate_contact, email, dob, address, area, pincode, city, state, country
        FROM leads WHERE uhid = $1`,
       [req.params.uhid]
     );
@@ -516,9 +537,12 @@ router.get('/departments', async (req, res) => {
 router.get('/:id', validateId, async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT l.*, u.name as assigned_to_name, mb.name as branch_name
+      `SELECT l.*, u.name as assigned_to_name, mb.name as branch_name,
+              creator.name as created_by_name, assigner.name as assigned_by_name
        FROM leads l
        LEFT JOIN users u ON l.assigned_to = u.id
+       LEFT JOIN users creator ON l.created_by = creator.id
+       LEFT JOIN users assigner ON l.assigned_by = assigner.id
        LEFT JOIN master_branches mb ON l.branch_id = mb.id
        WHERE l.id = $1`,
       [req.params.id]
@@ -539,7 +563,7 @@ router.get('/:id', validateId, async (req, res) => {
 router.post('/', validateLead, async (req, res) => {
   try {
     const {
-      name, uhid, phone, alternate_contact, email, dob, gender, address, area,
+      name, salutation, uhid, phone, alternate_contact, email, dob, gender, address, area,
       pincode, city, state, country, lead_source, status, priority, clinical_remarks,
     } = req.body;
     const branch_id = req.body.branch_id || null;
@@ -547,52 +571,35 @@ router.post('/', validateLead, async (req, res) => {
     // Generate initials from name
     const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-    // Check for duplicate phone number
-    if (phone) {
-      const existing = await db.query('SELECT id, name, phone FROM leads WHERE phone = $1', [phone]);
+    // Check for duplicate: same name AND phone number
+    if (phone && name) {
+      const existing = await db.query(
+        'SELECT id, name, phone FROM leads WHERE phone = $1 AND LOWER(TRIM(name)) = LOWER(TRIM($2))',
+        [phone, name]
+      );
       if (existing.rows.length > 0) {
-        logger.warn('Duplicate lead attempt', { phone, existingLeadId: existing.rows[0].id });
+        logger.warn('Duplicate lead attempt', { phone, name, existingLeadId: existing.rows[0].id });
         return res.status(409).json({
           status: 'error',
-          message: `A lead with phone number ${phone} already exists (${existing.rows[0].name}).`,
-          code: 'DUPLICATE_PHONE',
+          message: `A lead with the same name "${name}" and phone number ${phone} already exists.`,
+          code: 'DUPLICATE_LEAD',
           existingLead: existing.rows[0],
         });
       }
     }
 
-    // Auto-assign to a telecaller (round-robin)
-    let assignedTo = req.body.assigned_to || null;
-    if (!assignedTo) {
-      const telecallers = await db.query(
-        "SELECT id FROM users WHERE role = 'telecaller' AND is_active = true ORDER BY id"
-      );
-      if (telecallers.rows.length > 0) {
-        // Simple round-robin: assign to telecaller with fewest active leads
-        const leastBusy = await db.query(`
-          SELECT u.id, COUNT(l.id) as lead_count
-          FROM users u
-          LEFT JOIN leads l ON l.assigned_to = u.id AND l.status NOT IN ('Closed', 'Rejected')
-          WHERE u.role = 'telecaller' AND u.is_active = true
-          GROUP BY u.id
-          ORDER BY lead_count ASC
-          LIMIT 1
-        `);
-        if (leastBusy.rows.length > 0) {
-          assignedTo = leastBusy.rows[0].id;
-        }
-      }
-    }
+    // Assign to the creator by default (unless explicitly assigned to someone else)
+    let assignedTo = req.body.assigned_to || req.user.id;
 
     const follow_up_date = req.body.follow_up_date || null;
 
     const result = await db.query(
-      `INSERT INTO leads (name, initials, uhid, phone, alternate_contact, email, dob, gender, address, area,
+      `INSERT INTO leads (salutation, name, initials, uhid, phone, alternate_contact, email, dob, gender, address, area,
         pincode, city, state, country, lead_source, status, priority, assigned_to, branch_id, clinical_remarks,
         created_by, follow_up_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
        RETURNING *`,
-      [name, initials, uhid, phone, alternate_contact, email, dob || null, gender || null, address, area || null,
+      [salutation || null, name, initials, uhid, phone, alternate_contact, email, dob || null, gender || null, address, area || null,
         pincode, city, state, country, lead_source, status || 'New', priority || 'Medium', assignedTo, branch_id, clinical_remarks,
         req.user.id, follow_up_date]
     );
@@ -631,7 +638,7 @@ router.post('/', validateLead, async (req, res) => {
         user_id: assignedTo,
         type: 'info',
         title: `New lead assigned: ${name}`,
-        link: '/lead-box',
+        link: `/lead-box?viewLead=${lead.id}`,
       });
     }
 
@@ -648,7 +655,7 @@ router.post('/', validateLead, async (req, res) => {
 router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
   try {
     const {
-      name, uhid, phone, alternate_contact, email, dob, gender, address, area,
+      name, salutation, uhid, phone, alternate_contact, email, dob, gender, address, area,
       pincode, city, state, country, lead_source, status, priority, assigned_to, clinical_remarks, follow_up_date,
     } = req.body;
     const branch_id = req.body.branch_id || null;
@@ -661,44 +668,49 @@ router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
 
     const oldLead = existing.rows[0];
 
-    // Check for duplicate phone if phone is being changed
+    // Check for duplicate name+phone if phone is being changed
     if (phone && phone !== oldLead.phone) {
-      const duplicate = await db.query('SELECT id, name FROM leads WHERE phone = $1 AND id != $2', [phone, req.params.id]);
+      const leadName = name || oldLead.name;
+      const duplicate = await db.query(
+        'SELECT id, name FROM leads WHERE phone = $1 AND LOWER(TRIM(name)) = LOWER(TRIM($2)) AND id != $3',
+        [phone, leadName, req.params.id]
+      );
       if (duplicate.rows.length > 0) {
         return res.status(409).json({
           status: 'error',
-          message: `Phone number ${phone} is already used by ${duplicate.rows[0].name}.`,
-          code: 'DUPLICATE_PHONE',
+          message: `A lead with the same name "${leadName}" and phone number ${phone} already exists.`,
+          code: 'DUPLICATE_LEAD',
         });
       }
     }
 
     const result = await db.query(
       `UPDATE leads SET
-        name = COALESCE($1, name),
-        uhid = COALESCE($2, uhid),
-        phone = COALESCE($3, phone),
-        alternate_contact = COALESCE($4, alternate_contact),
-        email = COALESCE($5, email),
-        dob = COALESCE($6, dob),
-        gender = COALESCE($7, gender),
-        address = COALESCE($8, address),
-        area = COALESCE($9, area),
-        pincode = COALESCE($10, pincode),
-        city = COALESCE($11, city),
-        state = COALESCE($12, state),
-        country = COALESCE($13, country),
-        lead_source = COALESCE($14, lead_source),
-        status = COALESCE($15, status),
-        priority = COALESCE($16, priority),
-        assigned_to = COALESCE($17, assigned_to),
-        branch_id = COALESCE($18, branch_id),
-        clinical_remarks = COALESCE($19, clinical_remarks),
-        follow_up_date = COALESCE($20, follow_up_date),
+        salutation = COALESCE($1, salutation),
+        name = COALESCE($2, name),
+        uhid = COALESCE($3, uhid),
+        phone = COALESCE($4, phone),
+        alternate_contact = COALESCE($5, alternate_contact),
+        email = COALESCE($6, email),
+        dob = COALESCE($7, dob),
+        gender = COALESCE($8, gender),
+        address = COALESCE($9, address),
+        area = COALESCE($10, area),
+        pincode = COALESCE($11, pincode),
+        city = COALESCE($12, city),
+        state = COALESCE($13, state),
+        country = COALESCE($14, country),
+        lead_source = COALESCE($15, lead_source),
+        status = COALESCE($16, status),
+        priority = COALESCE($17, priority),
+        assigned_to = COALESCE($18, assigned_to),
+        branch_id = COALESCE($19, branch_id),
+        clinical_remarks = COALESCE($20, clinical_remarks),
+        follow_up_date = COALESCE($21, follow_up_date),
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $21
+       WHERE id = $22
        RETURNING *`,
-      [name, uhid, phone, alternate_contact, email, dob || null, gender || null, address, area,
+      [salutation, name, uhid, phone, alternate_contact, email, dob || null, gender || null, address, area,
         pincode, city, state, country, lead_source, status, priority, assigned_to, branch_id, clinical_remarks,
         follow_up_date || null, req.params.id]
     );
@@ -740,11 +752,23 @@ router.put('/:id', validateId, validateLeadUpdate, async (req, res) => {
     if (status && status !== oldLead.status) {
       const io = req.app.get('io');
       if (status === 'Follow-up' && lead.assigned_to) {
+        // If follow_up_date is provided, create a follow-up record
+        if (follow_up_date) {
+          try {
+            await db.query(
+              `INSERT INTO follow_ups (lead_id, assigned_to, scheduled_at, notes, created_by)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [lead.id, lead.assigned_to, follow_up_date, req.body.follow_up_notes || null, req.user.id]
+            );
+          } catch (fuErr) {
+            logger.warn('Failed to create follow-up record', { leadId: lead.id, error: fuErr.message });
+          }
+        }
         await notify(io, {
           user_id: lead.assigned_to,
           type: 'info',
           title: `Lead ${name} moved to Follow-up`,
-          link: '/lead-box',
+          link: `/lead-box?viewLead=${lead.id}`,
         });
       }
     }

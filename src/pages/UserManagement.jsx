@@ -72,6 +72,7 @@ const UserManagement = () => {
     (u.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (u.employee_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (u.intercom_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.vac_agent_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (u.department || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (u.role || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -126,7 +127,7 @@ const UserManagement = () => {
         {/* Users Table */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
+            <table className="w-full min-w-[1050px]">
               <thead>
                 <tr className="bg-surface-container-high">
                   <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">ID</th>
@@ -134,6 +135,7 @@ const UserManagement = () => {
                   <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Name</th>
                   <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Email</th>
                   <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Intercom</th>
+                  <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">VAC Agent</th>
                   <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Department</th>
                   <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Role</th>
                   <th className="px-4 py-3 text-left font-label-caps text-on-surface-variant">Status</th>
@@ -142,9 +144,9 @@ const UserManagement = () => {
               </thead>
               <tbody className="zebra-striping">
                 {loading ? (
-                  <tr><td colSpan={9} className="px-4 py-12 text-center font-body-md text-on-surface-variant">Loading users...</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-12 text-center font-body-md text-on-surface-variant">Loading users...</td></tr>
                 ) : paginatedUsers.length === 0 ? (
-                  <tr><td colSpan={9} className="px-4 py-12 text-center font-body-md text-on-surface-variant">No users found.</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-12 text-center font-body-md text-on-surface-variant">No users found.</td></tr>
                 ) : paginatedUsers.map((user) => (
                   <tr key={user.id} className="border-t border-outline-variant/50 hover:bg-surface-container/50 transition-colors">
                     <td className="px-4 py-3 font-data-tabular text-on-surface-variant">#{user.id}</td>
@@ -165,6 +167,15 @@ const UserManagement = () => {
                       {user.intercom_number ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary font-caption font-bold text-xs">
                           <Phone className="w-3 h-3" /> {user.intercom_number}
+                        </span>
+                      ) : (
+                        <span className="font-body-md text-on-surface-variant">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {user.vac_agent_id ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-tertiary/10 text-tertiary font-caption font-bold text-xs">
+                          {user.vac_agent_id}
                         </span>
                       ) : (
                         <span className="font-body-md text-on-surface-variant">—</span>
@@ -305,6 +316,7 @@ const UserFormPanel = ({ user, departments, users, onClose, onSave, onError, onS
     department: user?.department || '',
     designation: user?.designation || '',
     intercom_number: user?.intercom_number || '',
+    vac_agent_id: user?.vac_agent_id || '',
     date_of_birth: user?.date_of_birth ? user.date_of_birth.slice(0, 10) : '',
     phone: user?.phone || '',
     user_agent: user?.user_agent || '',
@@ -398,6 +410,7 @@ const UserFormPanel = ({ user, departments, users, onClose, onSave, onError, onS
         department: form.department || null,
         designation: form.designation || null,
         intercom_number: form.intercom_number || null,
+        vac_agent_id: form.vac_agent_id || null,
         date_of_birth: form.date_of_birth || null,
         allowed_departments: allowedDepartments.length > 0 ? allowedDepartments : null,
         phone: form.phone || null,
@@ -537,6 +550,14 @@ const UserFormPanel = ({ user, departments, users, onClose, onSave, onError, onS
               placeholder="e.g. 101, 102, 201"
               className={inputClass('intercom_number', fieldErrors)} />
             <p className="mt-1.5 text-xs text-on-surface-variant">Calls will be routed based on this intercom number. Each agent must have a unique intercom.</p>
+          </FormField>
+
+          {/* Row: VAC Agent ID */}
+          <FormField label="VAC Agent ID" error={fieldErrors.vac_agent_id}>
+            <input type="text" value={form.vac_agent_id} onChange={(e) => setField('vac_agent_id', e.target.value)}
+              placeholder="e.g. 1001, 1002"
+              className={inputClass('vac_agent_id', fieldErrors)} />
+            <p className="mt-1.5 text-xs text-on-surface-variant">VAC Dialer agent ID for Click2Call routing. If not set, the intercom number will be used as fallback.</p>
           </FormField>
 
           {/* Row: User Agent */}

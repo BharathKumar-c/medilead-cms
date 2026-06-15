@@ -10,6 +10,7 @@ import PatientIntakeForm from './PatientIntakeForm';
 import AudioPlayerModal from './AudioPlayerModal';
 import Toast from './Toast';
 import api from '../services/api';
+import { useAuth, getVacAgentId } from '../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const resolveRecordingUrl = (url) => {
@@ -64,6 +65,7 @@ const directionIcons = {
 };
 
 const CallLogsTable = () => {
+  const { user } = useAuth();
   const [calls, setCalls] = useState([]);
   const [stats, setStats] = useState({ totalToday: 0, missedToday: 0, avgDuration: 0, inbound: 0, outbound: 0 });
   const [loading, setLoading] = useState(true);
@@ -133,6 +135,11 @@ const CallLogsTable = () => {
   const totalPages = Math.ceil(filteredCalls.length / pageSize);
 
   const handleCall = async (phoneNumber) => {
+    const agentId = getVacAgentId(user);
+    if (!agentId) {
+      addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
+      return;
+    }
     try {
       const result = await api.vacClick2Call(phoneNumber);
       if (result?.status === 'success') {

@@ -9,10 +9,12 @@ import Pagination from '../components/Pagination';
 import AppointmentFormSlideOver from '../components/AppointmentFormSlideOver';
 import Toast from '../components/Toast';
 import api from '../services/api';
+import { useAuth, getVacAgentId } from '../context/AuthContext';
 
 let toastId = 0;
 
 const Appointments = () => {
+  const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [appointments, setAppointments] = useState([]);
@@ -46,6 +48,11 @@ const Appointments = () => {
 
   const handleCallPatient = async (phoneNumber) => {
     if (!phoneNumber) return;
+    const agentId = getVacAgentId(user);
+    if (!agentId) {
+      addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
+      return;
+    }
     try {
       const result = await api.vacClick2Call(phoneNumber);
       if (result?.status === 'success') {

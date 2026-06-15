@@ -158,6 +158,21 @@ const createTables = async () => {
       );
     `);
 
+    // Salutations master table
+    await client.query(`
+      CREATE TABLE master_salutation (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(50) UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Seed default salutations
+    await client.query(`
+      INSERT INTO master_salutation (name) VALUES ('Mr.'), ('Mrs.'), ('Miss'), ('Master'), ('Dr.'), ('Ms.')
+      ON CONFLICT DO NOTHING;
+    `);
+
     // Priorities master table
     await client.query(`
       CREATE TABLE master_priority (
@@ -208,6 +223,7 @@ const createTables = async () => {
     await client.query(`
       CREATE TABLE leads (
         id SERIAL PRIMARY KEY,
+        salutation VARCHAR(50),
         name VARCHAR(255) NOT NULL,
         initials VARCHAR(10),
         code VARCHAR(50),
