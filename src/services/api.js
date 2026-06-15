@@ -262,9 +262,12 @@ class ApiService {
     return this.request('/calls/telephony/stats');
   }
 
-  // ─── VAC Dialer Integration ───
+  // ─── VAC Dialer Integration (routed through backend proxy) ───
 
   async vacClick2Call(phoneNumber) {
+    // The backend proxy handles the actual VAC API call (avoids CORS issues
+    // from direct browser→VAC-server requests). The backend resolves the
+    // agent ID from the authenticated user's profile.
     return this.request('/calls/vac/click2call', {
       method: 'POST',
       body: { phone_number: phoneNumber },
@@ -272,6 +275,7 @@ class ApiService {
   }
 
   async vacHangup(dispo) {
+    // Routed through backend proxy (same CORS reason as vacClick2Call)
     return this.request('/calls/vac/hangup', {
       method: 'POST',
       body: { dispo: dispo || 'A' },
@@ -386,6 +390,12 @@ class ApiService {
   }
 
   // ── Master Data CRUD ──
+
+  // Salutations
+  async getMasterSalutations() { return this.request('/masters/salutations'); }
+  async createMasterSalutation(data) { return this.request('/masters/salutations', { method: 'POST', body: data }); }
+  async updateMasterSalutation(id, data) { return this.request(`/masters/salutations/${id}`, { method: 'PUT', body: data }); }
+  async deleteMasterSalutation(id) { return this.request(`/masters/salutations/${id}`, { method: 'DELETE' }); }
 
   // Lead Sources
   async getMasterLeadSources() { return this.request('/masters/lead-sources'); }
@@ -610,6 +620,36 @@ class ApiService {
     return res.blob();
   }
 
+  // Follow-Ups
+  async getFollowUps(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/follow-ups${query ? `?${query}` : ''}`);
+  }
+
+  async getFollowUpCounts() {
+    return this.request('/follow-ups/counts');
+  }
+
+  async getFollowUpsByLead(leadId) {
+    return this.request(`/follow-ups/lead/${leadId}`);
+  }
+
+  async createFollowUp(data) {
+    return this.request('/follow-ups', { method: 'POST', body: data });
+  }
+
+  async updateFollowUp(id, data) {
+    return this.request(`/follow-ups/${id}`, { method: 'PUT', body: data });
+  }
+
+  async completeFollowUp(id, leadStatus) {
+    return this.request(`/follow-ups/${id}/complete`, { method: 'PUT', body: { lead_status: leadStatus } });
+  }
+
+  async cancelFollowUp(id) {
+    return this.request(`/follow-ups/${id}`, { method: 'DELETE' });
+  }
+
   // Notifications
   async getNotifications(unreadOnly = false) {
     const query = unreadOnly ? '?unread_only=true' : '';
@@ -638,6 +678,14 @@ class ApiService {
   async deleteNotification(id) {
     return this.request(`/notifications/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  // System Announcements
+  async sendAnnouncement(data) {
+    return this.request('/notifications/announce', {
+      method: 'POST',
+      body: data,
     });
   }
 
