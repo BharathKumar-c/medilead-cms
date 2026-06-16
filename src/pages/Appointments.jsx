@@ -10,6 +10,7 @@ import AppointmentFormSlideOver from '../components/AppointmentFormSlideOver';
 import Toast from '../components/Toast';
 import api from '../services/api';
 import { useAuth, getVacAgentId } from '../context/AuthContext';
+import { dispatchOutgoingCallPending } from '../utils/callPopup';
 
 let toastId = 0;
 
@@ -53,23 +54,8 @@ const Appointments = () => {
       addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
       return;
     }
-    try {
-      const result = await api.vacClick2Call(phoneNumber);
-      if (result?.status === 'success') {
-        addToast('success', 'Call Initiated', `Calling ${phoneNumber}...`);
-      }
-    } catch (err) {
-      const code = err.code || '';
-      if (code === 'VAC_AGENT_NOT_LOGGED_IN') {
-        addToast('warning', 'Agent Not Logged In', 'Please log into the VAC Dialer first, then try again.');
-      } else if (code === 'VAC_AGENT_NOT_SET') {
-        addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
-      } else if (code === 'VAC_NOT_CONFIGURED') {
-        addToast('error', 'VAC Not Configured', 'VAC Dialer integration is not configured on this server.');
-      } else {
-        addToast('error', 'Call Failed', err.message || 'Could not initiate call. Please try again.');
-      }
-    }
+    // Show popup in 'ready' state — API fires when user clicks the green Call button
+    dispatchOutgoingCallPending({ phoneNumber, agentId });
   };
 
   useEffect(() => {

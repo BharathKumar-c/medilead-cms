@@ -11,6 +11,7 @@ import AudioPlayerModal from './AudioPlayerModal';
 import Toast from './Toast';
 import api from '../services/api';
 import { useAuth, getVacAgentId } from '../context/AuthContext';
+import { dispatchOutgoingCallPending } from '../utils/callPopup';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const resolveRecordingUrl = (url) => {
@@ -134,29 +135,14 @@ const CallLogsTable = () => {
   const paginatedCalls = filteredCalls.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const totalPages = Math.ceil(filteredCalls.length / pageSize);
 
-  const handleCall = async (phoneNumber) => {
+  const handleCall = async (phoneNumber, leadData = null) => {
     const agentId = getVacAgentId(user);
     if (!agentId) {
       addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
       return;
     }
-    try {
-      const result = await api.vacClick2Call(phoneNumber);
-      if (result?.status === 'success') {
-        addToast('success', 'Call Initiated', `Calling ${phoneNumber}...`);
-      }
-    } catch (err) {
-      const code = err.code || '';
-      if (code === 'VAC_AGENT_NOT_LOGGED_IN') {
-        addToast('warning', 'Agent Not Logged In', 'Please log into the VAC Dialer first, then try again.');
-      } else if (code === 'VAC_AGENT_NOT_SET') {
-        addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
-      } else if (code === 'VAC_NOT_CONFIGURED') {
-        addToast('error', 'VAC Not Configured', 'VAC Dialer integration is not configured on this server.');
-      } else {
-        addToast('error', 'Call Failed', err.message || 'Could not initiate call. Please try again.');
-      }
-    }
+    // Show popup in 'ready' state — API fires when user clicks the green Call button
+    dispatchOutgoingCallPending({ phoneNumber, agentId, leadData });
   };
 
   const handleCreateLead = (phoneNumber) => {
@@ -275,7 +261,7 @@ const CallLogsTable = () => {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleCall(call.caller_number || call.caller_phone_number)}
+                          onClick={() => handleCall(call.caller_number || call.caller_phone_number, call.lead_id ? { id: call.lead_id, name: call.lead_name, phone: call.lead_phone } : null)}
                           className="p-2 bg-on-tertiary-container/10 rounded-lg text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors"
                           title={`Call ${call.caller_number || call.caller_phone_number}`}
                         >

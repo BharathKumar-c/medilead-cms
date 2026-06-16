@@ -6,6 +6,123 @@ const methodColors = {
   PUT: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300' },
 };
 
+const vacWebhookEndpoints = [
+  {
+    method: 'POST', path: '/api/calls/vac/webhook/popup', auth: 'X-VAC-Secret',
+    summary: 'VAC Call Popup webhook — triggered when a call reaches the agent\'s extension (ring time)',
+    statuses: { 200: 'Popup processed', 400: 'Missing fields', 403: 'Invalid secret', 500: 'Server error' },
+    body: {
+      phone_number: 'string (required — customer phone number, e.g. 9876543210)',
+      user: 'string (required — VAC agent extension/ID, e.g. 1001)',
+      extension: 'string (alternative — VAC PBX sends "extension" instead of "user")',
+    },
+    response: {
+      success: true,
+      message: 'Call popup processed',
+      call_id: 'uuid (our internal call record ID)',
+    },
+    note: 'Auth via X-VAC-Secret header (static shared secret). Looks up CMS user by vac_agent_id or intercom_number. If no user matches, broadcasts to ALL users with calls:receive_sip_events permission (fallback). Emits Socket.IO incoming-call + call-event events with enriched lead info. This is the PRIMARY webhook — configure your VAC Dialer to call this endpoint at ring time.',
+  },
+  {
+    method: 'POST', path: '/api/calls/vac/webhook/answer', auth: 'X-VAC-Secret',
+    summary: 'VAC Call Answered webhook — triggered when the agent answers the call',
+    statuses: { 200: 'Answer recorded', 400: 'Missing phone_number', 403: 'Invalid secret', 500: 'Server error' },
+    body: {
+      phone_number: 'string (required — customer phone number)',
+      agent: 'string (required — VAC agent extension/ID)',
+      start_time: 'string (optional — call start time, YYYY-MM-DD HH:MM:SS)',
+      campaign_name: 'string (optional — campaign name)',
+    },
+    response: {
+      success: true,
+      message: 'Call answer recorded',
+      call_id: 'uuid',
+    },
+    note: 'Auth via X-VAC-Secret header. Transitions existing call from ringing → in-progress. Emits call-event with event: "answered" so the CMS popup updates in real-time. If no existing ringing call is found, creates a new record. Configure your VAC Dialer to send this webhook when the agent picks up.',
+  },
+  {
+    method: 'POST', path: '/api/calls/vac/webhook/completion', auth: 'X-VAC-Secret',
+    summary: 'VAC Call Completion webhook — triggered when the call ends',
+    statuses: { 200: 'Completion recorded', 400: 'Missing phone_number', 403: 'Invalid secret', 500: 'Server error' },
+    body: {
+      phone_number: 'string (required — customer phone number)',
+      agent: 'string (required — VAC agent extension/ID)',
+      duration: 'string (required — call duration in seconds)',
+      recording_url: 'string (optional — URL to the call recording)',
+      dispo: 'string (optional — A=Answered, B=Busy/Missed)',
+      start_time: 'string (optional — YYYY-MM-DD HH:MM:SS)',
+      end_time: 'string (optional — YYYY-MM-DD HH:MM:SS)',
+    },
+    response: {
+      success: true,
+      message: 'Call completion recorded',
+      call_id: 'uuid',
+    },
+    note: 'Auth via X-VAC-Secret header. Updates existing call record (from popup webhook) or creates new. Emits call-event with event: "ended" or "missed" (based on dispo). Updates lead.last_call_date. Configure your VAC Dialer to send this webhook after the call hangs up.',
+  },
+];
+
+const vacDialerEndpoints = [
+  {
+    method: 'POST', path: '/api/calls/vac/click2call', auth: 'JWT Required',
+    summary: 'Initiate an outbound call via VAC Dialer (Click2Call)',
+    statuses: { 201: 'Call initiated', 400: 'Agent not configured', 409: 'Agent not logged in', 502: 'VAC dial failed', 503: 'VAC not configured', 504: 'VAC timeout' },
+    body: {
+      phone_number: 'string (required, 10-15 digits)',
+      _log_only: 'boolean (optional — skips VAC API, only logs to DB)',
+      agent_id: 'string (optional — override agent ID for log-only mode)',
+    },
+    response: {
+      status: 'success',
+      message: 'Call initiated successfully',
+      data: { call_id: 'uuid', code: 'string', phone_number: 'string', direction: 'outbound', call_status: 'initiated', lead_id: 'number|null', lead_name: 'string|null', vac_message: 'string' },
+    },
+    note: 'Routes through backend proxy to avoid CORS issues. Resolves agent ID from the authenticated user\'s vac_agent_id or intercom_number. Logs the call to telephony_call_logs. Use _log_only:true when the frontend has already called VAC directly.',
+  },
+  {
+    method: 'POST', path: '/api/calls/vac/hangup', auth: 'JWT Required',
+    summary: 'End the current call via VAC Dialer Hangup API',
+    statuses: { 200: 'Call ended', 400: 'Agent not configured', 502: 'VAC error', 503: 'VAC not configured' },
+    body: {
+      dispo: 'string (optional — disposition code, default "A", e.g. A=Answered, B=Missed)',
+    },
+    response: {
+      status: 'success',
+      message: 'Call ended',
+      data: { vac_message: 'string' },
+    },
+    note: 'Calls VAC Hangup API. Used by the CMS popup to reject or end calls from the UI.',
+  },
+  {
+    method: 'POST', path: '/api/calls/vac/disposition', auth: 'JWT Required',
+    summary: 'Set call disposition without hanging up',
+    body: {
+      dispo: 'string (required — disposition code)',
+    },
+    response: { status: 'success', message: 'Disposition recorded' },
+    note: 'Sets the VAC disposition code for the current call.',
+  },
+  {
+    method: 'POST', path: '/api/calls/vac/transfer', auth: 'JWT Required',
+    summary: 'Transfer call (blind or attended) via VAC Dialer',
+    body: {
+      transfer_to: 'string (required — target extension/number)',
+      type: 'string (optional — "blind" or "attended", default "blind")',
+    },
+    response: { status: 'success', message: 'Call blind transfer initiated' },
+    note: 'Blind transfer: immediately transfers. Attended transfer: consults first.',
+  },
+  {
+    method: 'GET', path: '/api/calls/vac/status', auth: 'JWT Required',
+    summary: 'Check VAC Dialer integration status for the current user',
+    response: {
+      status: 'success',
+      data: { vac_configured: 'boolean', agent_configured: 'boolean', agent_id: 'string|null' },
+    },
+    note: 'Returns whether VAC is configured and whether the current user has a vac_agent_id set.',
+  },
+];
+
 const endpoints = [
   {
     method: 'POST', path: '/api/calls/inbound', auth: 'HMAC / JWT',
@@ -187,7 +304,7 @@ const SIPIntegration = () => {
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {[
-            { label: 'Total Endpoints', value: '9', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+            { label: 'Total Endpoints', value: '17', color: 'bg-blue-50 text-blue-700 border-blue-200' },
             { label: 'Auth Methods', value: 'HMAC + JWT', color: 'bg-purple-50 text-purple-700 border-purple-200' },
             { label: 'Call Statuses', value: '6', color: 'bg-green-50 text-green-700 border-green-200' },
           ].map(s => (
@@ -202,6 +319,8 @@ const SIPIntegration = () => {
           <p className="text-sm text-purple-800 font-medium mb-1">Key Capabilities</p>
           <ul className="text-sm text-purple-700 space-y-1 list-disc list-inside">
             <li>Telephony vendor webhook with HMAC-SHA256 signature verification</li>
+            <li>VAC Dialer integration: Click2Call, Hangup, Transfer, Disposition</li>
+            <li>VAC webhook triad: Call Popup → Call Answered → Call Completion</li>
             <li>SIP event processing with automatic call lifecycle management</li>
             <li>Automatic lead lookup by phone number on all inbound events</li>
             <li>Real-time Socket.IO events for call popups and live monitoring</li>
@@ -351,11 +470,170 @@ fetch('https://your-server.com/api/calls/inbound', {
         </div>
       </section>
 
+      {/* VAC Dialer Webhooks */}
+      <section className="mb-10">
+        <h2 className="text-xl font-semibold text-gray-900 mb-3">VAC Dialer Webhook Integration</h2>
+        <p className="text-gray-700 leading-relaxed mb-4">
+          The CMS integrates with the VAC Dialer via three webhook endpoints. These are called BY the VAC
+          Dialer server to notify the CMS of call events. All three require the
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono mx-1">X-VAC-Secret</code> header
+          for authentication.
+        </p>
+
+        {/* Webhook Flow Diagram */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <p className="text-sm font-medium text-blue-800 mb-2">Webhook Flow</p>
+          <div className="flex flex-col sm:flex-row items-center gap-2 text-xs text-blue-700 font-mono">
+            <span className="bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-300">1. Call Popup</span>
+            <span className="hidden sm:inline">→</span>
+            <span className="bg-green-100 px-3 py-1.5 rounded-lg border border-green-300">2. Call Answered</span>
+            <span className="hidden sm:inline">→</span>
+            <span className="bg-orange-100 px-3 py-1.5 rounded-lg border border-orange-300">3. Call Completion</span>
+          </div>
+          <p className="text-xs text-blue-600 mt-2">
+            Popup fires at ring time → Answered fires when agent picks up → Completion fires after hangup.
+            The Popup webhook triggers the real-time call popup in the CMS with a ringing sound.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {vacWebhookEndpoints.map((ep, i) => {
+            const colors = methodColors[ep.method] || methodColors.GET;
+            const isExpanded = expandedEndpoint === `vac-${i}`;
+
+            return (
+              <div key={`vac-${i}`} className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setExpandedEndpoint(isExpanded ? null : `vac-${i}`)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                >
+                  <span className={`${colors.bg} ${colors.text} px-2.5 py-0.5 rounded text-xs font-bold font-mono flex-shrink-0`}>
+                    {ep.method}
+                  </span>
+                  <code className="text-sm font-mono text-gray-800 flex-1">{ep.path}</code>
+                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded flex-shrink-0">{ep.auth}</span>
+                  <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div className="px-4 pb-3">
+                  <p className="text-sm text-gray-600 ml-[76px]">{ep.summary}</p>
+                </div>
+                {isExpanded && (
+                  <div className="border-t border-gray-100 bg-gray-50 px-4 py-4 space-y-4">
+                    {ep.body && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Request Body</h4>
+                        <div className="bg-gray-900 rounded-lg p-3 overflow-x-auto">
+                          <pre className="text-xs text-gray-300 font-mono"><code>{JSON.stringify(ep.body, null, 2)}</code></pre>
+                        </div>
+                      </div>
+                    )}
+                    {ep.response && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Response</h4>
+                        <div className="bg-gray-900 rounded-lg p-3 overflow-x-auto">
+                          <pre className="text-xs text-gray-300 font-mono"><code>{JSON.stringify(ep.response, null, 2)}</code></pre>
+                        </div>
+                      </div>
+                    )}
+                    {ep.statuses && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status Codes</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(ep.statuses).map(([code, desc]) => (
+                            <span key={code} className="bg-white border border-gray-200 px-2 py-1 rounded text-xs font-mono text-gray-700">
+                              <span className="font-bold">{code}</span>: {desc}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {ep.note && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <p className="text-xs text-amber-800">
+                          <strong>Note:</strong> {ep.note}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* VAC Dialer API (Outbound) */}
+      <section className="mb-10">
+        <h2 className="text-xl font-semibold text-gray-900 mb-3">VAC Dialer API (Outbound Calls)</h2>
+        <p className="text-gray-700 leading-relaxed mb-4">
+          These endpoints are called BY the CMS frontend (via backend proxy) to control the VAC Dialer.
+          They require a valid JWT token from an authenticated user with a configured
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono mx-1">vac_agent_id</code>.
+        </p>
+
+        <div className="space-y-3">
+          {vacDialerEndpoints.map((ep, i) => {
+            const colors = methodColors[ep.method] || methodColors.GET;
+            const isExpanded = expandedEndpoint === `vac-dialer-${i}`;
+
+            return (
+              <div key={`vac-dialer-${i}`} className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setExpandedEndpoint(isExpanded ? null : `vac-dialer-${i}`)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                >
+                  <span className={`${colors.bg} ${colors.text} px-2.5 py-0.5 rounded text-xs font-bold font-mono flex-shrink-0`}>
+                    {ep.method}
+                  </span>
+                  <code className="text-sm font-mono text-gray-800 flex-1">{ep.path}</code>
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded flex-shrink-0">{ep.auth}</span>
+                  <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div className="px-4 pb-3">
+                  <p className="text-sm text-gray-600 ml-[76px]">{ep.summary}</p>
+                </div>
+                {isExpanded && (
+                  <div className="border-t border-gray-100 bg-gray-50 px-4 py-4 space-y-4">
+                    {ep.body && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Request Body</h4>
+                        <div className="bg-gray-900 rounded-lg p-3 overflow-x-auto">
+                          <pre className="text-xs text-gray-300 font-mono"><code>{JSON.stringify(ep.body, null, 2)}</code></pre>
+                        </div>
+                      </div>
+                    )}
+                    {ep.response && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Response</h4>
+                        <div className="bg-gray-900 rounded-lg p-3 overflow-x-auto">
+                          <pre className="text-xs text-gray-300 font-mono"><code>{JSON.stringify(ep.response, null, 2)}</code></pre>
+                        </div>
+                      </div>
+                    )}
+                    {ep.note && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <p className="text-xs text-blue-800">
+                          <strong>Note:</strong> {ep.note}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* API Endpoints */}
       <section className="mb-10">
         <h2 className="text-xl font-semibold text-gray-900 mb-3">API Endpoints</h2>
         <p className="text-gray-700 leading-relaxed mb-4">
-          9 endpoints covering webhook reception, SIP event processing, manual logging, call listing,
+          9 core endpoints covering webhook reception, SIP event processing, manual logging, call listing,
           statistics, phone lookup, status updates, and backward-compatible legacy endpoints.
         </p>
 

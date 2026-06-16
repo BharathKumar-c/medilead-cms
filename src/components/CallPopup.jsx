@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Phone, PhoneOff, Mic, MicOff, UserPlus, PhoneIncoming, PhoneOutgoing, PhoneMissed, Clock, X } from 'lucide-react';
 import api from '../services/api';
 
-const CallPopup = ({ call, callState, onAnswer, onHangUp, onClose, leadInfo, onCreateLead }) => {
+const CallPopup = ({ call, callState, onAnswer, onHangUp, onClose, onCallInitiate, leadInfo, onCreateLead }) => {
   const [elapsed, setElapsed] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -47,6 +47,8 @@ const CallPopup = ({ call, callState, onAnswer, onHangUp, onClose, leadInfo, onC
   }, [onAnswer, onHangUp, onClose]);
 
   if (!call) return null;
+
+  const [calling, setCalling] = useState(false);
 
   const formatTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
   const callerNumber = call.caller_number || call.callerNumber || 'Unknown';
@@ -94,6 +96,14 @@ const CallPopup = ({ call, callState, onAnswer, onHangUp, onClose, leadInfo, onC
               <div className="min-w-0">
                 <p className="font-body-lg font-bold text-on-surface truncate max-w-[200px]">{callerNumber}</p>
                 <p className="font-caption text-on-surface-variant flex items-center gap-1.5 mt-0.5">
+                  {callState === 'ready' && (
+                    <>
+                      <span className="relative flex h-2 w-2">
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-on-tertiary-container" />
+                      </span>
+                      Ready to call
+                    </>
+                  )}
                   {callState === 'ringing' && (
                     <>
                       <span className="relative flex h-2 w-2">
@@ -186,6 +196,49 @@ const CallPopup = ({ call, callState, onAnswer, onHangUp, onClose, leadInfo, onC
 
         {/* ── Action Buttons ── */}
         <div className="px-4 pb-4 pt-1">
+          {/* Ready State - Outgoing (pre-call confirmation) */}
+          {callState === 'ready' && (
+            <div className="space-y-2.5">
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => {
+                    setCalling(true);
+                    onCallInitiate?.(callerNumber, leadInfo);
+                  }}
+                  disabled={calling}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-success text-white rounded-xl font-body-md font-bold hover:bg-success/90 active:scale-[0.97] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {calling ? (
+                    <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>Calling...</span></>
+                  ) : (
+                    <><Phone className="w-4 h-4" /><span>Call</span></>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleDismiss('close')}
+                  disabled={calling}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-surface-container-high text-on-surface rounded-xl font-body-md font-bold hover:bg-surface-container-highest transition-all border border-outline-variant/50 disabled:opacity-60"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Cancel</span>
+                </button>
+              </div>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setIsMuted(!isMuted)}
+                  className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-body-md font-bold transition-all flex-1 ${
+                    isMuted
+                      ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                      : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest border border-outline-variant/50'
+                  }`}
+                >
+                  {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  <span>{isMuted ? 'Unmute' : 'Mute'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Ringing State - Incoming */}
           {callState === 'ringing' && isIncoming && (
             <div className="space-y-2.5">
@@ -230,15 +283,39 @@ const CallPopup = ({ call, callState, onAnswer, onHangUp, onClose, leadInfo, onC
             </div>
           )}
 
-          {/* Ringing State - Outgoing */}
+          {/* Ringing State - Outgoing (call in progress) */}
           {callState === 'ringing' && !isIncoming && (
-            <button
-              onClick={() => handleDismiss('hangup')}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-error text-white rounded-xl font-body-md font-bold hover:bg-error/90 active:scale-[0.97] transition-all shadow-sm"
-            >
-              <PhoneOff className="w-4 h-4" />
-              <span>Cancel Call</span>
-            </button>
+            <div className="space-y-2.5">
+              <div className="flex gap-2.5">
+                <button
+                  disabled
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-success/50 text-white/70 rounded-xl font-body-md font-bold cursor-not-allowed shadow-sm"
+                >
+                  <Phone className="w-4 h-4" />
+                  <span>Calling...</span>
+                </button>
+                <button
+                  onClick={() => handleDismiss('hangup')}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-error text-white rounded-xl font-body-md font-bold hover:bg-error/90 active:scale-[0.97] transition-all shadow-sm"
+                >
+                  <PhoneOff className="w-4 h-4" />
+                  <span>End Call</span>
+                </button>
+              </div>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setIsMuted(!isMuted)}
+                  className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-body-md font-bold transition-all flex-1 ${
+                    isMuted
+                      ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                      : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest border border-outline-variant/50'
+                  }`}
+                >
+                  {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  <span>{isMuted ? 'Unmute' : 'Mute'}</span>
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Connected State */}

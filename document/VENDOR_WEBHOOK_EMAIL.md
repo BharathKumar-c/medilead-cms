@@ -8,7 +8,7 @@
 
 Hi Team,
 
-Please find below the webhook API details for integrating the VAC Dialer with our CMS application. We need two webhooks configured:
+Please find below the webhook API details for integrating the VAC Dialer with our CMS application. We need three webhooks configured:
 
 ---
 
@@ -53,7 +53,50 @@ X-VAC-Secret: 53796b5d6b698e3dc8783e85d317f91914434baa0c8e0b3226404e7c84dd6bd9
 
 ---
 
-## 2. Call Completion Webhook (Call Ended)
+## 2. Call Answered Webhook (Call Started)
+
+Trigger this when the agent answers the call (call transitions from ringing to connected).
+
+```
+URL:     http://192.168.10.125:5000/api/calls/vac/webhook/answer
+Method:  POST
+Content-Type: application/x-www-form-urlencoded
+```
+
+**Required Header:**
+```
+X-VAC-Secret: 53796b5d6b698e3dc8783e85d317f91914434baa0c8e0b3226404e7c84dd6bd9
+```
+
+**Request Body Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| phone_number | string | Yes | Customer's phone number |
+| agent | string | Yes | Agent extension/ID (e.g., 1001) |
+| start_time | string | No | Call start time (YYYY-MM-DD HH:MM:SS) |
+| campaign_name | string | No | Campaign name if applicable |
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Call answer recorded",
+  "call_id": 42
+}
+```
+
+**Error Responses:**
+
+| Status | Meaning |
+|--------|---------|
+| 400 | Missing phone_number |
+| 403 | Invalid or missing X-VAC-Secret header |
+| 500 | Server error |
+
+---
+
+## 3. Call Completion Webhook (Call Ended)
 
 Trigger this when the call ends (after hangup).
 
@@ -130,6 +173,14 @@ curl -X POST http://192.168.10.125:5000/api/calls/vac/webhook/popup \
   -d "phone_number=9876543210&user=1001"
 ```
 
+### Call Answered Example:
+```bash
+curl -X POST http://192.168.10.125:5000/api/calls/vac/webhook/answer \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "X-VAC-Secret: 53796b5d6b698e3dc8783e85d317f91914434baa0c8e0b3226404e7c84dd6bd9" \
+  -d "phone_number=9876543210&agent=1001&start_time=2026-06-10 10:00:00"
+```
+
 ### Call Completion Example:
 ```bash
 curl -X POST http://192.168.10.125:5000/api/calls/vac/webhook/completion \
@@ -171,9 +222,10 @@ echo "HTTP $httpCode: $response\n";
 
 1. **Protocol:** HTTP (not HTTPS) — as per on-premise setup
 2. **Timing:** Please send the Call Popup webhook at **ring time** (when the call reaches the extension), not after the agent answers. This allows us to show the popup before pickup.
-3. **Agent field:** The `user`/`agent` value must match the agent extension numbers we use for Click2Call (1001, 1002, etc.)
-4. **Both directions:** Please fire webhooks for both inbound AND outbound calls if possible
-5. **Our server:** IP `192.168.10.125`, Port `5000` — please ensure your server can reach this endpoint over the network
+3. **Call Answered:** Please send the Call Answered webhook when the agent **answers** the call (transitions from ringing to connected). This allows our CMS to update the popup state in real-time.
+4. **Agent field:** The `user`/`agent` value must match the agent extension numbers we use for Click2Call (1001, 1002, etc.)
+5. **Both directions:** Please fire webhooks for both inbound AND outbound calls if possible
+6. **Our server:** IP `192.168.10.125`, Port `5000` — please ensure your server can reach this endpoint over the network
 
 Please confirm once configured, and we can run a test together.
 

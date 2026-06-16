@@ -19,7 +19,8 @@ import Header from './Header';
 import PatientIntakeForm from './PatientIntakeForm';
 import CallPopup from './CallPopup';
 import Toast from './Toast';
-import {useAuth} from '../context/AuthContext';
+import {useAuth, getVacAgentId} from '../context/AuthContext';
+import api from '../services/api';
 import {
   useSocket,
   playNotificationSound,
@@ -35,6 +36,8 @@ const Layout = ({children, title = 'Medway CMS'}) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
+  const incomingCallRef = useRef(null);
+  const [callPopupState, setCallPopupState] = useState('ringing'); // ringing | connected | ended
   const [prefillPhoneFromCall, setPrefillPhoneFromCall] = useState('');
   const ringtoneStopRef = useRef(null);
   const navigate = useNavigate();
@@ -62,6 +65,8 @@ const Layout = ({children, title = 'Medway CMS'}) => {
     onIncomingCall: (data) => {
       // Show incoming call popup
       setIncomingCall(data);
+      incomingCallRef.current = data;
+      setCallPopupState('ringing');
       // Start looping ringtone
       if (ringtoneStopRef.current) ringtoneStopRef.current();
       ringtoneStopRef.current = playRingtoneLoop();
@@ -81,14 +86,30 @@ const Layout = ({children, title = 'Medway CMS'}) => {
       }, 30000);
     },
     onCallEvent: (data) => {
-      // Stop ringtone on answer/end/miss
-      if (data.event === 'answered' || data.event === 'ended' || data.event === 'missed') {
+      // ── Handle call state transitions ──
+      // Answered: transition popup from ringing → connected
+      if (data.event === 'answered' && incomingCallRef.current) {
         if (ringtoneStopRef.current) {
           ringtoneStopRef.current();
           ringtoneStopRef.current = null;
         }
+        setCallPopupState('connected');
+        addToast('success', 'Call Connected', `Connected with ${data.caller}`);
       }
-      // Show toast for call status changes
+      // Ended: stop ringtone, dismiss popup
+      if (data.event === 'ended' || data.event === 'missed') {
+        if (ringtoneStopRef.current) {
+          ringtoneStopRef.current();
+          ringtoneStopRef.current = null;
+        }            // Transition to ended state briefly, then dismiss
+            setCallPopupState('ended');
+            setTimeout(() => {
+              setIncomingCall(null);
+              incomingCallRef.current = null;
+              setCallPopupState('ringing');
+            }, 2000);
+      }
+      // Show toast for missed calls
       if (data.event === 'missed') {
         addToast('warning', 'Missed Call', `Missed call from ${data.caller}`);
         playNotificationSound();
@@ -103,6 +124,62 @@ const Layout = ({children, title = 'Medway CMS'}) => {
       window.dispatchEvent(new CustomEvent('call-update', {detail: data}));
     },
   });
+
+  // Listen for outgoing call pending events (popup shown BEFORE API call)
+  useEffect(() => {
+    const handler = (e) => {
+      const data = e.detail;
+      if (!data) return;
+      setIncomingCall(data);
+      incomingCallRef.current = data;
+      setCallPopupState('ready'); // Show popup in 'ready' state (green Call button)
+    };
+    window.addEventListener('outgoing-call-pending', handler);
+    return () => window.removeEventListener('outgoing-call-pending', handler);
+  }, []);
+
+  // Handler when user clicks green Call button in the popup's 'ready' state
+  const handleCallInitiate = useCallback(async (phoneNumber) => {
+    try {
+      const result = await api.vacClick2Call(phoneNumber);
+      if (result?.status === 'success') {
+        // Update call state with callId from API
+        setIncomingCall(prev => prev ? {
+          ...prev,
+          call: { ...prev.call, id: result.data?.call_id, status: 'ringing' },
+        } : prev);
+        // Transition to ringing state
+        setCallPopupState('ringing');
+        // Start looping ringtone
+        if (ringtoneStopRef.current) ringtoneStopRef.current();
+        ringtoneStopRef.current = playRingtoneLoop();
+        addToast('success', 'Call Initiated', `Calling ${phoneNumber}...`);
+        // Auto-dismiss after 30 seconds if call doesn't connect
+        setTimeout(() => {
+          setIncomingCall((prev) => {
+            if (prev && prev.call?.id === result.data?.call_id) {
+              if (ringtoneStopRef.current) ringtoneStopRef.current();
+              return null;
+            }
+            return prev;
+          });
+        }, 30000);
+      }
+    } catch (err) {
+      const code = err.code || '';
+      if (code === 'VAC_AGENT_NOT_LOGGED_IN') {
+        addToast('warning', 'Agent Not Logged In', 'Please log into the VAC Dialer first, then try again.');
+      } else if (code === 'VAC_NOT_CONFIGURED') {
+        addToast('error', 'VAC Not Configured', 'VAC Dialer integration is not configured on this server.');
+      } else {
+        addToast('error', 'Call Failed', err.message || 'Could not initiate call. Please try again.');
+      }
+      // Close popup on failure
+      setIncomingCall(null);
+      incomingCallRef.current = null;
+      setCallPopupState('ringing');
+    }
+  }, [addToast]);
 
   // Listen for custom toast events from child components
   useEffect(() => {
@@ -369,38 +446,62 @@ const Layout = ({children, title = 'Medway CMS'}) => {
         <CallPopup
           key={incomingCall.call?.id || Date.now()}
           call={incomingCall.call}
-          callState="ringing"
+          callState={callPopupState}
           leadInfo={incomingCall.leadInfo}
           onAnswer={() => {
             if (ringtoneStopRef.current) {
               ringtoneStopRef.current();
               ringtoneStopRef.current = null;
             }
+            setCallPopupState('connected');
             addToast(
               'success',
               'Call Answered',
               `Connected with ${incomingCall.call?.caller_number}`,
             );
-            setIncomingCall(null);
+            // Notify backend that call was answered (marks call as in-progress)
+            api.updateCallStatus(incomingCall.call?.id, { call_status: 'in-progress' }).catch(() => {
+              addToast('warning', 'Sync Warning', 'Call answered locally but server sync failed.');
+            });
           }}
+          onCallInitiate={handleCallInitiate}
           onHangUp={() => {
             if (ringtoneStopRef.current) {
               ringtoneStopRef.current();
               ringtoneStopRef.current = null;
             }
+            const isOutgoing = incomingCall?.call?.direction === 'outbound';
+            setCallPopupState('ended');
             addToast(
               'info',
-              'Call Rejected',
-              `Rejected call from ${incomingCall.call?.caller_number}`,
+              isOutgoing ? 'Call Cancelled' : 'Call Rejected',
+              isOutgoing
+                ? `Cancelled call to ${incomingCall.call?.caller_number}`
+                : `Rejected call from ${incomingCall.call?.caller_number}`,
             );
-            setIncomingCall(null);
+            // Call VAC Hangup API to end the call on the dialer
+            api.vacHangup('B').catch(() => {
+              addToast('warning', 'Hangup Failed', 'Could not end the call on the dialer. Please hang up manually.');
+            });
+            // Dismiss popup after brief delay
+            setTimeout(() => {
+              setIncomingCall(null);
+              incomingCallRef.current = null;
+              setCallPopupState('ringing');
+            }, 1500);
           }}
           onClose={() => {
             if (ringtoneStopRef.current) {
               ringtoneStopRef.current();
               ringtoneStopRef.current = null;
             }
+            // For outgoing calls, also hang up on the dialer to avoid orphaned calls
+            if (incomingCall?.call?.direction === 'outbound') {
+              api.vacHangup('B').catch(() => {});
+            }
             setIncomingCall(null);
+            incomingCallRef.current = null;
+            setCallPopupState('ringing');
           }}
           onCreateLead={(phone) => {
             if (ringtoneStopRef.current) {

@@ -1196,6 +1196,19 @@ router.post('/vac/webhook/popup', validateVacWebhook, async (req, res) => {
       [agentId]
     );
 
+    if (userResult.rows.length === 0) {
+      logger.warn('VAC popup: No CMS user found for agent ID — falling back to broadcast', {
+        agentId,
+        phone: maskPhone(phone_number),
+      });
+    } else {
+      logger.info('VAC popup: Matched CMS user', {
+        agentId,
+        userId: userResult.rows[0].id,
+        userName: userResult.rows[0].name,
+      });
+    }
+
     // Auto-lookup lead
     const lead = await lookupLead(db, phone_number);
 
@@ -1213,66 +1226,183 @@ router.post('/vac/webhook/popup', validateVacWebhook, async (req, res) => {
     const code = generateCallCode(call.id);
     await db.query('UPDATE telephony_call_logs SET code = $1 WHERE id = $2', [code, call.id]);
 
+    // Enrich lead info with call stats
+    let enrichedLeadInfo = null;
+    if (lead) {
+      const statsResult = await db.query(
+        `SELECT COUNT(*) as total_calls,
+                COUNT(*) FILTER (WHERE call_status = 'missed') as missed_calls
+         FROM telephony_call_logs
+         WHERE caller_phone_number = $1 OR lead_id = $2`,
+        [phone_number, lead.id]
+      );
+      enrichedLeadInfo = {
+        id: lead.id,
+        name: lead.name,
+        uhid: lead.uhid || null,
+        phone: lead.phone,
+        callStats: {
+          totalCalls: parseInt(statsResult.rows[0].total_calls) || 0,
+          missedCalls: parseInt(statsResult.rows[0].missed_calls) || 0,
+        },
+      };
+    }
+
+    const incomingCallPayload = {
+      call: {
+        id: call.id,
+        caller_number: phone_number,
+        direction: 'inbound',
+        status: 'ringing',
+        intercom_number: agentId,
+      },
+      leadInfo: enrichedLeadInfo,
+    };
+
+    const callEventPayload = {
+      event: 'incoming',
+      call_id: call.id,
+      caller: phone_number,
+      status: 'ringing',
+      direction: 'inbound',
+      timestamp: new Date().toISOString(),
+      lead_id: lead?.id || null,
+      lead_name: lead?.name || null,
+    };
+
     // Emit real-time incoming call popup via Socket.IO
     const io = req.app.get('io');
-    if (io && userResult.rows.length > 0) {
-      const targetUsers = userResult.rows;
-
-      // Enrich lead info with call stats
-      let enrichedLeadInfo = null;
-      if (lead) {
-        const statsResult = await db.query(
-          `SELECT COUNT(*) as total_calls,
-                  COUNT(*) FILTER (WHERE call_status = 'missed') as missed_calls
-           FROM telephony_call_logs
-           WHERE caller_phone_number = $1 OR lead_id = $2`,
-          [phone_number, lead.id]
-        );
-        enrichedLeadInfo = {
-          id: lead.id,
-          name: lead.name,
-          uhid: lead.uhid || null,
-          phone: lead.phone,
-          callStats: {
-            totalCalls: parseInt(statsResult.rows[0].total_calls) || 0,
-            missedCalls: parseInt(statsResult.rows[0].missed_calls) || 0,
-          },
-        };
+    if (io) {
+      // Primary: emit to the matched user(s)
+      if (userResult.rows.length > 0) {
+        await emitCallEvent(io, userResult.rows, 'incoming-call', incomingCallPayload);
+        await emitCallEvent(io, userResult.rows, 'call-event', callEventPayload);
       }
 
-      await emitCallEvent(io, targetUsers, 'incoming-call', {
-        call: {
-          id: call.id,
-          caller_number: phone_number,
-          direction: 'inbound',
-          status: 'ringing',
-          intercom_number: agentId,
-        },
-        leadInfo: enrichedLeadInfo,
-      });
+      // Fallback: if no user matched by agent ID, broadcast to ALL users with
+      // calls:receive_sip_events permission so the popup still appears somewhere
+      if (userResult.rows.length === 0) {
+        logger.warn('VAC popup: No user matched — broadcasting to all permitted users');
+        const fallbackUsers = await getSipUsers(db, null);
+        if (fallbackUsers.length > 0) {
+          await emitCallEvent(io, fallbackUsers, 'incoming-call', incomingCallPayload);
+          await emitCallEvent(io, fallbackUsers, 'call-event', callEventPayload);
+        } else {
+          logger.warn('VAC popup: No permitted users found for fallback broadcast', { agentId });
+        }
+      }
 
-      await emitCallEvent(io, targetUsers, 'call-event', {
-        event: 'incoming',
-        call_id: call.id,
-        caller: phone_number,
-        status: 'ringing',
-        direction: 'inbound',
-        timestamp: new Date().toISOString(),
-        lead_id: lead?.id || null,
-        lead_name: lead?.name || null,
-      });
-
-      // Send notification
+      // Send notification to all permitted users
       notifyByPermission(io, 'calls:receive_sip_events', {
         type: 'info',
         title: `Incoming call from ${phone_number}${lead ? ` (${lead.name})` : ''}`,
         link: '/vendor-call-logs',
       }).catch(err => logger.error('VAC popup notification error', { error: err.message }));
+    } else {
+      logger.error('VAC popup: Socket.IO not available — cannot emit events');
     }
 
     res.json({ success: true, message: 'Call popup processed', call_id: call.id });
   } catch (err) {
     logger.error('VAC webhook popup error', { error: err.message, stack: err.stack });
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  POST /api/calls/vac/webhook/answer  — VAC Call Answered/Started webhook
+//  Auth: IP whitelist + X-VAC-Secret header
+//  VAC sends when the agent answers the call (call transitions from ringing → connected)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/vac/webhook/answer', validateVacWebhook, async (req, res) => {
+  try {
+    const {
+      phone_number, phone,
+      agent, extension, user,
+      start_time, campaign_name,
+    } = req.body;
+
+    const agentId = agent || extension || user;
+    const phoneNumber = phone_number || phone;
+
+    if (!phoneNumber) {
+      return res.status(400).json({ success: false, message: 'phone_number is required' });
+    }
+
+    logger.info('VAC webhook: Call Answered', {
+      phone: maskPhone(phoneNumber),
+      agent: agentId,
+      start_time,
+      campaign_name,
+    });
+
+    // Find user by agent ID
+    let userId = null;
+    if (agentId) {
+      const userResult = await db.query(
+        'SELECT id FROM users WHERE (vac_agent_id = $1 OR intercom_number = $1) AND is_active = true',
+        [agentId]
+      );
+      if (userResult.rows.length > 0) userId = userResult.rows[0].id;
+    }
+
+    // Try to find the existing ringing call record (from popup webhook)
+    const existingCall = await db.query(
+      `SELECT id FROM telephony_call_logs
+       WHERE caller_phone_number = $1 AND call_status = 'ringing'
+       AND (intercom_number = $2 OR intercom_number IS NULL)
+       ORDER BY created_at DESC LIMIT 1`,
+      [phoneNumber, agentId || '']
+    );
+
+    let callId = null;
+
+    if (existingCall.rows.length > 0) {
+      // Update existing ringing call to in-progress
+      callId = existingCall.rows[0].id;
+      await db.query(
+        `UPDATE telephony_call_logs SET
+           call_status = 'in-progress',
+           user_id = COALESCE(user_id, $1),
+           updated_at = NOW()
+         WHERE id = $2`,
+        [userId, callId]
+      );
+    } else {
+      // Create new call record (answer without prior popup)
+      const result = await db.query(
+        `INSERT INTO telephony_call_logs
+           (caller_phone_number, call_status, direction, intercom_number, user_id, timestamp, raw_payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id`,
+        [phoneNumber, 'in-progress', 'inbound', agentId || null, userId,
+         start_time || new Date().toISOString(), { vac_webhook: 'answer', ...req.body }]
+      );
+      callId = result.rows[0].id;
+      const code = generateCallCode(callId);
+      await db.query('UPDATE telephony_call_logs SET code = $1 WHERE id = $2', [code, callId]);
+    }
+
+    // Emit real-time socket event to transition popup from ringing → connected
+    const io = req.app.get('io');
+    if (io) {
+      const targetUsers = userId
+        ? [{ id: userId }]
+        : await getSipUsers(db, agentId);
+
+      await emitCallEvent(io, targetUsers, 'call-event', {
+        event: 'answered',
+        call_id: callId,
+        caller: phoneNumber,
+        status: 'in-progress',
+        direction: 'inbound',
+        timestamp: start_time || new Date().toISOString(),
+      });
+    }
+
+    res.json({ success: true, message: 'Call answer recorded', call_id: callId });
+  } catch (err) {
+    logger.error('VAC webhook answer error', { error: err.message, stack: err.stack });
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

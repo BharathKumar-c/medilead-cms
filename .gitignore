@@ -16,9 +16,13 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env.production
+.env.production.local
 server/.env
 server/.env.local
 server/.env.*.local
+server/.env.production
+server/.env.production.local
 
 # SSL Certificates (keep ca.pem for deployment, but protect any private keys)
 server/certs/*.key

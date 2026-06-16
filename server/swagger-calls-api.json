@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Calls & SIP Integration API",
-    "description": "Unified call management API for MediLead CMS. Supports telephony vendor webhooks (HMAC-SHA256), SIP event processing, manual call logging, real-time Socket.IO events, and intercom-based agent routing.\n\n## Authentication\n- **POST /api/calls/inbound**: HMAC-SHA256 via `X-Webhook-Signature` header, or JWT Bearer fallback\n- **All other endpoints**: JWT Bearer token via `Authorization` header\n\n## Base URL\n`http://localhost:5000/api`",
-    "version": "1.0.0",
+    "description": "Unified call management API for MediLead CMS. Supports VAC Dialer integration (webhooks + control APIs), telephony vendor webhooks (HMAC-SHA256), SIP event processing, manual call logging, real-time Socket.IO events, and intercom-based agent routing.\n\n## Authentication\n- **VAC Webhooks** (`/calls/vac/webhook/*`): `X-VAC-Secret` header (static shared secret) or IP whitelist\n- **POST /api/calls/inbound**: HMAC-SHA256 via `X-Webhook-Signature` header, or JWT Bearer fallback\n- **VAC Dialer APIs** (`/calls/vac/*`): JWT Bearer token (user must have `vac_agent_id` set)\n- **All other endpoints**: JWT Bearer token via `Authorization` header\n\n## Base URL\n`http://localhost:5000/api`",
+    "version": "1.1.0",
     "contact": {
       "name": "MediLead CMS Support",
       "url": "https://medilead.com"
@@ -16,6 +16,380 @@
     }
   ],
   "paths": {
+    "/calls/vac/webhook/popup": {
+      "post": {
+        "summary": "VAC Call Popup webhook — triggered at ring time",
+        "description": "Called BY the VAC Dialer when a call reaches the agent's extension. Triggers the real-time call popup in the CMS with a ringing sound. Looks up the CMS user by `vac_agent_id` or `intercom_number`. If no user matches, broadcasts to ALL users with `calls:receive_sip_events` permission (fallback). Emits Socket.IO `incoming-call` + `call-event` events with enriched lead info.",
+        "tags": ["VAC Dialer"],
+        "security": [{ "VacSecret": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["phone_number"],
+                "properties": {
+                  "phone_number": { "type": "string", "description": "Customer phone number", "example": "9876543210" },
+                  "user": { "type": "string", "description": "VAC agent extension/ID (use this OR extension)", "example": "1001" },
+                  "extension": { "type": "string", "description": "Alternative field name — VAC PBX may send 'extension' instead of 'user'. At least one of user/extension is required.", "example": "1001" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Popup processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Call popup processed" },
+                    "call_id": { "type": "string", "format": "uuid", "description": "Internal call record ID" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing required fields" },
+          "403": { "description": "Invalid or missing X-VAC-Secret header" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/calls/vac/webhook/answer": {
+      "post": {
+        "summary": "VAC Call Answered webhook — triggered when agent answers",
+        "description": "Called BY the VAC Dialer when the agent picks up the call (ringing → connected). Transitions the existing call record from 'ringing' to 'in-progress'. If no existing ringing call is found, creates a new call record. Emits Socket.IO `call-event` with `event: 'answered'` so the CMS popup updates in real-time.",
+        "tags": ["VAC Dialer"],
+        "security": [{ "VacSecret": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["phone_number"],
+                "properties": {
+                  "phone_number": { "type": "string", "description": "Customer phone number (also accepts 'phone' field)", "example": "9876543210" },
+                  "phone": { "type": "string", "description": "Alternative field name for phone_number", "example": "9876543210" },
+                  "agent": { "type": "string", "description": "VAC agent extension/ID (also accepts 'extension' or 'user')", "example": "1001" },
+                  "extension": { "type": "string", "description": "Alternative field name for agent (used by some VAC PBX configs)", "example": "1001" },
+                  "user": { "type": "string", "description": "Alternative field name for agent (used by VAC Dialer)", "example": "1001" },
+                  "start_time": { "type": "string", "description": "Call start time (YYYY-MM-DD HH:MM:SS)", "example": "2026-06-15 10:00:00" },
+                  "campaign_name": { "type": "string", "description": "Campaign name if applicable" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Answer recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Call answer recorded" },
+                    "call_id": { "type": "string", "format": "uuid", "description": "Internal call record ID" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing phone_number" },
+          "403": { "description": "Invalid or missing X-VAC-Secret header" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/calls/vac/webhook/completion": {
+      "post": {
+        "summary": "VAC Call Completion webhook — triggered when call ends",
+        "description": "Called BY the VAC Dialer after the call hangs up. Updates the existing call record with duration, recording URL, and disposition. If no existing call is found, creates a new call record. Emits Socket.IO `call-event` with `event: 'ended'` or `event: 'missed'`. Updates `leads.last_call_date`. Supports both VAC Dialer fields (agent, dispo) and VAC PBX fields (extension, status, calldate).",
+        "tags": ["VAC Dialer"],
+        "security": [{ "VacSecret": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["phone_number"],
+                "properties": {
+                  "phone_number": { "type": "string", "description": "Customer phone number", "example": "9876543210" },
+                  "agent": { "type": "string", "description": "VAC agent extension/ID (also accepts 'extension')", "example": "1001" },
+                  "extension": { "type": "string", "description": "Alternative field name for agent (used by VAC PBX)", "example": "1001" },
+                  "duration": { "type": "string", "description": "Call duration in seconds (also accepts 'duration_seconds')", "example": "34" },
+                  "duration_seconds": { "type": "string", "description": "Alternative field name for duration", "example": "34" },
+                  "recording_url": { "type": "string", "description": "URL to the call recording file", "example": "http://192.168.10.100/recordings/call123.wav" },
+                  "dispo": { "type": "string", "description": "Disposition code (A=Answered, B=Busy/Missed). Maps to 'missed' status when B.", "example": "A" },
+                  "status": { "type": "string", "description": "Call status from VAC PBX (e.g. 'Missed'). Maps to 'missed' status.", "example": "Missed" },
+                  "start_time": { "type": "string", "description": "Call start time (YYYY-MM-DD HH:MM:SS)", "example": "2026-06-15 10:00:00" },
+                  "end_time": { "type": "string", "description": "Call end time (YYYY-MM-DD HH:MM:SS)", "example": "2026-06-15 10:01:00" },
+                  "calldate": { "type": "string", "description": "Alternative timestamp field from VAC PBX (YYYY-MM-DD HH:MM:SS)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completion recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Call completion recorded" },
+                    "call_id": { "type": "string", "format": "uuid", "description": "Internal call record ID" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing phone_number" },
+          "403": { "description": "Invalid or missing X-VAC-Secret header" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/calls/vac/click2call": {
+      "post": {
+        "summary": "Initiate outbound call via VAC Dialer (Click2Call)",
+        "description": "Routes through backend proxy to avoid CORS issues. Resolves agent ID from the authenticated user's `vac_agent_id` or `intercom_number`. Logs the call to `telephony_call_logs`. Use `_log_only:true` when the frontend has already called VAC directly.",
+        "tags": ["VAC Dialer"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phone_number"],
+                "properties": {
+                  "phone_number": { "type": "string", "pattern": "^[0-9]{10,15}$", "description": "Customer phone number (10-15 digits)", "example": "9876543210" },
+                  "_log_only": { "type": "boolean", "description": "If true, skips VAC API call and only logs to DB", "default": false },
+                  "agent_id": { "type": "string", "description": "Override agent ID (only for _log_only mode)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Call initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Call initiated successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "call_id": { "type": "string", "format": "uuid" },
+                        "code": { "type": "string" },
+                        "phone_number": { "type": "string" },
+                        "direction": { "type": "string", "example": "outbound" },
+                        "call_status": { "type": "string", "example": "initiated" },
+                        "lead_id": { "type": "integer", "nullable": true },
+                        "lead_name": { "type": "string", "nullable": true },
+                        "vac_message": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error or agent not configured" },
+          "409": { "description": "VAC agent not logged in" },
+          "502": { "description": "VAC dial failed" },
+          "503": { "description": "VAC not configured" },
+          "504": { "description": "VAC request timed out" }
+        }
+      }
+    },
+    "/calls/vac/hangup": {
+      "post": {
+        "summary": "End current call via VAC Dialer Hangup API",
+        "description": "Calls the VAC Hangup API to end the current call. Used by the CMS popup to reject or end calls from the UI. Resolves the agent ID from the authenticated user's `vac_agent_id` or `intercom_number`.",
+        "tags": ["VAC Dialer"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dispo": { "type": "string", "description": "Disposition code (default: A). Max 10 characters.", "default": "A", "example": "A", "maxLength": 10 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Call ended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Call ended" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "vac_message": { "type": "string", "description": "Response message from VAC Dialer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Agent not configured" },
+          "502": { "description": "VAC error" },
+          "503": { "description": "VAC not configured" }
+        }
+      }
+    },
+    "/calls/vac/disposition": {
+      "post": {
+        "summary": "Set call disposition via VAC Dialer",
+        "description": "Sets the VAC disposition code for the current call without hanging up. Resolves the agent ID from the authenticated user's `vac_agent_id` or `intercom_number`.",
+        "tags": ["VAC Dialer"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["dispo"],
+                "properties": {
+                  "dispo": { "type": "string", "description": "Disposition code", "example": "A" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Disposition recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Disposition recorded" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "vac_message": { "type": "string", "description": "Response message from VAC Dialer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error" },
+          "502": { "description": "VAC error" },
+          "503": { "description": "VAC not configured" }
+        }
+      }
+    },
+    "/calls/vac/transfer": {
+      "post": {
+        "summary": "Transfer call via VAC Dialer (blind or attended)",
+        "description": "Transfers the current call. Blind transfer: immediately transfers. Attended transfer: consults first. Resolves the agent ID from the authenticated user's `vac_agent_id` or `intercom_number`.",
+        "tags": ["VAC Dialer"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["transfer_to"],
+                "properties": {
+                  "transfer_to": { "type": "string", "description": "Target extension/number", "example": "1002" },
+                  "type": { "type": "string", "enum": ["blind", "attended"], "description": "Transfer type (default: blind)", "default": "blind" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transfer initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Call blind transfer initiated" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "vac_message": { "type": "string", "description": "Response message from VAC Dialer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error" },
+          "502": { "description": "VAC error" },
+          "503": { "description": "VAC not configured" }
+        }
+      }
+    },
+    "/calls/vac/status": {
+      "get": {
+        "summary": "Check VAC Dialer integration status",
+        "description": "Returns whether VAC is configured and whether the current user has a `vac_agent_id` set.",
+        "tags": ["VAC Dialer"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "VAC status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "vac_configured": { "type": "boolean", "description": "Whether VAC_SERVER_URL and VAC_API_TOKEN are set" },
+                        "agent_configured": { "type": "boolean", "description": "Whether the current user has a vac_agent_id" },
+                        "agent_id": { "type": "string", "nullable": true, "description": "The user's VAC agent ID" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
     "/calls/inbound": {
       "post": {
         "summary": "Telephony vendor webhook — record an inbound call",
@@ -404,7 +778,35 @@
           }
         },
         "responses": {
-          "200": { "description": "Call updated successfully" },
+          "200": {
+            "description": "Call updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "call": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "string", "format": "uuid" },
+                            "caller_number": { "type": "string" },
+                            "call_status": { "type": "string" },
+                            "duration": { "type": "integer" },
+                            "notes": { "type": "string", "nullable": true },
+                            "updated_at": { "type": "string", "format": "date-time" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "400": { "description": "Validation error" },
           "401": { "description": "Unauthorized" },
           "404": { "description": "Call not found", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string" }, "message": { "type": "string" }, "code": { "type": "string", "example": "CALL_NOT_FOUND" } } } } } },
@@ -426,7 +828,49 @@
           { "name": "phone", "in": "query", "schema": { "type": "string" }, "description": "ILIKE phone number search" }
         ],
         "responses": {
-          "200": { "description": "Paginated telephony calls with masked numbers" },
+          "200": {
+            "description": "Paginated telephony calls with masked numbers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "calls": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "string", "format": "uuid" },
+                              "caller_number": { "type": "string" },
+                              "caller_phone_number": { "type": "string", "description": "Masked phone number" },
+                              "call_status": { "type": "string" },
+                              "duration": { "type": "integer" },
+                              "direction": { "type": "string" },
+                              "recording_url": { "type": "string", "nullable": true },
+                              "timestamp": { "type": "string", "format": "date-time" },
+                              "received_at": { "type": "string", "format": "date-time" },
+                              "vendor_call_id": { "type": "string" },
+                              "created_at": { "type": "string", "format": "date-time" },
+                              "lead_name": { "type": "string", "nullable": true },
+                              "lead_phone": { "type": "string", "nullable": true },
+                              "lead_id": { "type": "integer", "nullable": true }
+                            }
+                          }
+                        },
+                        "total": { "type": "integer" },
+                        "page": { "type": "integer" },
+                        "totalPages": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": { "description": "Unauthorized" },
           "500": { "description": "Server error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TelephonyLogsError" } } } }
         }
@@ -481,6 +925,12 @@
         "in": "header",
         "name": "X-Webhook-Signature",
         "description": "HMAC-SHA256 hex digest of the raw request body, signed with TELEPHONY_WEBHOOK_SECRET"
+      },
+      "VacSecret": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-VAC-Secret",
+        "description": "Static shared secret for VAC Dialer webhooks. Set via VAC_WEBHOOK_SECRET env var. Falls back to IP whitelist (VAC_ALLOWED_IPS) if header is missing."
       }
     },
     "schemas": {

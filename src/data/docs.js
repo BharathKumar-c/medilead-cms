@@ -139,9 +139,9 @@ export const searchableContent = [
     section: 'Features',
     title: 'SIP Integration',
     keywords:
-      'sip call incoming outgoing webhook hmac signature jwt intercom routing lead lookup socket events real-time popup',
+      'sip call incoming outgoing webhook hmac signature jwt intercom routing lead lookup socket events real-time popup vac dialer click2call click-to-call hangup transfer disposition webhook popup answer completion',
     content:
-      'Calls & SIP API: 9 endpoints for telephony integration, intercom-based routing, auto lead lookup, HMAC/JWT auth, Socket.IO real-time events, backward-compatible legacy endpoints.',
+      'Calls & SIP API: 9 core endpoints + 8 VAC Dialer endpoints for telephony integration, intercom-based routing, auto lead lookup, HMAC/JWT auth, Socket.IO real-time events, VAC webhook triad (popup → answer → completion), Click2Call, Hangup, Transfer, Disposition, backward-compatible legacy endpoints.',
   },
   {
     id: 'reports',
@@ -193,9 +193,9 @@ export const searchableContent = [
     id: 'api-calls',
     section: 'API Reference',
     title: 'Calls API',
-    keywords: 'calls call log stats sip-event webhook inbound outgoing telephony phone lookup manual update intercom routing',
+    keywords: 'calls call log stats sip-event webhook inbound outgoing telephony phone lookup manual update intercom routing vac dialer click2call hangup transfer disposition popup answer completion x-vac-secret',
     content:
-      '9 call endpoints: inbound webhook (HMAC auth), SIP event processing, manual call logging, paginated list with filters, today stats, phone history lookup, status update, backward-compatible telephony list and stats.',
+      '17 call endpoints: VAC webhook triad (popup, answer, completion), VAC dialer control (click2call, hangup, disposition, transfer, status), inbound webhook (HMAC auth), SIP event processing, manual call logging, paginated list with filters, today stats, phone history lookup, status update, backward-compatible telephony list and stats.',
   },
   {
     id: 'api-dashboard',
@@ -552,6 +552,74 @@ export const apiEndpoints = {
     },
   ],
   calls: [
+    {
+      method: 'POST',
+      path: '/api/calls/vac/webhook/popup',
+      auth: 'X-VAC-Secret',
+      description: 'VAC webhook — call popup at ring time (triggers real-time popup in CMS with ringtone)',
+      body: {
+        phone_number: 'string (required)',
+        user: 'string (required — VAC agent extension)',
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/calls/vac/webhook/answer',
+      auth: 'X-VAC-Secret',
+      description: 'VAC webhook — call answered (transitions popup from ringing → connected)',
+      body: {
+        phone_number: 'string (required)',
+        agent: 'string (required — VAC agent extension)',
+        start_time: 'string (optional — YYYY-MM-DD HH:MM:SS)',
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/calls/vac/webhook/completion',
+      auth: 'X-VAC-Secret',
+      description: 'VAC webhook — call ended (records duration, recording, disposition)',
+      body: {
+        phone_number: 'string (required)',
+        agent: 'string (required — VAC agent extension)',
+        duration: 'string (required — seconds)',
+        recording_url: 'string (optional)',
+        dispo: 'string (optional — A=Answered, B=Missed)',
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/calls/vac/click2call',
+      auth: 'Required',
+      description: 'Initiate outbound call via VAC Dialer (Click2Call)',
+      body: { phone_number: 'string (required, 10-15 digits)' },
+    },
+    {
+      method: 'POST',
+      path: '/api/calls/vac/hangup',
+      auth: 'Required',
+      description: 'End current call via VAC Dialer Hangup API',
+      body: { dispo: 'string (optional, default A)' },
+    },
+    {
+      method: 'POST',
+      path: '/api/calls/vac/disposition',
+      auth: 'Required',
+      description: 'Set call disposition via VAC Dialer',
+      body: { dispo: 'string (required)' },
+    },
+    {
+      method: 'POST',
+      path: '/api/calls/vac/transfer',
+      auth: 'Required',
+      description: 'Transfer call (blind or attended) via VAC Dialer',
+      body: { transfer_to: 'string (required)', type: 'string (optional — blind|attended)' },
+    },
+    {
+      method: 'GET',
+      path: '/api/calls/vac/status',
+      auth: 'Required',
+      description: 'Check VAC Dialer integration status for the current user',
+    },
     {
       method: 'POST',
       path: '/api/calls/inbound',

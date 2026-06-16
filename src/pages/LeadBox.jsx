@@ -35,6 +35,7 @@ import {leadBoxMetrics as defaultMetrics, pincodeData} from '../data/mockData';
 import api from '../services/api';
 import Toast from '../components/Toast';
 import FollowUpModal from '../components/FollowUpModal';
+import { dispatchOutgoingCallPending } from '../utils/callPopup';
 
 
 const formatRelativeTime = (dateStr) => {
@@ -257,30 +258,15 @@ const LeadBox = () => {
   const handleEdit = (lead) => setEditLead(lead);
   const handleDelete = (lead) => setDeleteConfirm(lead);
 
-  const handleCallLead = async (phoneNumber) => {
+  const handleCallLead = async (phoneNumber, leadData = null) => {
     if (!phoneNumber) return;
     const agentId = getVacAgentId(user);
     if (!agentId) {
       addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
       return;
     }
-    try {
-      const result = await api.vacClick2Call(phoneNumber);
-      if (result?.status === 'success') {
-        addToast('success', 'Call Initiated', `Calling ${phoneNumber}...`);
-      }
-    } catch (err) {
-      const code = err.code || '';
-      if (code === 'VAC_AGENT_NOT_LOGGED_IN') {
-        addToast('warning', 'Agent Not Logged In', 'Please log into the VAC Dialer first, then try again.');
-      } else if (code === 'VAC_AGENT_NOT_SET') {
-        addToast('error', 'Agent Not Configured', 'Your VAC Agent ID is not set. Contact your administrator.');
-      } else if (code === 'VAC_NOT_CONFIGURED') {
-        addToast('error', 'VAC Not Configured', 'VAC Dialer integration is not configured on this server.');
-      } else {
-        addToast('error', 'Call Failed', err.message || 'Could not initiate call. Please try again.');
-      }
-    }
+    // Show popup in 'ready' state — API fires when user clicks the green Call button
+    dispatchOutgoingCallPending({ phoneNumber, agentId, leadData });
   };
 
   const confirmDelete = async () => {
@@ -640,7 +626,7 @@ const LeadBox = () => {
                           <span>{lead.phone || '—'}</span>
                           {lead.phone && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleCallLead(lead.phone); }}
+                              onClick={(e) => { e.stopPropagation(); handleCallLead(lead.phone, lead); }}
                               className="p-1 rounded-md bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors"
                               title={`Call ${lead.phone}`}
                             >
@@ -1767,7 +1753,7 @@ const ViewLeadModal = ({lead, statusColors, priorityColors, onClose, onReschedul
               </span>
               {lead.phone && (
                 <button
-                  onClick={() => handleCallLead(lead.phone)}
+                  onClick={() => handleCallLead(lead.phone, lead)}
                   className="ml-1 p-1.5 rounded-lg bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors"
                   title={`Call ${lead.phone}`}
                 >
@@ -1848,7 +1834,7 @@ const ViewLeadModal = ({lead, statusColors, priorityColors, onClose, onReschedul
                       <div className="flex items-center gap-2">
                         <span className="font-body-md text-on-surface">{lead.phone || '—'}</span>
                         {lead.phone && (
-                          <button onClick={() => handleCallLead(lead.phone)} className="p-1 rounded-md bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors" title={`Call ${lead.phone}`}>
+                          <button onClick={() => handleCallLead(lead.phone, lead)} className="p-1 rounded-md bg-on-tertiary-container/10 text-on-tertiary-container hover:bg-on-tertiary-container/20 transition-colors" title={`Call ${lead.phone}`}>
                             <Phone className="w-3.5 h-3.5" />
                           </button>
                         )}

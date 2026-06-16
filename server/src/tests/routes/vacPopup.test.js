@@ -222,16 +222,19 @@ describe('POST /api/calls/vac/webhook/popup', () => {
     expect(allEvents.length).toBe(2);
   });
 
-  test('6. VAC popup with no user found → returns success but no socket events', async () => {
+  test('6. VAC popup with no user found → fallback broadcast to all permitted users', async () => {
     const db = { query: vi.fn() };
     const callId = 'vac-popup-006';
     const callRecord = { id: callId, caller_phone_number: VAC_PHONE, call_status: 'ringing' };
+    const fallbackUser = { id: 99, name: 'Fallback Agent' };
 
     db.query
       .mockResolvedValueOnce({ rows: [] })                // find CMS user — not found
       .mockResolvedValueOnce({ rows: [LEAD_RECORD] })    // lookupLead
       .mockResolvedValueOnce({ rows: [callRecord] })     // INSERT
-      .mockResolvedValueOnce({ rowCount: 1 });            // UPDATE code
+      .mockResolvedValueOnce({ rowCount: 1 })            // UPDATE code
+      .mockResolvedValueOnce({ rows: [{ total_calls: 0, missed_calls: 0 }] }) // call stats
+      .mockResolvedValueOnce({ rows: [fallbackUser] });  // getSipUsers fallback broadcast
 
     const io = createMockIo();
     const app = createVacPopupApp(db, io);
@@ -242,8 +245,9 @@ describe('POST /api/calls/vac/webhook/popup', () => {
 
     expect(res.body.success).toBe(true);
 
-    // No socket events emitted when user not found
-    expect(io.emitFn).not.toHaveBeenCalled();
+    // Fallback: socket events emitted to all permitted users
+    expect(io.emitFn).toHaveBeenCalled();
+    expect(io.to).toHaveBeenCalledWith('user_99');
   });
 
   test('7. VAC popup with missing phone_number → 400', async () => {
