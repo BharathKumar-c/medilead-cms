@@ -1,19 +1,19 @@
 const { body, param, query, validationResult } = require('express-validator');
 const logger = require('../utils/logger');
+const db = require('../config/database');
 
-// All allowed lead statuses (modern pipeline + legacy enquiry types)
-const ALL_LEAD_STATUSES = [
-  'New', 'Contacted', 'Interested', 'Follow-up', 'Closed', 'Rejected',
-  'Complaint Enquiry', 'Location Enquiry', 'Medical Certificate',
-  'Dial a Doctor', 'Appointment Cancel', 'Ambulance Service Enquiry',
-  'Biomedical', 'IT', 'CGHS and Ex-Service Scheme',
-  'CM Scheme & PM Scheme', 'Admission and Room Details Enquiry',
-  'Purchase', 'Lab & Diagnostic', 'Accounts',
-  'Medical Record Documents', 'Blood Bank', 'ER', 'Marketing',
-  'Job Vacancy', 'Pharmacy', 'Billing & Payment', 'Insurance',
-  'Doctors Enquiry', 'MHC Package', 'Dialysis Enquiry',
-  'Scan & X-Ray', 'Internship', 'Appointment Booked',
-];
+// Dynamic status validator — queries master_lead_status table at validation time
+// so any newly added status via the admin UI is immediately recognized as valid.
+const isValidLeadStatus = async (value) => {
+  const result = await db.query(
+    'SELECT 1 FROM master_lead_status WHERE name = $1',
+    [value]
+  );
+  if (result.rows.length === 0) {
+    throw new Error('Invalid status');
+  }
+  return true;
+};
 
 // Helper to handle validation errors
 const handleValidationErrors = (req, res, next) => {
@@ -227,8 +227,7 @@ const validateLead = [
     .withMessage('Country must be less than 100 characters'),
   body('status')
     .optional()
-    .isIn(ALL_LEAD_STATUSES)
-    .withMessage('Invalid status'),
+    .custom(isValidLeadStatus),
   body('priority')
     .optional()
     .isIn(['High', 'Medium', 'Low'])
@@ -324,8 +323,7 @@ const validateLeadUpdate = [
     .withMessage('Country must be less than 100 characters'),
   body('status')
     .optional()
-    .isIn(ALL_LEAD_STATUSES)
-    .withMessage('Invalid status'),
+    .custom(isValidLeadStatus),
   body('priority')
     .optional()
     .isIn(['High', 'Medium', 'Low'])
@@ -726,8 +724,17 @@ const validateLeadQuery = [
     .withMessage('Search term must be less than 100 characters'),
   query('status')
     .optional()
-    .isIn(['All', ...ALL_LEAD_STATUSES])
-    .withMessage('Invalid status filter'),
+    .custom(async (value) => {
+      if (value === 'All') return true;
+      const result = await db.query(
+        'SELECT 1 FROM master_lead_status WHERE name = $1',
+        [value]
+      );
+      if (result.rows.length === 0) {
+        throw new Error('Invalid status filter');
+      }
+      return true;
+    }),
   query('priority')
     .optional()
     .isIn(['High', 'Medium', 'Low'])
